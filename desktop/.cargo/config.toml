@@ -1,0 +1,6 @@
+[build]
+
+# MSVC must decode upstream C++ UTF-8 comments consistently on zh-TW Windows.
+# _CL_ is consumed by MSVC only; non-Windows compilers ignore this variable.
+[env]
+_CL_ = "/utf-8"

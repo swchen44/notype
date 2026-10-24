@@ -30,3 +30,8 @@ private-config/
 *.db
 *.db-shm
 *.db-wal
+
+# Fixed upstream runtime resources (provenance in desktop/UPSTREAM.md).
+!desktop/src-tauri/resources/models/
+!desktop/src-tauri/resources/models/silero_vad_v4.onnx
+!desktop/src-tauri/resources/*.wav
