@@ -8,7 +8,7 @@
 - 對 Handy x64 發布物做下載hash及靜態解包研究；沒有執行installer／payload。這是研究證據，不是公司部署方式。
 - 使用者確認個人pilot、dictation MVP、可修改開源App、Windows amd64 only、繁中夾英文忠實整理、LLM失敗待選，以及五個目標App。
 - 使用者新增硬限制：**不能使用 installer**。公司版以portable檔案包、預備runtime／模型與npm／pip Proxy配送為方向。
-- 使用者要求建立GitHub repo與issue tracking；建立 private `swchen44/notype_study`。本次提交研究、Windows接手說明及待決紀錄；產品訪談與實作仍未完成。
+- 使用者要求建立GitHub repo與issue tracking；建立 private `swchen44/notype`。本次提交研究、Windows接手說明及待決紀錄；產品訪談與實作仍未完成。
 
 後續每個issue用commit／可重現receipt連回結果。精確變更順序以Git history為準，這份文件不把未執行工作寫成完成。
 

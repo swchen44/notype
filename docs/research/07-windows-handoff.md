@@ -1,6 +1,6 @@
 # 公司 Windows amd64 接手說明
 
-更新日期：2026-10-24。Repository：<https://github.com/swchen44/notype_study>，private。
+更新日期：2026-10-24。Repository：<https://github.com/swchen44/notype>，private。
 
 **使用者已選定自己的 Windows 11 開發。** 新 session 先讀根目錄 [HANDOFF.md](../../HANDOFF.md) 與 [TODO.md](../../TODO.md)；目前的直接貼用 prompt 以 HANDOFF.md 為準。
 
@@ -54,12 +54,12 @@ Q1～Q15 已完成；若 Windows 有 `to-spec`／`to-tickets` 可用來補規格
 
 | Issue | 工作 |
 | --- | --- |
-| [#1](https://github.com/swchen44/notype_study/issues/1) | grilling 與規格確認 |
-| [#2](https://github.com/swchen44/notype_study/issues/2) | Windows amd64 portable 啟動基線 |
-| [#3](https://github.com/swchen44/notype_study/issues/3) | STT 品質與端到端效能 |
-| [#4](https://github.com/swchen44/notype_study/issues/4) | 公司文字 API 與錯誤待選 |
-| [#5](https://github.com/swchen44/notype_study/issues/5) | 五個目標 App 送字驗收 |
-| [#6](https://github.com/swchen44/notype_study/issues/6) | npm Proxy 配送與完整 portable payload |
-| [#7](https://github.com/swchen44/notype_study/issues/7) | 長期文字歷史與當次錄音分離 |
+| [#1](https://github.com/swchen44/notype/issues/1) | grilling 與規格確認 |
+| [#2](https://github.com/swchen44/notype/issues/2) | Windows amd64 portable 啟動基線 |
+| [#3](https://github.com/swchen44/notype/issues/3) | STT 品質與端到端效能 |
+| [#4](https://github.com/swchen44/notype/issues/4) | 公司文字 API 與錯誤待選 |
+| [#5](https://github.com/swchen44/notype/issues/5) | 五個目標 App 送字驗收 |
+| [#6](https://github.com/swchen44/notype/issues/6) | npm Proxy 配送與完整 portable payload |
+| [#7](https://github.com/swchen44/notype/issues/7) | 長期文字歷史與當次錄音分離 |
 
 研究 Mac 的工作區禁止寫入 `.git`，因此此處沒有本地 Git 初始化；遠端 commits 經 GitHub API 建立。Windows 接手可直接 clone private repo，再核對 remote HEAD 與本地 checkout。

@@ -25,3 +25,8 @@ models/
 recordings/
 private-config/
 *.log
+
+.local/
+*.db
+*.db-shm
+*.db-wal

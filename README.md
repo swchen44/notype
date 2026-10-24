@@ -1,10 +1,12 @@
-# notype_study
+# notype
 
 公司 Windows amd64 免安裝語音輸入 App 的研究、決策與實作追蹤。
 
 目標流程：**熱鍵錄音 → 本機 STT → 公司文字 LLM 整理 → 貼回原本輸入框**。
 
-目前完成 Typeless macOS 發行套件分析、8 個 GitHub 候選比較，以及 Handy 固定版本 source／Windows payload 靜態研究。Q1～Q15 產品決策已確認；公司 App 尚未實作，Windows runtime、效能與公司 API 尚未驗證。
+目前完成研究與第一個文字流程核心：先保存原稿、HTTP 整理、錯誤待選、取消、SQLite 歷史與重啟復原。這是 Handy/native 接合前的開發切片，尚未完成語音 App；真實 STT、Windows 輸入框、效能與公司 API 尚未驗證。
+
+開發測試（Node 22.15+）：`npm.cmd run test:unit`、`npm.cmd run test:integration`。資料預設在 `%LOCALAPPDATA%/notype/history.db`，位於 npm package tree 外。測試只使用暫存資料與 loopback HTTP；目前的 `{transcript, glossary} → {text}` 是開發 contract，不代表公司 API 格式。SQLite API 在此 Node 版本仍為 experimental。History 目前限定單一程序持有資料庫；正式 App 尚需 single-instance guard。
 
 ## 已確認的限制
 
@@ -30,6 +32,6 @@
 | [工作紀錄](docs/research/HISTORY.md) | 研究／決策里程碑；程式碼演進以 Git commits 為準 |
 | [測試規範](tests/README.md) | `tests/unittest/` 與 `tests/integration/` 的範圍、執行與回報規則 |
 | [Agent skills](AGENTS.md) | Issue tracker、triage labels、domain docs 與測試目錄入口 |
-| [GitHub Issues](https://github.com/swchen44/notype_study/issues) | 待辦、驗收條件與後續 evidence receipt |
+| [GitHub Issues](https://github.com/swchen44/notype/issues) | 待辦、驗收條件與後續 evidence receipt |
 
 此 repo 為 private。公司 endpoint、API key、token、實際工作錄音與逐字稿不屬於目前提交內容；通用產品包以公開 npm 為發布方向，公司設定留本機。此 repo 沒有發行公司 App 或模型包。

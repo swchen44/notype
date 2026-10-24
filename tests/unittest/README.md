@@ -14,4 +14,4 @@
 
 LLM 實際文字品質及 STT 辨識率屬 integration／品質驗收，不能以 mocked 回應證明模型正確。
 
-目前沒有產品測試檔；實作對應模組時，將測試檔加入本目錄並在 `tests/README.md` 補上可執行命令。
+執行：`npm.cmd run test:unit`。目前涵蓋文字 session、取消、失敗待選與交付去重；原生錄音／焦點驗證尚待接合。

@@ -8,7 +8,12 @@ tests/
   integration/    # 模組接合、Windows、API 與 portable payload
 ```
 
-目前為研究與工程設定階段，**尚無產品測試程式或已選定的測試框架**。本次建立的是目錄與驗收規範；文件查核、source hash 核對及空目錄都不能當作產品測試通過。
+文字流程核心使用 Node 22.15+ 內建 test runner 與 SQLite。Windows PowerShell 使用 `npm.cmd`，不需要變更 execution policy。
+
+- unit：`npm.cmd run test:unit`
+- integration：`npm.cmd run test:integration`
+
+目前測試 HTTP、SQLite、文字流程及輸入 callback 邊界；callback 並非真實 Windows 輸入框。STT、公司 API、五個 App 與完整 portable 啟動仍須獨立驗收。
 
 ## 執行原則
 

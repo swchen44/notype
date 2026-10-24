@@ -1,15 +1,17 @@
 # Windows 11 開發接手
 
-更新日期：2026-10-24。Repository：[swchen44/notype_study](https://github.com/swchen44/notype_study)，private。
+更新日期：2026-10-24。Repository：[swchen44/notype](https://github.com/swchen44/notype)，private。
 
 使用者已決定在自己的 **Windows 11** 開發，只做 **amd64／x64**。下一個 session 應接續實作與目標機驗證；Q1～Q15 已確認，不必重新訪談。
 
 ## 目前 checkpoint
 
+2026-10-24 Windows 接手已開始：產品與 private repo 改名為 **notype**（本機資料夾仍為 notype_study），環境與工具安裝進度見 [preflight](docs/verification/windows11-preflight.md)。新增 Node 文字核心，8 unit／5 integration tests 通過；尚未完成真實 STT→LLM→Windows 輸入框。使用者已授權安裝開發所需工具，產品交付仍維持 npm portable。以下研究 checkpoint 為接手前背景。
+
 - 研究、選型比較、15 項產品決策、兩份 ADR、測試目錄規範與 GitHub issues 已保存。
-- 研究定稿 commit：[bdbcb13](https://github.com/swchen44/notype_study/commit/bdbcb13bdb2a3f529236b0e690344522351c5e54)。本交接文件屬於其後續更新，請以 clone 後的 `HEAD` 與 live issues 核對最新狀態。
+- 研究定稿 commit：[bdbcb13](https://github.com/swchen44/notype/commit/bdbcb13bdb2a3f529236b0e690344522351c5e54)。本交接文件屬於其後續更新，請以 clone 後的 `HEAD` 與 live issues 核對最新狀態。
 - 尚無產品程式碼、可執行產品測試、Windows runtime／效能結果或已發布 npm 產品。`tests/` 目前只有規範，不能回報測試通過。
-- [#1 設計收斂](https://github.com/swchen44/notype_study/issues/1) 已結案；[#2～#7](TODO.md) 是開放待辦，尚未全部拆成可直接執行的規格切片。
+- [#1 設計收斂](https://github.com/swchen44/notype/issues/1) 已結案；[#2～#7](TODO.md) 是開放待辦，尚未全部拆成可直接執行的規格切片。
 
 ## 先讀哪些檔案
 
@@ -43,7 +45,7 @@ Windows 已有 Codex 與使用者所稱的 `grillme` skill。先查當地實際 
 ## 直接貼給 Windows Codex
 
 ```text
-請接手並繼續開發 private repo https://github.com/swchen44/notype_study。
+請接手並繼續開發 private repo https://github.com/swchen44/notype。
 若目前不是這個 repo，先取得或定位工作副本，保留現有未提交變更。
 
 我已決定在這台 Windows 11 開發，只支援 amd64。先讀 HANDOFF.md、AGENTS.md、

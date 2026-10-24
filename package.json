@@ -1,0 +1,11 @@
+{
+  "name": "notype",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22.15.0" },
+  "scripts": {
+    "test:unit": "node --experimental-sqlite --test tests/unittest/*.test.mjs",
+    "test:integration": "node --experimental-sqlite --test tests/integration/*.test.mjs"
+  }
+}
