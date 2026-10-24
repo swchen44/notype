@@ -30,9 +30,17 @@
 
 ## 一般權限啟動探針
 
-目前工具宿主為 elevated/high。另以 Microsoft 文件記載的 Explorer parent-process attribute 機制，在同使用者／同 session 啟動僅會回報自身權限的隱藏 helper；子程序實際回報 `elevated=false`、`integrityMedium=true`、`integrityBelowHigh=true`、`uiAccess=false`，exit 0，已清理程序。未使用 token duplication、registry、UAC 或排程變更。
+目前工具宿主為 elevated/high。另以 [Microsoft 文件記載的 Explorer parent-process attribute 機制](https://devblogs.microsoft.com/oldnewthing/20190425-00/?p=102443)，在同使用者／同 session 啟動僅會回報自身權限的隱藏 helper；子程序實際回報 `elevated=false`、`integrityMedium=true`、`integrityBelowHigh=true`、`uiAccess=false`，exit 0，已清理程序。未使用 token duplication、registry、UAC 或排程變更。
 
 這提供 #14 在本機驗證一般使用者啟動的可行測試路徑，尚未啟動 notype／WebView。呼叫者環境仍可能繼承，後續須明確設定測試自己的 fixed folder／資料目錄並觀察實際 runtime process path。
+
+## Native DLL 連結與 VC runtime
+
+補正先前 #9 檢查：`Get-Item` 回報 `DirectML.dll` 的 Length 0 是 symbolic link 自身的長度，不是目標 DLL 的實體大小。`lstat` 確認連結，`realpath` 指向本機 ORT cache；跟隨連結後 `stat`／實際讀取均為 **18,527,776 bytes**，MZ header，SHA256 `9c9e6d822561c6c41b90e6994b3e8857cf1d66dbfb1e0c4c799c7c89b4e92da1`，Microsoft Windows Publisher 簽章有效，版本 `1.15.4+241025-1615.1.dml-1.15.fac7597`。
+
+PE regular import table 確實包含 DirectML，沒有 delay import；#11 的獨立原生測試亦觀察到從此 build path 載入 DirectML。**不能將它當作 optional 空檔而丟棄，也不能把指向開發機 cache 的連結直接放入 npm。** #14 須將已稽核且具備正確授權／來源的相依實體複製為 payload regular file，驗證檔案內容及 manifest。CPU 推論模式不等於 linker 沒有此相依。
+
+`dumpbin /dependents` 另確認 `MSVCP140.dll`、`MSVCP140_1.dll` 與 transcribe／ggml 的 `VCRUNTIME140.dll`、`VCRUNTIME140_1.dll` 等相依。本機 Build Tools 的 `VC/Redist/MSVC/14.44.35112/x64/Microsoft.VC143.CRT/` 有正式 redist 檔案；[Microsoft 支援 app-local 配送，且要求遵守 REDIST list／授權](https://learn.microsoft.com/en-us/cpp/windows/redistributing-visual-cpp-files?view=msvc-170)。尚未將它們打包，也不能用本機已裝 VC runtime 的啟動成功，替代完整 payload 的依賴驗收。
 
 ## 外部證據位置
 
