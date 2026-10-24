@@ -1,0 +1,145 @@
+{
+  "purpose": "Diagnostic CPU smoke only; not final notype payload or model selection",
+  "release": "v1.8.6",
+  "archive": {
+    "url": "https://github.com/ggml-org/whisper.cpp/releases/download/v1.8.6/whisper-bin-x64.zip",
+    "sha256": "b07ea0b1b4115a38e1a7b07debf581f0b77d999925f8acb8f39d322b0ba0a822"
+  },
+  "files": [
+    {
+      "name": "bench.exe",
+      "bytes": 28160,
+      "sha256": "3d86e66c1b54e392271cf62d7e560466b67874785819ec2ebf618f09f67d07c4"
+    },
+    {
+      "name": "command.exe",
+      "bytes": 28160,
+      "sha256": "8c6850fdac016eb139c8de27c9ce6f32eeb5f0efb86b120d19a383c3a019e408"
+    },
+    {
+      "name": "ggml-base.dll",
+      "bytes": 636416,
+      "sha256": "017cd9c859d0da3c6d0e8da120ec5641db7c8d1f266df7ce1f9eca42029186ba"
+    },
+    {
+      "name": "ggml-cpu.dll",
+      "bytes": 782848,
+      "sha256": "cb5bfd79c0255e282982527fee42d8aa8407b63ae46ef1acd395c3e21d1f52f9"
+    },
+    {
+      "name": "ggml.dll",
+      "bytes": 67072,
+      "sha256": "722ff1350efe25a1bffa048bef2a8aa7fe7552fce3c38d2c1505f99beb0fb1f7"
+    },
+    {
+      "name": "main.exe",
+      "bytes": 28160,
+      "sha256": "a50301e8d8f4c29d9a2ad608b15dd7d62c320c03fa1800e66ad7c3fc59b49f0c"
+    },
+    {
+      "name": "SDL2.dll",
+      "bytes": 2500096,
+      "sha256": "de23db1694a3c7a4a735e7ecd3d214b2023cc2267922c6c35d30c7fc7370d677"
+    },
+    {
+      "name": "stream.exe",
+      "bytes": 28160,
+      "sha256": "9d08a04de78c18f9703ce1d5dfb43ed4ee0a1e80270496a2f27a6bdc4a240822"
+    },
+    {
+      "name": "test-vad-full.exe",
+      "bytes": 368640,
+      "sha256": "8a65f5f06df373d7ae8e604b40aedcb7c0d48c2a9aa90a9790c55b35971dd8c4"
+    },
+    {
+      "name": "test-vad.exe",
+      "bytes": 368128,
+      "sha256": "5b07666f11368d328da03b4cf714a6b16291005aa783027ee849dfc43509584b"
+    },
+    {
+      "name": "wchess.exe",
+      "bytes": 165376,
+      "sha256": "b8fb0a12b73f458d0494666d9dbd2be4219d5a18a37b7e88374d2dbc7c732c36"
+    },
+    {
+      "name": "whisper-bench.exe",
+      "bytes": 20992,
+      "sha256": "5c16577b47f92180af1475d7699f07071eb536dad00ee3e8fb49d559cccd41fe"
+    },
+    {
+      "name": "whisper-cli.exe",
+      "bytes": 489472,
+      "sha256": "111bd344b7bf0356818f2795a525cb5240ed0a99028fa9f3f1c68b4ff5b17b91"
+    },
+    {
+      "name": "whisper-command.exe",
+      "bytes": 168960,
+      "sha256": "8bbfa8501ffa3af47638071c6c4c2840c9504096d2a4e177fe2b5c424cad9257"
+    },
+    {
+      "name": "whisper-lsp.exe",
+      "bytes": 180736,
+      "sha256": "cd96c405799fdd8d36eeb5097d7c3882198def8c61e7a3367e2475e65c32bb61"
+    },
+    {
+      "name": "whisper-quantize.exe",
+      "bytes": 103936,
+      "sha256": "230a675ef5fb5a25907b430b994f487339e1b91261732dd67b719c9a9291f256"
+    },
+    {
+      "name": "whisper-server.exe",
+      "bytes": 728064,
+      "sha256": "d52adc17f509da58717e853a0c56a281a40847c56a12d01933e227426616eabf"
+    },
+    {
+      "name": "whisper-stream.exe",
+      "bytes": 390656,
+      "sha256": "c9becc2c3d9add767da664b54f00a7f620eb09ff5e240aa16fc8ae7a89ee73c9"
+    },
+    {
+      "name": "whisper-talk-llama.exe",
+      "bytes": 2197504,
+      "sha256": "aca10f6ec11193bcbae2f1df806bdfb8e2780128791f566938977b5e70ea5e0b"
+    },
+    {
+      "name": "whisper-vad-speech-segments.exe",
+      "bytes": 376320,
+      "sha256": "245d897626443bbbf0a93541d2be1df25c75fb87136ff7134bc8b45666c6b5d2"
+    },
+    {
+      "name": "whisper.dll",
+      "bytes": 484864,
+      "sha256": "aecc185550327461d74a7c89436e13a62e12cc408c05719e7a677e1586a9cda3"
+    }
+  ],
+  "model": {
+    "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-tiny.en.bin",
+    "bytes": 77704715,
+    "sha256": "921e4cf8686fdd993dcd081a5da5b6c365bfde1162e72b08d75ac75289920b1f",
+    "language": "English-only; does not establish Chinese quality"
+  },
+  "fixture": {
+    "generator": "tests/integration/runtime/generate-smoke.ps1",
+    "voice": "Microsoft Zira Desktop",
+    "format": "WAV PCM 16kHz 16-bit mono",
+    "text": "Please keep the number forty two and do not delete the API.",
+    "sha256": "e39a4a9e0b86c5187e586aeb5f0ae9b7eebf6d75508d02955560818040b1ca00",
+    "bytes": 130286,
+    "durationSeconds": 4.07
+  },
+  "sourceCommit": "23ee03506a91ac3d3f0071b40e66a430eebdfa1d",
+  "observation": {
+    "date": "2026-10-24",
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "sttMs": 919,
+    "samples": 1,
+    "transcript": "please keep the number 42 and do not delete the API.",
+    "browser": "Microsoft Edge 156.0.4314.42",
+    "companyApi": "not-performed",
+    "nativePaste": "not-performed",
+    "chineseQuality": "not-performed",
+    "p95": "not-measured"
+  }
+}

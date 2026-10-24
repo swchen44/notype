@@ -4,7 +4,7 @@
 
 目標流程：**熱鍵錄音 → 本機 STT → 公司文字 LLM 整理 → 貼回原本輸入框**。
 
-目前完成研究與第一個文字流程核心：先保存原稿、HTTP 整理、錯誤待選、取消、SQLite 歷史與重啟復原。這是 Handy/native 接合前的開發切片，尚未完成語音 App；真實 STT、Windows 輸入框、效能與公司 API 尚未驗證。
+目前完成研究、文字流程核心及獨立 CPU 語音 smoke：固定合成 WAV → whisper.cpp → HTTP 測試服務 → SQLite → Edge 測試文字框。這是 Handy/native 接合前的開發切片，尚未完成語音 App；麥克風熱鍵、繁中品質、原生跨 App 送字、效能門檻與公司 API 尚未驗證。
 
 開發測試（Node 22.15+）：`npm.cmd run test:unit`、`npm.cmd run test:integration`。資料預設在 `%LOCALAPPDATA%/notype/history.db`，位於 npm package tree 外。測試只使用暫存資料與 loopback HTTP；目前的 `{transcript, glossary} → {text}` 是開發 contract，不代表公司 API 格式。SQLite API 在此 Node 版本仍為 experimental。History 目前限定單一程序持有資料庫；正式 App 尚需 single-instance guard。
 

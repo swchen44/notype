@@ -12,8 +12,9 @@ tests/
 
 - unit：`npm.cmd run test:unit`
 - integration：`npm.cmd run test:integration`
+- 真實 CPU／Edge smoke：`npm.cmd run test:runtime`，需先準備固定模型、CLI、WAV 與 Edge；見 [runtime receipt](../docs/verification/windows11-preflight.md)。缺少必要檔案會失敗，不會 skip。
 
-目前測試 HTTP、SQLite、文字流程及輸入 callback 邊界；callback 並非真實 Windows 輸入框。STT、公司 API、五個 App 與完整 portable 啟動仍須獨立驗收。
+Deterministic tests 測試 HTTP、SQLite、文字流程與 callback 邊界。獨立 runtime smoke 使用真實 CPU STT 與全新 headless Edge 文字框；它不證明原生 Windows 貼上、公司 API、五個 App 或完整 portable 啟動。
 
 ## 執行原則
 
