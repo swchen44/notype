@@ -10,6 +10,7 @@
 - [x] 使用者選定自己的 Windows 11 開發；將交接說明與可貼用 prompt 保存於 repo。
 - [x] 依 to-spec 發布 [#8 MVP 與跨平台核心規格](https://github.com/swchen44/notype/issues/8)，使用者已確認主要測試 seam，標記 ready-for-agent；新增 [ADR 0003](docs/adr/0003-shared-core-platform-adapters.md)，先交付 Windows amd64，架構預留 macOS／Linux。
 - [x] 將繁體／簡體中文介面、語言偏好保存及與 STT／文字輸出設定分離加入 #8；實作與介面驗收仍待完成。API key 於真正需要時再通知使用者。
+- [x] 將「繁體中文＋英文／簡體中文＋英文」兩種本機辨識模式與獨立品質驗收加入 #8、#3；正式實作及模型驗收仍待完成。
 
 已完成 Windows 環境查核、開發工具安裝及 Rust／C++ 編譯驗證。產品名稱及 private repo 已改為 notype。文字核心與固定英文合成 WAV→CPU STT→HTTP fixture→SQLite→Edge 文字框已接通（11 unit、5 integration、1 runtime smoke 通過）。麥克風熱鍵、繁中品質、原生跨 App 送字、公司 API 與完整 portable 產品仍未完成。見 [開發驗證紀錄](docs/verification/windows11-preflight.md)。
 

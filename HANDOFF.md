@@ -6,6 +6,8 @@
 
 ## 目前 checkpoint
 
+2026-10-25 語音需求補充：本機 STT 必須支援「繁體中文＋英文」及「簡體中文＋英文」兩種同段中英混合模式，保存模式偏好，預設沿用繁體中文＋英文，並在 LLM 前產生與保存所選中文字形的原稿。介面 locale 與辨識模式獨立；模式切換不改動既有歷史，整理結果預設沿用當次原稿字形。規格 #8 與 STT issue #3 同步此需求，兩種中文品質／效能尚未驗收，英文 tiny.en smoke 不能代替。
+
 2026-10-25 補充：介面納入繁體中文（zh-TW）與簡體中文（zh-CN），可切換並保存偏好，翻譯資源跨平台共用；介面語言獨立於 STT／文字輸出，不自動改寫原稿、整理結果或文字歷史。已更新規格 #8，尚待正式介面實作。使用者要求真正需要 API key 時再通知；目前以本機 STT／HTTP fixture 繼續開發，不要求先申請或提供 key。
 
 2026-10-25：已依 to-spec 發布 [完整規格 #8](https://github.com/swchen44/notype/issues/8)，標記 ready-for-agent；使用者確認主要測試 seam。正式 App 方向為 Handy 的 Rust + Tauri 2 + React／TypeScript + SQLite；現有 Node 實作為 prototype／驗收先例。先建立共用核心與平台 adapter 的 contract，將 Windows 專用資料位置及原生互動隔離，再繼續正式 App 整合。macOS／Linux 目前只規劃架構，不宣稱已可執行。
