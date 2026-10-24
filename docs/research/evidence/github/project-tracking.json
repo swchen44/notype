@@ -45,7 +45,7 @@
     {
       "html_url": "https://github.com/swchen44/notype_study/issues/1",
       "number": 1,
-      "state": "open",
+      "state": "closed",
       "title": "[Design] 收斂 amd64 portable MVP 規格與 grilling 決策"
     }
   ],
@@ -116,5 +116,13 @@
     "Model selection and measured performance",
     "Npm publisher and corporate Proxy technical acceptance"
   ],
-  "snapshot_note": "Issue snapshot is recorded before final research commit and design-issue closure; live GitHub is authoritative."
+  "snapshot_note": "Issue states refreshed for Windows 11 handoff; #1 closed and #2-#7 open. Live GitHub is authoritative.",
+  "windows_handoff": {
+    "development_os": "User selected Windows 11; actual amd64 architecture to be verified",
+    "corporate_network": "not yet observed on development machine",
+    "entrypoint": "HANDOFF.md",
+    "todo": "TODO.md",
+    "available_agent_tools": "User reports Codex and grillme; other planning skills are optional",
+    "product_runtime_verified": false
+  }
 }

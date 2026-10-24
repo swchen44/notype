@@ -1,6 +1,6 @@
 {
-  "checked_at_utc": "2026-10-24T11:07:14.413429+00:00",
-  "scope": "Final research/decision/document identity checks. No product code, product tests, Windows runtime or npm publication.",
+  "checked_at_utc": "2026-10-24T13:57:31.964177+00:00",
+  "scope": "Windows 11 durable handoff and TODO documentation checks; no product implementation, product test execution, Windows runtime or npm publication.",
   "checks": {
     "json_parse": {
       "status": "passed",
@@ -8,14 +8,16 @@
     },
     "markdown": {
       "status": "passed",
-      "files": 23,
-      "local_links": 63,
-      "reference_definitions": 73
+      "files": 25,
+      "local_links": 85,
+      "reference_definitions": 73,
+      "external_links": "not network-checked by this local validator"
     },
     "tool_python_parse": {
       "status": "passed",
       "files": 2,
-      "python": "3.13.2"
+      "python": "3.13.2",
+      "scope": "AST parse only, not execution"
     },
     "repo_configuration": {
       "status": "passed",
@@ -74,7 +76,7 @@
       "limitations_preserved": true,
       "windows_runtime_verified": false
     },
-    "prior_source_checks_scope": "Earlier source/static-payload checks preserved with their limits; these do not constitute new Windows runtime tests.",
+    "prior_source_checks_scope": "Source/static-payload checks below are retained from the previous receipt at 2026-10-24T11:07:14.413429+00:00; no source or payload runtime was re-executed for this handoff update.",
     "product_tests": {
       "status": "not-performed",
       "scaffold_only": true,
@@ -89,128 +91,238 @@
       "github_issues_created": 7,
       "product_implementation_started": false,
       "product_package_published": false
+    },
+    "durable_windows_handoff": {
+      "status": "passed",
+      "entrypoint": "HANDOFF.md",
+      "todo": "TODO.md",
+      "confirmed_development_os": "Windows 11 selected by user, actual machine not observed",
+      "decision_ids": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15
+      ],
+      "issue_snapshot": {
+        "closed": [
+          1
+        ],
+        "open": [
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ]
+      },
+      "product_test_files": 0,
+      "optional_skill_fallback_documented": true
     }
   },
   "artifacts_excluding_this_receipt": [
     {
-      "path": "01-typeless-macos-analysis.md",
+      "path": ".gitignore",
+      "bytes": 214,
+      "sha256": "eaf6336f695ed78a48103c0a8a76b2e848d950a663443935a18aa35a746ad7f4"
+    },
+    {
+      "path": "AGENTS.md",
+      "bytes": 514,
+      "sha256": "2d5f73985670d4bf7e98b54056563b0453e929639d9fb29c1b6e0872b24c6340"
+    },
+    {
+      "path": "GLOSSARY.md",
+      "bytes": 1246,
+      "sha256": "aeccb24e6d5aa6aeba32abdcade8e2dc6960f7844a9f5ec66e0dc149bcc8b889"
+    },
+    {
+      "path": "HANDOFF.md",
+      "bytes": 6344,
+      "sha256": "3bfe26b559ab458324fd42f9b384deab81f03e1ad83c590c3705e4016d666bfd"
+    },
+    {
+      "path": "README.md",
+      "bytes": 2844,
+      "sha256": "71f4a3193c128e54a43ac1344692d75619cff9ccac45ddfafff88668d64c1832"
+    },
+    {
+      "path": "TODO.md",
+      "bytes": 3086,
+      "sha256": "f8c059f7275593d39f1898a448c540fb0b80b15799a83fd9464692c8a656cc85"
+    },
+    {
+      "path": "docs/adr/0001-portable-npm-distribution.md",
+      "bytes": 986,
+      "sha256": "73c216eae0205e52d64149309e022895ea46da0fdc8a6286c6916768d40427b9"
+    },
+    {
+      "path": "docs/adr/0002-text-history-independent-of-audio.md",
+      "bytes": 890,
+      "sha256": "ce9ed43b8363098169086e17b81bfe9333e32635bc1c0302569d71c5b30ed391"
+    },
+    {
+      "path": "docs/agents/domain.md",
+      "bytes": 487,
+      "sha256": "845ead89970283cc9736fcdbcace6f60183a77862bc0d2d4e413ab57f192f2d4"
+    },
+    {
+      "path": "docs/agents/issue-tracker.md",
+      "bytes": 852,
+      "sha256": "023324aca684832997e9ff210df04f5a5fbf97ae46c3d1254a4889f692e4656e"
+    },
+    {
+      "path": "docs/agents/triage-labels.md",
+      "bytes": 431,
+      "sha256": "e827be9af8c8ca2258dd16d15d4f764285adc99ddd27ad972a1c035fb7ab18e8"
+    },
+    {
+      "path": "docs/research/01-typeless-macos-analysis.md",
       "bytes": 11488,
       "sha256": "0cb4775113a66a51dce3ea569ebbc9afa8c907eff1a4d0b4ef252d2e4bf1f2e6"
     },
     {
-      "path": "02-open-source-alternatives.md",
+      "path": "docs/research/02-open-source-alternatives.md",
       "bytes": 25518,
       "sha256": "e0c4a34d7caa04c5f6ffa7a666b76e0adf2cca976d99975c35b2dbd1ec0e910e"
     },
     {
-      "path": "03-windows-intranet-architecture.md",
+      "path": "docs/research/03-windows-intranet-architecture.md",
       "bytes": 12153,
       "sha256": "86fef287dabcc9cf27cd212de416116b9ce303db2d9e407ac85167eb5f021e43"
     },
     {
-      "path": "04-method-and-evidence.md",
+      "path": "docs/research/04-method-and-evidence.md",
       "bytes": 9334,
       "sha256": "7c35464e889f8e31bb2069074b8ff964e8a5df4112da4cc27410035030e0bc81"
     },
     {
-      "path": "05-performance-and-package-delivery.md",
+      "path": "docs/research/05-performance-and-package-delivery.md",
       "bytes": 8948,
       "sha256": "cb79a07d9484bffd7cdd30fd8405678a3185339fc45ac29f66a1b51c952df926"
     },
     {
-      "path": "06-source-feasibility-audit.md",
+      "path": "docs/research/06-source-feasibility-audit.md",
       "bytes": 17943,
       "sha256": "0dbf1a14c47f0ffc86eb3e9ce75cdc474a48be3d7d3e193a998b5a8119bf561a"
     },
     {
-      "path": "07-windows-handoff.md",
-      "bytes": 7911,
-      "sha256": "1dae75860b121167ba241f29fbf32b8cf7cb40161599547ff68fef62b481f56e"
+      "path": "docs/research/07-windows-handoff.md",
+      "bytes": 6239,
+      "sha256": "eb70d7e7e61e3859aff00791808f6bc83206d82ecf58ee188ebb2c97fa237987"
     },
     {
-      "path": "08-decision-log.md",
-      "bytes": 4831,
-      "sha256": "2aac674c4f066574c05d4f057859fba4e9e1ec654014fce78e1fbf00ab7941f2"
+      "path": "docs/research/08-decision-log.md",
+      "bytes": 5024,
+      "sha256": "48cea956d675d18fa0a27efdf197edaf2a459c4b4aaeb41d7adc35d9b09eeeb4"
     },
     {
-      "path": "09-history-source-audit.md",
+      "path": "docs/research/09-history-source-audit.md",
       "bytes": 12774,
       "sha256": "a64c85c39ea488d5939fd737762dd96a3c9c9f75a480a6a461d9540806047305"
     },
     {
-      "path": "10-confirmed-windows-mvp.md",
+      "path": "docs/research/10-confirmed-windows-mvp.md",
       "bytes": 6124,
       "sha256": "c8ec74a2bb1807e0eeaf448f2a1cfc7f20d263211df57991e9a02be002239f3f"
     },
     {
-      "path": "HISTORY.md",
-      "bytes": 2607,
-      "sha256": "ff2998be36549cd8a8d54d3fe8b79c85f9befc22de1331a1ffee6d0746a427bd"
+      "path": "docs/research/HISTORY.md",
+      "bytes": 3143,
+      "sha256": "a894d5c8a15a5c9756724a195fbaf77e8730de4cf8a25ea14dd701339b224c5b"
     },
     {
-      "path": "README.md",
-      "bytes": 5511,
-      "sha256": "cc3931450b3f526c03e2899754dae92cd00ba6e9053d57f4800b3c11f434e663"
+      "path": "docs/research/README.md",
+      "bytes": 5646,
+      "sha256": "10a5a2272843919434b99aa79082bde4dd4bf752f9fc2f318d32e2ebc37708d0"
     },
     {
-      "path": "evidence/github/handy-history-source-audit.json",
+      "path": "docs/research/evidence/github/handy-history-source-audit.json",
       "bytes": 3681,
       "sha256": "9d5075d14ec5685864e88d2137bcdf840557fd70418fae65edf9991c983aa981"
     },
     {
-      "path": "evidence/github/handy-stable-source-audit.json",
+      "path": "docs/research/evidence/github/handy-stable-source-audit.json",
       "bytes": 18559,
       "sha256": "c60af467b3ef35ecbd4ff1eb3c319c3528e9eb06621cffee8074d0ecedb98d65"
     },
     {
-      "path": "evidence/github/project-tracking.json",
-      "bytes": 3512,
-      "sha256": "0fcb11a03e36102d88935598d25dda356c73bae9c72f136ce72aadc456fd53d4"
+      "path": "docs/research/evidence/github/project-tracking.json",
+      "bytes": 3885,
+      "sha256": "70fe66b10de731cfc5631117edb4f71e34460f4c2e70dc0f3da27a0831e7d153"
     },
     {
-      "path": "evidence/github/repository-metadata.json",
+      "path": "docs/research/evidence/github/repository-metadata.json",
       "bytes": 44479,
       "sha256": "68ab91a3fef9359fead1df5102ba96def0c4abecf24d22c9f75c37f5bb4facfd"
     },
     {
-      "path": "evidence/github/source-file-identities.json",
+      "path": "docs/research/evidence/github/source-file-identities.json",
       "bytes": 26890,
       "sha256": "e46920a539bfb1642a8a11ea9f483e510c458c7b6fc5f3867e858f35f080c7fc"
     },
     {
-      "path": "evidence/primary-sources.json",
+      "path": "docs/research/evidence/primary-sources.json",
       "bytes": 3550,
       "sha256": "7745a667c0680ce37dec2a7b6de877a5288ee40536fa69559acd0513517ffa2f"
     },
     {
-      "path": "evidence/typeless-artifact-identity.json",
+      "path": "docs/research/evidence/typeless-artifact-identity.json",
       "bytes": 21078,
       "sha256": "ee16815cf31d4b43e888873a6aa49fce3e1cdaeb24541b8b90076f580f9432b2"
     },
     {
-      "path": "evidence/typeless-rea-initial-integrity-error.json",
+      "path": "docs/research/evidence/typeless-rea-initial-integrity-error.json",
       "bytes": 1377,
       "sha256": "e543d372c7fc723d8d3e09dd7861ef80ac56e463dacbea32ca7432db6648ddfa"
     },
     {
-      "path": "evidence/typeless-rea-summary.json",
+      "path": "docs/research/evidence/typeless-rea-summary.json",
       "bytes": 21167,
       "sha256": "b8048af75a099fede3a8723fb1c7caf52695281d10dd770e3f39d657198738f3"
     },
     {
-      "path": "evidence/typeless-static-excerpts.json",
+      "path": "docs/research/evidence/typeless-static-excerpts.json",
       "bytes": 51694,
       "sha256": "368da17e9036b15043fe543c5a1123186806c41dd8d1142cb9fec1b4d0a515b6"
     },
     {
-      "path": "tools/extract_app_sources.py",
+      "path": "docs/research/tools/extract_app_sources.py",
       "bytes": 2961,
       "sha256": "2f6e0c1e16bed47d8065c89985b7f3439e411e2e0f8ef81f979530fe23df20b7"
     },
     {
-      "path": "tools/static_literal_decode.py",
+      "path": "docs/research/tools/static_literal_decode.py",
       "bytes": 3898,
       "sha256": "aab1aac91f1e52ca6d830168c9afabb19a5ce66d42465e4150ff881bd656e143"
+    },
+    {
+      "path": "tests/README.md",
+      "bytes": 1681,
+      "sha256": "8df83dc964fd36b3ef2c605896c2453331e19059739d007de48936f9bd98e662"
+    },
+    {
+      "path": "tests/integration/README.md",
+      "bytes": 2067,
+      "sha256": "7f49fd2c427ee073f349213b7e9777763a7e8d88250da2a64ec23d5a984626b8"
+    },
+    {
+      "path": "tests/unittest/README.md",
+      "bytes": 1148,
+      "sha256": "7ebef750596a1c6485407276c0185a9ad50fbba3c87f64230678c9e41ff94f8c"
     }
-  ]
+  ],
+  "artifact_path_base": "repository root",
+  "validation_method": "UTF-8/NUL check; JSON parse; Python AST parse; Markdown local file/reference destinations; Q1-Q15 uniqueness; accepted ADRs; handoff entrypoints and required constraints; product-test file count. GitHub publication identity is checked after creating the commit."
 }

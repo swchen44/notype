@@ -2,6 +2,8 @@
 
 查核日期：2026-10-24。
 
+Windows 11 新 session 先讀根目錄 [HANDOFF.md](../../HANDOFF.md) 與 [TODO.md](../../TODO.md)；接手 prompt 已保存其中。
+
 **研究與Q1～Q15決策已收斂，先讀 [Windows MVP 定稿](10-confirmed-windows-mvp.md)。** 產品為Windows amd64 portable App，只用公開通用npm包配送，公司設定留本機；本機STT→公司文字LLM→原輸入目標交付，並保留可搜尋的長期文字歷史。優先評估修改Handy，效能與runtime仍須在公司Windows驗收。
 
 ## 已確認的需求

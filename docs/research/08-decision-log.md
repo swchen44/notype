@@ -29,6 +29,7 @@
 | C6 | 建立 GitHub repo，保存 history 與 issue tracking | 使用者明確授權；repo 採 private |
 | C7 | 根目錄指引使用 `AGENTS.md`；GitHub Issues、五個預設 triage labels、single-context domain docs | 使用者確認 setup 草稿與檔名 |
 | C8 | 測試分為 `tests/unittest/` 與 `tests/integration/` | 使用者補充；框架隨 Windows 實作選定 |
+| C9 | 在使用者自己的 Windows 11 開發，GitHub 保存 handoff／issues／TODO；Windows 已有 Codex 與 grillme | 使用者最後明確選定；是否位於公司內網仍待查核 |
 
 ## 2. 訪談收斂
 

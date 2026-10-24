@@ -23,3 +23,6 @@
 
 - Q11～Q15 全部採建議：長期本機文字歷史與當次錄音分離、公開通用npm與本機公司設定、按住熱鍵／Esc、最小LLM上下文、原輸入目標一致才自動貼。
 - 15項訪談決策收斂；補glossary、兩份ADR與Windows MVP定稿。History source audit確認需要拆開WAV gate／cleanup、加入文字LLM重試與歷史搜尋UI；新增追蹤issue #7。
+- 研究定稿 commit `bdbcb13bdb2a3f529236b0e690344522351c5e54` 已保存，設計 issue #1 結案；#2～#7 留待 Windows 實作。
+- 使用者明確選定自己的 Windows 11 開發，已有 Codex 與 grillme。新增根目錄 HANDOFF.md、TODO.md 與接手 prompt；不重問 Q1～Q15，其他 skills 未安裝時仍可依文件及 issues 接續。
+- Windows 開發機與公司內網驗收條件分開記錄；本次僅更新交接文件及追蹤，沒有新增產品程式、產品測試、Windows runtime 或 npm 發布結果。

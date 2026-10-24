@@ -2,9 +2,11 @@
 
 更新日期：2026-10-24。Repository：<https://github.com/swchen44/notype_study>，private。
 
+**使用者已選定自己的 Windows 11 開發。** 新 session 先讀根目錄 [HANDOFF.md](../../HANDOFF.md) 與 [TODO.md](../../TODO.md)；目前的直接貼用 prompt 以 HANDOFF.md 為準。
+
 ## 1. 實作與驗收在哪裡做
 
-**應在公司 Windows amd64 上開始實作接點與 runtime 驗收。** 麥克風、快捷鍵、IME、WebView2、native DLL、公司 TLS／Proxy 與跨 App 貼上都需要目標 Windows 的 evidence。macOS source review、Windows CI build 或成功解包均不能替代這一層驗收。
+**在使用者的 Windows 11 amd64 開始實作與本機驗證，最後在公司 Windows 驗收內網條件。** 若開發機本身位於公司內網，可在同一台機器完成兩者；目前尚未查核。麥克風、快捷鍵、IME、WebView2、native DLL、公司 TLS／Proxy 與跨 App 貼上都需要目標 Windows 的 evidence。macOS source review、Windows CI build 或成功解包均不能替代這一層驗收。
 
 公司 App **不能使用 installer**。首版交付應為可寫入使用者目錄的 portable payload，只由 npm Proxy 取得完整檔案，不另做 Python wheel。不得把啟動時下載並執行 setup／MSI／WebView2 bootstrapper 當成解法。
 
@@ -44,35 +46,9 @@ Rust build 工具能否在公司機器使用仍未知。如果已有 MSVC／Rust
 
 ## 5. 可貼給 Windows Codex 的接手 prompt
 
-```text
-接手 private repository swchen44/notype_study。先讀 README.md、docs/research/README.md、
-07-windows-handoff.md、08-decision-log.md、09-history-source-audit.md、10-confirmed-windows-mvp.md、GLOSSARY.md、docs/adr/ 與 GitHub Issues。
+直接使用根目錄 [HANDOFF.md 的 prompt](../../HANDOFF.md#直接貼給-windows-codex)，避免多份 prompt 各自演進。
 
-目標為公司 Windows amd64 portable 語音輸入 App：熱鍵→本機STT→公司文字LLM→貼回輸入框。
-不能使用 installer/setup.exe/MSI 或 runtime bootstrapper。npm Proxy 可配送含預編譯
-exe/DLL/模型的套件；不另做Python wheel；通用產品包採公開npm，公司設定留本機，GitHub private。
-先供使用者本人使用，首批目標 browser、VS Code、Teams、Outlook、Windows Terminal。
-繁中夾英文忠實整理；LLM失敗保留原稿待選。長期文字歷史可搜尋／複製／刪除，
-本機保留原稿、整理結果、時間與狀態到手動刪除；錄音只供當次處理。
-按住可自訂熱鍵說話、放開處理、Esc取消；所有App手動Enter，Terminal先做自然語言prompt。
-公司LLM只接收當次原稿與手動術語表；原輸入目標改變或無法確認時不自動貼上。
-CPU可用baseline；10～20秒錄音放開到貼上p95≤5秒為待驗證目標。
-
-先唯讀查核此Windows環境與GitHub狀態，不安裝工具、不執行外來installer、不讀取或提交
-實際工作錄音/逐字稿/API秘密。Q1～Q15已確認，沿用定稿；新技術問題先查環境與來源。
-Handy文字歷史與WAV gate/cleanup耦合，請依09追查結果拆開，不以retention設定假裝完成。
-
-原始碼基底優先評估Handy v0.9.8，commit 14f6f0d31cb22a4268acfbddba3052820fd0a06e。
-依固定來源取得payload/模型，不依賴Mac的/private/tmp。readiness、build、靜態解包、
-Windows實際啟動、ASR品質/效能、公司API和五個App貼上分開記錄證據。
-每項變更對應issue及commit；成功與失敗都留下command、版本、狀態和未驗證邊界。
-套件publish與CI配置依後續明確授權範圍執行。
-
-遵循AGENTS.md與docs/agents/*.md。unit tests放tests/unittest/，integration tests放
-tests/integration/；選定stack後補可分開執行的命令，不能把目前的文件scaffold當測試通過。
-```
-
-建議的 skills 流程：Q1～Q15 已完成；接著用 `to-spec` 整理規格，再用 `to-tickets` 拆分含 blocking edges 的可驗證切片。換到 Windows 新 session 前可用 `handoff` 產生暫存交接文件，引用此 repo 既有文件及 issues。
+Q1～Q15 已完成；若 Windows 有 `to-spec`／`to-tickets` 可用來補規格與 blocking edges，沒有時直接在 repo／issues 留下範圍、驗收、相依與測試方式。使用者已有的 grillme 只處理新的重大決策。交接已依使用者要求持久保存在 repo，接手不依賴 Mac 暫存檔或其他 skills。
 
 ## 6. GitHub 追蹤入口
 

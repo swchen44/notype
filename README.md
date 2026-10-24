@@ -21,9 +21,11 @@
 
 | 文件 | 用途 |
 | --- | --- |
+| [Windows 11 HANDOFF](HANDOFF.md) | 下一個 Codex session 的首讀文件、現況與可直接貼用的 prompt |
+| [TODO](TODO.md) | 開放 issues、建議接續順序與完成條件 |
 | [Windows MVP 定稿](docs/research/10-confirmed-windows-mvp.md) | 已確認產品行為、上游必改點與 Windows 實作／驗收順序 |
 | [研究索引](docs/research/README.md) | Typeless、開源選型、架構、封裝與證據 |
-| [Windows 接手說明](docs/research/07-windows-handoff.md) | 在公司 Windows 開始實作與驗收的順序及接手 prompt |
+| [Windows 接手說明](docs/research/07-windows-handoff.md) | Windows 開發與公司內網驗收的技術順序 |
 | [決策紀錄](docs/research/08-decision-log.md) | 已確認選項、未決訪談問題與設計樹 |
 | [工作紀錄](docs/research/HISTORY.md) | 研究／決策里程碑；程式碼演進以 Git commits 為準 |
 | [測試規範](tests/README.md) | `tests/unittest/` 與 `tests/integration/` 的範圍、執行與回報規則 |
