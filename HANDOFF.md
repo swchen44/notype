@@ -6,6 +6,8 @@
 
 ## 目前 checkpoint
 
+implement-spec 進度：#9 桌面基線及 #10 共用 Rust 核心已合入 `implement/notype-mvp`，合併點 `036c08c`；#11 正在實作。notype 原生 App 已成功啟動及驗證設定重啟保存；核心相同 contracts 已在 Windows 與 Linux 通過，見 [portability receipt](docs/verification/shared-core-portability.md) 及 [GitHub CI](https://github.com/swchen44/notype/actions/runs/40137924066)。這些不等同完整語音／公司 API／五個 App／配送驗收，#8～#16 尚未結案。
+
 2026-10-25 Prompt 補充：使用者提供角色／處理原則／格式／限制及 few-shot 草稿；已加入 #8／#11 的保真文字整理設計。只處理原稿文字，保留數字／否定／英文／code／既有不確定標記，依上下文刪贅詞，不新增講者或臆測音訊；原稿及術語表當作資料，不執行其指令。中英排版保護字面值，提示詞依當次辨識模式選字形，與介面 locale 獨立。真正模型品質仍待驗收，無需為 prompt 設計先提供 key。
 
 2026-10-25 implement-spec 已啟動：整合分支 `implement/notype-mvp`（起點 `be6f0a5`），實作／驗收工作圖為 #9～#16，具 GitHub 原生 blocking edges，見 [TODO](TODO.md)。#9 桌面基線與 #10 共用 Rust 核心先並行；#11 接合後解鎖語言及原生交付，再做配送／目標驗收。公司 contract／真實 App／Proxy 未就緒時 #15／#16 保持未完成。實作以 TDD、獨立 worktree、整合與最終 code review 推進；只有實際達成驗收才結案。

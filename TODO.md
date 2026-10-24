@@ -18,6 +18,8 @@
 
 整合分支：`implement/notype-mvp`，起點 `be6f0a5`。每個實作 ticket 使用獨立 branch／worktree 與已確認的 public seams 做 TDD，合入整合分支後再啟動被解鎖的工作；最後對起點到整合分支的完整 diff 做 Standards／Spec review。本輪不建立 PR，不把公司／目標環境尚未執行的驗收當作完成。
 
+目前 #9／#10 已合入整合分支，#11 正在實作；issues 保持 open 直到 review／驗收完成。桌面政策 3 tests、真實 native 設定／重啟 1 test 通過；共用核心 Windows／Linux 各 17 tests 加 1 文件範例通過，Linux CI 也通過既有 Node 11 unit／5 integration。見 [桌面基線](docs/verification/windows-desktop-baseline.md) 與 [核心 portability receipt](docs/verification/shared-core-portability.md)。
+
 | Ticket | 阻擋來源 | 可展示／驗收成果 |
 | --- | --- | --- |
 | [#9 桌面基線](https://github.com/swchen44/notype/issues/9) | 無 | 固定 Handy source、notype 啟動、設定保存、外部資料目錄、CPU-only no-bundle 與停用 installer updater／自動 Enter |
