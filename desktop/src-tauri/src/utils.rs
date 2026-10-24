@@ -8,7 +8,6 @@ use tauri::{AppHandle, Manager};
 
 // Re-export all utility modules for easy access
 // pub use crate::audio_feedback::*;
-pub use crate::clipboard::*;
 pub use crate::overlay::*;
 pub use crate::tray::*;
 
@@ -85,6 +84,11 @@ fn native_windows_machine() -> Option<u16> {
 /// Handles cancelling both recording and transcription operations and updates UI state.
 pub fn cancel_current_operation(app: &AppHandle) {
     info!("Initiating operation cancellation...");
+    if let Some(workflow) = app.try_state::<Arc<crate::workflow::DesktopWorkflow>>() {
+        if workflow.cancel_active().is_err() {
+            log::error!("session-cancellation-storage-failed");
+        }
+    }
 
     // Unregister the cancel shortcut asynchronously
     shortcut::unregister_cancel_shortcut(app);

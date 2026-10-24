@@ -1,154 +1,296 @@
-use crate::actions::process_transcription_output;
-use crate::managers::{
-    history::{HistoryManager, PaginatedHistory},
-    transcription::TranscriptionManager,
+use crate::{
+    portable, settings,
+    workflow::{DesktopWorkflow, TextConfiguration},
 };
+use notype_core::{RecognitionMode, SessionEntry, SessionStatus};
+use serde::{Deserialize, Serialize};
+use specta::Type;
 use std::sync::Arc;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
+use tauri_plugin_clipboard_manager::ClipboardExt;
+use tauri_plugin_store::StoreExt;
 
-#[tauri::command]
-#[specta::specta]
-pub async fn get_history_entries(
-    _app: AppHandle,
-    history_manager: State<'_, Arc<HistoryManager>>,
-    cursor: Option<i64>,
-    limit: Option<usize>,
-) -> Result<PaginatedHistory, String> {
-    history_manager
-        .get_history_entries(cursor, limit)
-        .await
-        .map_err(|e| e.to_string())
+#[derive(Serialize, Type)]
+#[serde(rename_all = "kebab-case")]
+pub enum SessionPhase {
+    Recognized,
+    Processing,
+    Pending,
+    Failed,
+    Cancelled,
+    Delivering,
+    Delivered,
+    DeliveryUnknown,
 }
-
-#[tauri::command]
-#[specta::specta]
-pub async fn toggle_history_entry_saved(
-    _app: AppHandle,
-    history_manager: State<'_, Arc<HistoryManager>>,
-    id: i64,
-) -> Result<(), String> {
-    history_manager
-        .toggle_saved_status(id)
-        .await
-        .map_err(|e| e.to_string())
+#[derive(Serialize, Type)]
+pub struct SessionDto {
+    pub id: String,
+    pub transcript: String,
+    pub result: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+    pub status: SessionPhase,
+    pub error: Option<String>,
+    pub recognition_mode: Option<String>,
+    pub selection: String,
 }
-
-#[tauri::command]
-#[specta::specta]
-pub async fn get_audio_file_path(
-    _app: AppHandle,
-    history_manager: State<'_, Arc<HistoryManager>>,
-    file_name: String,
-) -> Result<String, String> {
-    let path = history_manager.get_audio_file_path(&file_name);
-    path.to_str()
-        .ok_or_else(|| "Invalid file path".to_string())
-        .map(|s| s.to_string())
-}
-
-#[tauri::command]
-#[specta::specta]
-pub async fn delete_history_entry(
-    _app: AppHandle,
-    history_manager: State<'_, Arc<HistoryManager>>,
-    id: i64,
-) -> Result<(), String> {
-    history_manager
-        .delete_entry(id)
-        .await
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-#[specta::specta]
-pub async fn retry_history_entry_transcription(
-    app: AppHandle,
-    history_manager: State<'_, Arc<HistoryManager>>,
-    transcription_manager: State<'_, Arc<TranscriptionManager>>,
-    id: i64,
-) -> Result<(), String> {
-    let entry = history_manager
-        .get_entry_by_id(id)
-        .await
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| format!("History entry {} not found", id))?;
-
-    let audio_path = history_manager.get_audio_file_path(&entry.file_name);
-    let samples = crate::audio_toolkit::read_wav_samples(&audio_path)
-        .map_err(|e| format!("Failed to load audio: {}", e))?;
-
-    if samples.is_empty() {
-        return Err("Recording has no audio samples".to_string());
+impl From<SessionEntry> for SessionDto {
+    fn from(entry: SessionEntry) -> Self {
+        Self {
+            id: entry.id,
+            transcript: entry.transcript,
+            result: entry.result,
+            created_at: entry.created_at,
+            updated_at: entry.updated_at,
+            status: match entry.status {
+                SessionStatus::Recognized => SessionPhase::Recognized,
+                SessionStatus::Processing => SessionPhase::Processing,
+                SessionStatus::Pending => SessionPhase::Pending,
+                SessionStatus::Failed => SessionPhase::Failed,
+                SessionStatus::Cancelled => SessionPhase::Cancelled,
+                SessionStatus::Delivering => SessionPhase::Delivering,
+                SessionStatus::Delivered => SessionPhase::Delivered,
+                SessionStatus::DeliveryUnknown => SessionPhase::DeliveryUnknown,
+            },
+            error: entry.error,
+            recognition_mode: entry.recognition_mode.map(|mode| {
+                match mode {
+                    RecognitionMode::TraditionalEnglish => "traditional_english",
+                    RecognitionMode::SimplifiedEnglish => "simplified_english",
+                }
+                .into()
+            }),
+            selection: match entry.selection {
+                notype_core::TextSelection::Original => "original",
+                notype_core::TextSelection::Polished => "polished",
+            }
+            .into(),
+        }
     }
+}
 
-    transcription_manager.initiate_model_load();
+pub struct LegacyImportNotice(pub Option<String>);
+#[derive(Serialize, Type)]
+pub struct WorkflowReadiness {
+    pub text_configured: bool,
+    pub delivery_available: bool,
+    pub legacy_import_error: Option<String>,
+}
 
-    let tm = Arc::clone(&transcription_manager);
-    let transcription = tauri::async_runtime::spawn_blocking(move || tm.transcribe(samples))
-        .await
-        .map_err(|e| format!("Transcription task panicked: {}", e))?
-        .map_err(|e| e.to_string())?;
+pub(crate) fn read_configuration(app: &AppHandle) -> Result<TextConfiguration, String> {
+    let path = portable::app_data_dir(app)
+        .map_err(|_| "configuration-storage-failed")?
+        .join("text_processing_store.json");
+    let store = app
+        .store(path)
+        .map_err(|_| "configuration-storage-failed")?;
+    store
+        .get("configuration")
+        .map(serde_json::from_value)
+        .transpose()
+        .map_err(|_| "configuration-required".to_string())
+        .map(|configuration| configuration.unwrap_or_default())
+}
 
-    if transcription.is_empty() {
-        return Err("Recording contains no speech".to_string());
+#[tauri::command]
+#[specta::specta]
+pub fn get_text_configuration(app: AppHandle) -> Result<TextConfiguration, String> {
+    read_configuration(&app)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn set_text_configuration(
+    app: AppHandle,
+    configuration: TextConfiguration,
+) -> Result<(), String> {
+    let path = portable::app_data_dir(&app)
+        .map_err(|_| "configuration-storage-failed")?
+        .join("text_processing_store.json");
+    let store = app
+        .store(path)
+        .map_err(|_| "configuration-storage-failed")?;
+    store.set(
+        "configuration",
+        serde_json::to_value(configuration).map_err(|_| "configuration-required")?,
+    );
+    store
+        .save()
+        .map_err(|_| "configuration-storage-failed".to_string())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn get_workflow_readiness(
+    app: AppHandle,
+    notice: State<'_, LegacyImportNotice>,
+) -> WorkflowReadiness {
+    WorkflowReadiness {
+        text_configured: read_configuration(&app)
+            .is_ok_and(|configuration| configuration.is_ready()),
+        delivery_available: false,
+        legacy_import_error: notice.0.clone(),
     }
-
-    let processed =
-        process_transcription_output(&app, &transcription, entry.post_process_requested).await;
-    history_manager
-        .update_transcription(
-            id,
-            transcription,
-            processed.post_processed_text,
-            processed.post_process_prompt,
-        )
-        .map(|_| ())
-        .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
-#[specta::specta]
-pub async fn update_history_limit(
-    app: AppHandle,
-    history_manager: State<'_, Arc<HistoryManager>>,
-    limit: usize,
-) -> Result<(), String> {
-    let mut settings = crate::settings::get_settings(&app);
-    settings.history_limit = limit;
-    crate::settings::write_settings(&app, settings);
-
-    history_manager
-        .cleanup_old_entries()
-        .map_err(|e| e.to_string())?;
-
-    Ok(())
-}
-
-#[tauri::command]
-#[specta::specta]
-pub async fn update_recording_retention_period(
-    app: AppHandle,
-    history_manager: State<'_, Arc<HistoryManager>>,
-    period: String,
-) -> Result<(), String> {
-    use crate::settings::RecordingRetentionPeriod;
-
-    let retention_period = match period.as_str() {
-        "never" => RecordingRetentionPeriod::Never,
-        "preserve_limit" => RecordingRetentionPeriod::PreserveLimit,
-        "days3" => RecordingRetentionPeriod::Days3,
-        "weeks2" => RecordingRetentionPeriod::Weeks2,
-        "months3" => RecordingRetentionPeriod::Months3,
-        _ => return Err(format!("Invalid retention period: {}", period)),
+pub(crate) fn begin_recording(app: &AppHandle) -> Result<u64, String> {
+    let mode = match settings::get_settings(app).chinese_script {
+        settings::ChineseScript::Simplified => RecognitionMode::SimplifiedEnglish,
+        settings::ChineseScript::Traditional | settings::ChineseScript::AsTranscribed => {
+            RecognitionMode::TraditionalEnglish
+        }
     };
+    app.state::<Arc<DesktopWorkflow>>()
+        .begin(mode, None)
+        .map_err(|error| error.to_string())
+}
 
-    let mut settings = crate::settings::get_settings(&app);
-    settings.recording_retention_period = retention_period;
-    crate::settings::write_settings(&app, settings);
+pub(crate) async fn finish_recognized(
+    app: &AppHandle,
+    generation: u64,
+    transcript: &str,
+) -> Result<SessionEntry, String> {
+    let workflow = Arc::clone(&app.state::<Arc<DesktopWorkflow>>());
+    let configuration = read_configuration(app).unwrap_or_default();
+    let glossary = settings::get_settings(app).custom_words;
+    workflow
+        .finish(generation, transcript, configuration, glossary)
+        .await
+        .map_err(|error| error.to_string())
+}
 
-    history_manager
-        .cleanup_old_entries()
-        .map_err(|e| e.to_string())?;
+#[tauri::command]
+#[specta::specta]
+pub fn get_history_entries(
+    workflow: State<'_, Arc<DesktopWorkflow>>,
+    query: Option<String>,
+) -> Result<Vec<SessionDto>, String> {
+    workflow
+        .sessions()
+        .search(query.as_deref().unwrap_or(""))
+        .map(|entries| entries.into_iter().map(Into::into).collect())
+        .map_err(|error| error.to_string())
+}
 
-    Ok(())
+#[tauri::command]
+#[specta::specta]
+pub fn delete_history_entry(
+    workflow: State<'_, Arc<DesktopWorkflow>>,
+    id: String,
+) -> Result<(), String> {
+    workflow.delete(&id).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn cancel_history_entry(
+    workflow: State<'_, Arc<DesktopWorkflow>>,
+    id: String,
+) -> Result<SessionDto, String> {
+    workflow
+        .cancel(&id)
+        .map(Into::into)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn retry_history_entry_processing(
+    app: AppHandle,
+    workflow: State<'_, Arc<DesktopWorkflow>>,
+    id: String,
+) -> Result<SessionDto, String> {
+    let configuration = read_configuration(&app).unwrap_or_default();
+    let glossary = settings::get_settings(&app).custom_words;
+    workflow
+        .retry(&id, configuration, glossary)
+        .await
+        .map(Into::into)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn choose_history_original(
+    workflow: State<'_, Arc<DesktopWorkflow>>,
+    id: String,
+) -> Result<SessionDto, String> {
+    workflow
+        .choose_original(&id)
+        .map(Into::into)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn deliver_history_entry(
+    workflow: State<'_, Arc<DesktopWorkflow>>,
+    id: String,
+) -> Result<SessionDto, String> {
+    workflow
+        .deliver(&id)
+        .await
+        .map(Into::into)
+        .map_err(|error| error.to_string())
+}
+
+#[derive(Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum HistoryTextVersion {
+    Original,
+    Result,
+}
+#[tauri::command]
+#[specta::specta]
+pub fn copy_history_text(
+    app: AppHandle,
+    workflow: State<'_, Arc<DesktopWorkflow>>,
+    id: String,
+    version: HistoryTextVersion,
+) -> Result<(), String> {
+    let entry = workflow
+        .sessions()
+        .get(&id)
+        .map_err(|error| error.to_string())?;
+    let text = match version {
+        HistoryTextVersion::Original => entry.transcript,
+        HistoryTextVersion::Result => entry.result.ok_or("result-unavailable")?,
+    };
+    app.clipboard()
+        .write_text(text)
+        .map_err(|_| "clipboard-unavailable".to_string())
+}
+
+// Compatibility commands cannot enable automatic text deletion.
+#[tauri::command]
+#[specta::specta]
+pub fn update_history_limit(_limit: usize) -> Result<(), String> {
+    Err("manual-history-retention".into())
+}
+#[tauri::command]
+#[specta::specta]
+pub fn update_recording_retention_period(_period: String) -> Result<(), String> {
+    Err("session-audio-only".into())
+}
+
+#[cfg(debug_assertions)]
+#[tauri::command]
+pub fn debug_begin_session(
+    workflow: State<'_, Arc<DesktopWorkflow>>,
+    recognition_mode: RecognitionMode,
+) -> Result<u64, String> {
+    workflow
+        .begin(recognition_mode, None)
+        .map_err(|error| error.to_string())
+}
+#[cfg(debug_assertions)]
+#[tauri::command]
+pub async fn debug_finish_session(
+    app: AppHandle,
+    generation: u64,
+    transcript: String,
+) -> Result<SessionDto, String> {
+    finish_recognized(&app, generation, &transcript)
+        .await
+        .map(Into::into)
 }

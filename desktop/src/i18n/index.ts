@@ -90,7 +90,7 @@ export const getSupportedLanguage = (
 i18n.use(initReactI18next).init({
   resources,
   lng: "en",
-  fallbackLng: "en",
+  fallbackLng: "zh-TW",
   interpolation: {
     escapeValue: false, // React already escapes values
   },

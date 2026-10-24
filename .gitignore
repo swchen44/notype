@@ -35,3 +35,6 @@ private-config/
 !desktop/src-tauri/resources/models/
 !desktop/src-tauri/resources/models/silero_vad_v4.onnx
 !desktop/src-tauri/resources/*.wav
+!desktop/src/components/settings/models/
+!desktop/src/components/settings/models/*.tsx
+!desktop/src/components/settings/models/*.ts
