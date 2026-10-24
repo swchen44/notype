@@ -1,0 +1,41 @@
+name: Shared core contracts
+
+on:
+  push:
+    branches: [main, implement/notype-mvp]
+    paths:
+      - .github/workflows/core-contracts.yml
+      - crates/notype-core/**
+      - tests/unittest/**
+      - tests/integration/core_*.rs
+      - tests/integration/text-flow.test.mjs
+      - src/**
+      - package.json
+      - package-lock.json
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  portable-core:
+    name: Core and diagnostic contracts on Linux
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install the verified Rust toolchain
+        run: rustup toolchain install 1.99.1 --profile minimal --component rustfmt --component clippy
+      - name: Check core formatting
+        run: cargo +1.99.1 fmt --manifest-path crates/notype-core/Cargo.toml -- --check
+      - name: Exercise the public core contracts without Windows or Tauri
+        run: cargo +1.99.1 test --locked --manifest-path crates/notype-core/Cargo.toml
+      - name: Lint the core
+        run: cargo +1.99.1 clippy --locked --manifest-path crates/notype-core/Cargo.toml --all-targets -- -D warnings
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22.15.0
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run test:unit
+      - run: npm run test:integration
