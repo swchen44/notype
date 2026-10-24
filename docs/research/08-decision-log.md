@@ -31,6 +31,8 @@
 | C8 | 測試分為 `tests/unittest/` 與 `tests/integration/` | 使用者補充；框架隨 Windows 實作選定 |
 | C9 | 在使用者自己的 Windows 11 開發，GitHub 保存 handoff／issues／TODO；Windows 已有 Codex 與 grillme | 使用者最後明確選定；是否位於公司內網仍待查核 |
 | C10 | MVP 先交付 Windows amd64；架構現在預留 macOS／Linux，以共用核心及平台 adapter 降低移植返工；正式 App 優先沿用 Handy 的 Rust／Tauri 2／React TypeScript 路線 | 2026-10-25 使用者新增跨平台架構需求；見 [ADR 0003](../adr/0003-shared-core-platform-adapters.md)，其他平台尚未實作／驗收 |
+| C11 | 介面新增簡體中文（zh-CN），與繁體中文（zh-TW）可切換並保存偏好；介面語言獨立於語音辨識及文字輸出，不自動轉換使用者文字 | 2026-10-25 使用者要求「介面再加入簡體中文」；已加入規格 #8，實作／介面驗收待完成 |
+| C12 | 真正需要 API key 時再通知使用者；目前繼續本機 STT、HTTP fixture 與核心開發，不要求先申請 key | 2026-10-25 使用者明確指示「需要 key 再和我講」 |
 
 ## 2. 訪談收斂
 

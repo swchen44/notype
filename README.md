@@ -15,6 +15,7 @@ notype 免安裝語音輸入 App 的研究、決策與實作追蹤；先交付 W
 - 公司目前只有文字 LLM API，語音辨識需在本機完成。
 - 以修改現有開源 App 為優先，先評估 Handy；Rust 不代表沒有 native DLL 或 WebView runtime。
 - 繁中夾英文，以忠實整理為準；LLM 失敗時停下，保留逐字稿供重試或貼原稿。
+- 介面語言規劃支援繁體中文（zh-TW）與簡體中文（zh-CN），可切換並保存偏好；介面語言獨立於語音辨識與文字輸出語言。此項已納入規格，正式 App 介面尚待實作。
 - 首批目標為瀏覽器文字框、VS Code、Teams、Outlook、Windows Terminal；所有 App 手動按 Enter，Terminal 首版以自然語言 prompt 為主。
 - 本機長期保存原稿、整理結果、時間與狀態，提供搜尋／複製／刪除；錄音只供當次處理。
 - CPU 可用為基線，10～20秒短錄音以放開到貼上 p95≤5秒為待驗證目標。
@@ -23,7 +24,7 @@ notype 免安裝語音輸入 App 的研究、決策與實作追蹤；先交付 W
 
 | 文件 | 用途 |
 | --- | --- |
-| [MVP 與跨平台核心規格 #8](https://github.com/swchen44/notype/issues/8) | to-spec 正式規格、50 條 user stories、共用核心與平台 adapter、驗收與範圍 |
+| [MVP 與跨平台核心規格 #8](https://github.com/swchen44/notype/issues/8) | to-spec 正式規格、53 條 user stories、介面語言、共用核心與平台 adapter、驗收與範圍 |
 | [Windows 11 HANDOFF](HANDOFF.md) | 下一個 Codex session 的首讀文件、現況與可直接貼用的 prompt |
 | [TODO](TODO.md) | 開放 issues、建議接續順序與完成條件 |
 | [Windows MVP 定稿](docs/research/10-confirmed-windows-mvp.md) | 已確認產品行為、上游必改點與 Windows 實作／驗收順序 |
