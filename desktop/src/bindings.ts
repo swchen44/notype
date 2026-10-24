@@ -859,31 +859,66 @@ async unloadModelManually() : Promise<Result<null, string>> {
     else return { status: "error", error: e  as any };
 }
 },
-async getHistoryEntries(cursor: number | null, limit: number | null) : Promise<Result<PaginatedHistory, string>> {
+async getHistoryEntries(query: string | null) : Promise<Result<SessionDto[], string>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("get_history_entries", { cursor, limit }) };
+    return { status: "ok", data: await TAURI_INVOKE("get_history_entries", { query }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
 },
-async toggleHistoryEntrySaved(id: number) : Promise<Result<null, string>> {
+async getTextConfiguration() : Promise<Result<TextConfiguration, string>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("toggle_history_entry_saved", { id }) };
+    return { status: "ok", data: await TAURI_INVOKE("get_text_configuration") };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
 },
-async getAudioFilePath(fileName: string) : Promise<Result<string, string>> {
+async setTextConfiguration(configuration: TextConfiguration) : Promise<Result<null, string>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("get_audio_file_path", { fileName }) };
+    return { status: "ok", data: await TAURI_INVOKE("set_text_configuration", { configuration }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
 },
-async deleteHistoryEntry(id: number) : Promise<Result<null, string>> {
+async getWorkflowReadiness() : Promise<WorkflowReadiness> {
+    return await TAURI_INVOKE("get_workflow_readiness");
+},
+async cancelHistoryEntry(id: string) : Promise<Result<SessionDto, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cancel_history_entry", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async chooseHistoryOriginal(id: string) : Promise<Result<SessionDto, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("choose_history_original", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async deliverHistoryEntry(id: string) : Promise<Result<SessionDto, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("deliver_history_entry", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async copyHistoryText(id: string, version: HistoryTextVersion) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("copy_history_text", { id, version }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async deleteHistoryEntry(id: string) : Promise<Result<null, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("delete_history_entry", { id }) };
 } catch (e) {
@@ -891,9 +926,9 @@ async deleteHistoryEntry(id: number) : Promise<Result<null, string>> {
     else return { status: "error", error: e  as any };
 }
 },
-async retryHistoryEntryTranscription(id: number) : Promise<Result<null, string>> {
+async retryHistoryEntryProcessing(id: string) : Promise<Result<SessionDto, string>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("retry_history_entry_transcription", { id }) };
+    return { status: "ok", data: await TAURI_INVOKE("retry_history_entry_processing", { id }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -916,10 +951,8 @@ async updateRecordingRetentionPeriod(period: string) : Promise<Result<null, stri
 }
 },
 /**
- * Checks if the Mac is a laptop by detecting battery presence
- * 
- * This uses pmset to check for battery information.
- * Returns true if a battery is detected (laptop), false otherwise (desktop)
+ * Stub implementation for non-macOS platforms
+ * Always returns false since laptop detection is macOS-specific
  */
 async isLaptop() : Promise<Result<boolean, string>> {
     try {
@@ -935,11 +968,9 @@ async isLaptop() : Promise<Result<boolean, string>> {
 
 
 export const events = __makeEvents__<{
-historyUpdatePayload: HistoryUpdatePayload,
 streamPhaseEvent: StreamPhaseEvent,
 streamTextEvent: StreamTextEvent
 }>({
-historyUpdatePayload: "history-update-payload",
 streamPhaseEvent: "stream-phase-event",
 streamTextEvent: "stream-text-event"
 })
@@ -1041,8 +1072,7 @@ export type EngineType =
  */
 "TranscribeCpp" | "Parakeet" | "Moonshine" | "MoonshineStreaming" | "SenseVoice" | "GigaAM" | "Canary" | "Cohere"
 export type GpuDeviceOption = { id: string; name: string; total_vram_mb: number }
-export type HistoryEntry = { id: number; file_name: string; timestamp: number; saved: boolean; title: string; transcription_text: string; post_processed_text: string | null; post_process_prompt: string | null; post_process_requested: boolean }
-export type HistoryUpdatePayload = { action: "added"; entry: HistoryEntry } | { action: "updated"; entry: HistoryEntry } | { action: "deleted"; id: number } | { action: "toggled"; id: number }
+export type HistoryTextVersion = "original" | "result"
 /**
  * Result of changing keyboard implementation
  */
@@ -1095,7 +1125,6 @@ export type OverlayPosition = "top" | "bottom"
  * streaming mode (that is driven purely by model capability).
  */
 export type OverlayStyle = "none" | "minimal" | "live"
-export type PaginatedHistory = { entries: HistoryEntry[]; has_more: boolean }
 export type PasteMethod = "ctrl_v" | "direct" | "none" | "shift_insert" | "ctrl_shift_v" | "external_script"
 export type PermissionAccess = "allowed" | "denied" | "unknown"
 export type PostProcessProvider = { id: string; label: string; base_url: string; allow_base_url_edit?: boolean; models_endpoint?: string | null; supports_structured_output?: boolean }
@@ -1133,6 +1162,8 @@ uncovered_bindings: string[];
  * warning banner appears and explains why recording refused.
  */
 recorder_blocked: boolean }
+export type SessionDto = { id: string; transcript: string; result: string | null; created_at: string; updated_at: string; status: SessionPhase; error: string | null; recognition_mode: string | null; selection: string }
+export type SessionPhase = "recognized" | "processing" | "pending" | "failed" | "cancelled" | "delivering" | "delivered" | "delivery-unknown"
 /**
  * How the transcribe shortcut's key events drive a recording.
  */
@@ -1185,6 +1216,9 @@ export type StreamTextEvent = { committed: string; tentative: string }
  * Semantic kind of "working" phase, used to localize the spinner label.
  */
 export type StreamWorkKind = "transcribing" | "polishing"
+export type TextAuthentication = "unspecified" | "none" | "bearer"
+export type TextConfiguration = { transport: TextTransport; endpoint: string; model: string; authentication: TextAuthentication; api_key: string; timeout_ms: number }
+export type TextTransport = "disabled" | "open_ai_chat"
 /**
  * UI appearance mode. `System` follows the OS `prefers-color-scheme`; `Light`
  * and `Dark` force one of the two palettes Handy already ships.
@@ -1194,6 +1228,7 @@ export type TranscribeAcceleratorSetting = "auto" | "cpu" | "gpu"
 export type TypingTool = "auto" | "wtype" | "kwtype" | "dotool" | "ydotool" | "xdotool"
 export type VadBackend = "silero" | "earshot"
 export type WindowsMicrophonePermissionStatus = { supported: boolean; overall_access: PermissionAccess; device_access: PermissionAccess; app_access: PermissionAccess; desktop_app_access: PermissionAccess }
+export type WorkflowReadiness = { text_configured: boolean; delivery_available: boolean; legacy_import_error: string | null }
 
 /** tauri-specta globals **/
 

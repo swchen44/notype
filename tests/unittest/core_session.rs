@@ -65,6 +65,31 @@ async fn original_is_saved_before_processing_and_success_remains_pending() {
 }
 
 struct Reply(Result<String, TextFailure>);
+
+#[tokio::test]
+async fn missing_configuration_remains_a_persisted_recoverable_failure() {
+    let service = SessionService::in_memory().unwrap();
+    let entry = service.create("原稿 API 42", options()).unwrap();
+    let failed = service
+        .process(
+            &entry.id,
+            vec![],
+            Arc::new(Reply(Err(TextFailure::ConfigurationRequired))),
+        )
+        .await
+        .unwrap();
+    assert_eq!(failed.status, SessionStatus::Failed);
+    assert_eq!(
+        service.get(&entry.id).unwrap().error.as_deref(),
+        Some("configuration-required")
+    );
+    assert_eq!(failed.transcript, entry.transcript);
+    assert_eq!(failed.result, None);
+    assert_eq!(
+        service.choose_original(&entry.id).unwrap().selection,
+        TextSelection::Original
+    );
+}
 impl TextProcessor for Reply {
     fn polish(&self, _: TextRequest, _: CancellationToken) -> TextFuture {
         let response = self.0.clone();

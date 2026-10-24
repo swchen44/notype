@@ -141,6 +141,35 @@ function App() {
 
   // Listen for recording errors from the backend and show a toast
   useEffect(() => {
+    const outcome = listen<{ status: string; error: string | null }>(
+      "session-outcome",
+      (event) => {
+        if (event.payload.status === "pending")
+          toast.info(t("notype.status.pending"), {
+            description: t("notype.history.deliveryUnavailable"),
+          });
+        else if (event.payload.status === "failed")
+          toast.error(
+            t(`notype.errors.${event.payload.error}`, {
+              defaultValue: t("notype.history.failed"),
+            }),
+          );
+      },
+    );
+    const failure = listen<string>("session-error", (event) => {
+      toast.error(
+        t(`notype.errors.${event.payload}`, {
+          defaultValue: t("notype.history.actionFailed"),
+        }),
+      );
+    });
+    return () => {
+      void outcome.then((stop) => stop());
+      void failure.then((stop) => stop());
+    };
+  }, [t]);
+
+  useEffect(() => {
     const unlisten = listen<RecordingErrorEvent>("recording-error", (event) => {
       const { error_type, detail } = event.payload;
 

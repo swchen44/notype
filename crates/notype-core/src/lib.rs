@@ -58,6 +58,7 @@ pub struct TextRequest {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TextFailure {
+    ConfigurationRequired,
     Failed,
     Timeout,
     InvalidResponse,
@@ -565,6 +566,9 @@ impl SessionService {
             response = processor.polish(TextRequest { transcript: entry.transcript, glossary, recognition_mode: entry.recognition_mode }, cancellation.clone()) => response,
         };
         let (status, result, error) = match response {
+            Err(TextFailure::ConfigurationRequired) => {
+                ("failed", None, Some("configuration-required"))
+            }
             Ok(text) if !text.trim().is_empty() => ("pending", Some(text), None),
             Ok(_) => ("failed", None, Some("llm-invalid-response")),
             Err(TextFailure::Timeout) => ("failed", None, Some("llm-timeout")),

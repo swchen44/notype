@@ -1,8 +1,10 @@
-use enigo::{Enigo, Key, Keyboard, Mouse, Settings};
+use enigo::{Enigo, Mouse, Settings};
+#[cfg(test)]
+use enigo::{Key, Keyboard};
 use std::sync::Mutex;
 use tauri::{AppHandle, Manager};
 
-#[cfg(target_os = "macos")]
+#[cfg(all(test, target_os = "macos"))]
 mod macos {
     use super::Key;
     use log::{debug, warn};
@@ -176,6 +178,7 @@ pub fn get_cursor_position(app_handle: &AppHandle) -> Option<(i32, i32)> {
 /// handling the key need the modifier to still be down — the hold insures
 /// against those. Callers that can detect a failed chord (e.g. the
 /// receipt-sequenced paste path) may use a much shorter hold.
+#[cfg(test)]
 pub fn send_paste_ctrl_v(enigo: &mut Enigo, hold_ms: u64) -> Result<(), String> {
     // Platform-specific key definitions
     #[cfg(target_os = "macos")]
@@ -205,6 +208,7 @@ pub fn send_paste_ctrl_v(enigo: &mut Enigo, hold_ms: u64) -> Result<(), String> 
 /// Sends a Ctrl+Shift+V paste command.
 /// This is commonly used in terminal applications on Linux to paste without formatting.
 /// Note: On Wayland, this may not work - callers should check for Wayland and use alternative methods.
+#[cfg(test)]
 pub fn send_paste_ctrl_shift_v(enigo: &mut Enigo, hold_ms: u64) -> Result<(), String> {
     // Platform-specific key definitions
     #[cfg(target_os = "macos")]
@@ -240,6 +244,7 @@ pub fn send_paste_ctrl_shift_v(enigo: &mut Enigo, hold_ms: u64) -> Result<(), St
 /// Sends a Shift+Insert paste command (Windows and Linux only).
 /// This is more universal for terminal applications and legacy software.
 /// Note: On Wayland, this may not work - callers should check for Wayland and use alternative methods.
+#[cfg(test)]
 pub fn send_paste_shift_insert(enigo: &mut Enigo, hold_ms: u64) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     let insert_key_code = Key::Other(0x2D); // VK_INSERT
@@ -265,6 +270,7 @@ pub fn send_paste_shift_insert(enigo: &mut Enigo, hold_ms: u64) -> Result<(), St
 
 /// Pastes text directly using the enigo text method.
 /// This tries to use system input methods if possible, otherwise simulates keystrokes one by one.
+#[cfg(test)]
 pub fn paste_text_direct(enigo: &mut Enigo, text: &str) -> Result<(), String> {
     enigo
         .text(text)

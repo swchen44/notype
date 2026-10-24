@@ -7,15 +7,20 @@ mod autostart;
 mod catalog;
 mod chinese_script;
 pub mod cli;
+// Retained upstream helpers are test-only. Production has no arbitrary-focus
+// paste or legacy prompt transport; #13 supplies a guarded delivery adapter.
+#[cfg(test)]
 mod clipboard;
 mod commands;
 mod data_policy;
 mod helpers;
 mod input;
+#[cfg(test)]
 mod llm_client;
 mod managers;
 mod memory;
 mod overlay;
+#[cfg(test)]
 mod paste_tx;
 pub mod portable;
 mod secure_input;
@@ -26,6 +31,7 @@ mod transcription_coordinator;
 mod tray;
 mod tray_i18n;
 mod utils;
+pub mod workflow;
 
 pub use cli::CliArgs;
 #[cfg(debug_assertions)]
@@ -35,7 +41,6 @@ pub use utils::env_flag_enabled;
 
 use env_filter::Builder as EnvFilterBuilder;
 use managers::audio::AudioRecordingManager;
-use managers::history::HistoryManager;
 use managers::model::ModelManager;
 use managers::transcription::TranscriptionManager;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
@@ -185,7 +190,7 @@ fn should_force_show_permissions_window(app: &AppHandle) -> bool {
     false
 }
 
-fn initialize_core_logic(app_handle: &AppHandle) {
+fn initialize_core_logic(app_handle: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     // Note: Enigo (keyboard/mouse simulation) is NOT initialized here.
     // The frontend is responsible for calling the `initialize_enigo` command
     // after onboarding completes. This avoids triggering permission dialogs
@@ -204,8 +209,25 @@ fn initialize_core_logic(app_handle: &AppHandle) {
         AudioRecordingManager::new(app_handle, transcription_manager.stream_router())
             .expect("Failed to initialize recording manager"),
     );
-    let history_manager =
-        Arc::new(HistoryManager::new(app_handle).expect("Failed to initialize history manager"));
+    let data_root = portable::app_data_dir(app_handle)?;
+    let sessions = notype_core::SessionService::open(data_root.join("sessions.db"))?;
+    let legacy = data_root.join("history.db");
+    let import_error = if legacy.exists() {
+        sessions
+            .import_handy_history(&legacy)
+            .err()
+            .map(|error| error.to_string())
+    } else {
+        None
+    };
+    app_handle.manage(commands::history::LegacyImportNotice(import_error));
+    let event_app = app_handle.clone();
+    let workflow = Arc::new(workflow::DesktopWorkflow::new(
+        sessions,
+        Arc::new(move || {
+            let _ = event_app.emit("session-history-changed", ());
+        }),
+    ));
 
     // Initialize the transcribe-cpp native backend (logging + backend module
     // registration) once, before any whisper model is loaded.
@@ -218,7 +240,7 @@ fn initialize_core_logic(app_handle: &AppHandle) {
     app_handle.manage(recording_manager.clone());
     app_handle.manage(model_manager.clone());
     app_handle.manage(transcription_manager.clone());
-    app_handle.manage(history_manager.clone());
+    app_handle.manage(workflow);
     app_handle.manage(tray::TrayState::new());
 
     // Note: Shortcuts are NOT initialized here.
@@ -370,6 +392,7 @@ fn initialize_core_logic(app_handle: &AppHandle) {
 
     // Create the recording overlay window (hidden by default)
     utils::create_recording_overlay(app_handle);
+    Ok(())
 }
 
 #[tauri::command]
@@ -760,16 +783,20 @@ pub fn run(cli_args: CliArgs) {
             commands::transcription::get_model_load_status,
             commands::transcription::unload_model_manually,
             commands::history::get_history_entries,
-            commands::history::toggle_history_entry_saved,
-            commands::history::get_audio_file_path,
+            commands::history::get_text_configuration,
+            commands::history::set_text_configuration,
+            commands::history::get_workflow_readiness,
+            commands::history::cancel_history_entry,
+            commands::history::choose_history_original,
+            commands::history::deliver_history_entry,
+            commands::history::copy_history_text,
             commands::history::delete_history_entry,
-            commands::history::retry_history_entry_transcription,
+            commands::history::retry_history_entry_processing,
             commands::history::update_history_limit,
             commands::history::update_recording_retention_period,
             helpers::clamshell::is_laptop,
         ])
         .events(collect_events![
-            managers::history::HistoryUpdatePayload,
             managers::transcription::StreamTextEvent,
             managers::transcription::StreamPhaseEvent,
         ]);
@@ -778,11 +805,17 @@ pub fn run(cli_args: CliArgs) {
     specta_builder
         .export(
             Typescript::default().bigint(BigIntExportBehavior::Number),
-            "../src/bindings.ts",
+            concat!(env!("CARGO_MANIFEST_DIR"), "/../src/bindings.ts"),
         )
         .expect("Failed to export typescript bindings");
 
     let invoke_handler = specta_builder.invoke_handler();
+    #[cfg(debug_assertions)]
+    let debug_handler: Box<dyn Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send + Sync> =
+        Box::new(tauri::generate_handler![
+            commands::history::debug_begin_session,
+            commands::history::debug_finish_session
+        ]);
 
     // The headless path must run as its own instance (see the single-instance
     // note below), not forward to an already-running app.
@@ -1022,7 +1055,7 @@ pub fn run(cli_args: CliArgs) {
             let app_handle = app.handle().clone();
             app.manage(TranscriptionCoordinator::new(app_handle.clone()));
 
-            initialize_core_logic(&app_handle);
+            initialize_core_logic(&app_handle)?;
 
             // Secure Input monitor (macOS): detects stuck secure input that
             // silently blocks keyed shortcuts, warns the user, and activates
@@ -1099,7 +1132,11 @@ pub fn run(cli_args: CliArgs) {
             }
             _ => {}
         })
-        .invoke_handler(invoke_handler)
+        .invoke_handler(move |invoke| {
+            #[cfg(debug_assertions)]
+            if matches!(invoke.message.command(),"debug_begin_session"|"debug_finish_session") { return debug_handler(invoke); }
+            invoke_handler(invoke)
+        })
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
 

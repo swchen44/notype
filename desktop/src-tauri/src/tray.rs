@@ -20,12 +20,12 @@
 //! a hidden tray relies on tray-icon recreating it from the last applied
 //! icon/menu/tooltip, so those must only ever be set through the applier.
 
-use crate::managers::history::{HistoryEntry, HistoryManager};
 use crate::managers::model::ModelManager;
 use crate::managers::transcription::TranscriptionManager;
 use crate::settings;
 use crate::tray_i18n::get_tray_translations;
 use log::{debug, error, info, trace, warn};
+use notype_core::{SessionEntry, TextSelection};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -594,11 +594,11 @@ fn build_menu(app: &AppHandle, inputs: &MenuInputs) -> tauri::Result<(Menu<tauri
     Ok((menu, tooltip))
 }
 
-fn last_transcript_text(entry: &HistoryEntry) -> &str {
-    entry
-        .post_processed_text
-        .as_deref()
-        .unwrap_or(&entry.transcription_text)
+fn last_transcript_text(entry: &SessionEntry) -> &str {
+    match entry.selection {
+        TextSelection::Original => &entry.transcript,
+        TextSelection::Polished => entry.result.as_deref().unwrap_or(&entry.transcript),
+    }
 }
 
 pub fn set_tray_visibility(app: &AppHandle, visible: bool) {
@@ -636,10 +636,10 @@ pub fn recreate_tray_icon(app: &AppHandle) {
 }
 
 pub fn copy_last_transcript(app: &AppHandle) {
-    let history_manager = app.state::<Arc<HistoryManager>>();
-    let entry = match history_manager.get_latest_completed_entry() {
-        Ok(Some(entry)) => entry,
-        Ok(None) => {
+    let workflow = app.state::<Arc<crate::workflow::DesktopWorkflow>>();
+    let entry = match workflow.sessions().search("") {
+        Ok(entries) if !entries.is_empty() => entries.into_iter().next().unwrap(),
+        Ok(_) => {
             warn!("No completed transcription history entries available for tray copy.");
             return;
         }
@@ -669,19 +669,20 @@ pub fn copy_last_transcript(app: &AppHandle) {
 #[cfg(test)]
 mod tests {
     use super::{last_transcript_text, load_tray_icon, MenuInputs, TrayDesired, TrayIconState};
-    use crate::managers::history::HistoryEntry;
+    use notype_core::{SessionEntry, SessionStatus, TextSelection};
 
-    fn build_entry(transcription: &str, post_processed: Option<&str>) -> HistoryEntry {
-        HistoryEntry {
-            id: 1,
-            file_name: "handy-1.wav".to_string(),
-            timestamp: 0,
-            saved: false,
-            title: "Recording".to_string(),
-            transcription_text: transcription.to_string(),
-            post_processed_text: post_processed.map(|text| text.to_string()),
-            post_process_prompt: None,
-            post_process_requested: false,
+    fn build_entry(transcription: &str, post_processed: Option<&str>) -> SessionEntry {
+        SessionEntry {
+            id: "session-1".into(),
+            transcript: transcription.into(),
+            result: post_processed.map(Into::into),
+            created_at: "2026-10-25T00:00:00.000Z".into(),
+            updated_at: "2026-10-25T00:00:00.000Z".into(),
+            status: SessionStatus::Pending,
+            error: None,
+            recognition_mode: None,
+            original_target: None,
+            selection: TextSelection::Polished,
         }
     }
 

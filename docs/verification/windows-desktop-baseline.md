@@ -10,6 +10,8 @@ Product/window identity is notype / `io.github.swchen44.notype`; default paths c
 
 ## Executed checks
 
+These historical #9 builds used the local extracted source tree. A later clean-checkout audit found that the root `models/` ignore rule had omitted `src/components/settings/models/ModelsSettings.tsx` and its `index.ts` from Git. The #11 change restores those exact pinned files and adds scoped source exceptions; its tracked-source frontend check is recorded separately in [desktop workflow verification](desktop-workflow.md). The historical local build alone did not prove that the earlier tracked checkout was complete.
+
 | Check | Result |
 | --- | --- |
 | `bun install --cwd desktop --frozen-lockfile` | Passed |
@@ -33,4 +35,4 @@ The elevated tool process also caused WebView2 to ignore its environment browser
 
 ## Limits
 
-Only the Windows x64 debug no-bundle build and isolated settings receipt are verified here. Release payload completeness, other machines, macOS/Linux adapters, STT quality, session orchestration, original-target delivery and company/five-app acceptance remain their own tickets. No installer was built or launched, and Vulkan installation was not retried. The local static ORT build leaves a zero-byte optional `DirectML.dll` in the shared target; payload assembly must validate files rather than copying that artifact. Existing upstream Rust warnings remain in secure-input/transcription code; source import also retains upstream generated-bindings/Swift whitespace. No API key is needed for these checks.
+Only the Windows x64 debug no-bundle build and isolated settings receipt are verified here. Release payload completeness, other machines, macOS/Linux adapters, STT quality, session orchestration, original-target delivery and company/five-app acceptance remain their own tickets. No installer was built or launched, and Vulkan installation was not retried. The apparent zero-length `DirectML.dll` is a developer-cache symlink, not an optional empty DLL: the executable imports it and the native process loads it. Portable assembly must dereference its validated target into a regular payload file rather than shipping that cache link; see [dependency preparation evidence](portable-inputs-preparation.md). Existing upstream Rust warnings remain in secure-input/transcription code; source import also retains upstream generated-bindings/Swift whitespace. No API key is needed for these checks.
