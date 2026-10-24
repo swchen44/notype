@@ -6,7 +6,7 @@
 
 ## 目前 checkpoint
 
-2026-10-24 Windows 接手已開始：產品與 private repo 改名為 **notype**（本機資料夾仍為 notype_study），環境與工具安裝進度見 [preflight](docs/verification/windows11-preflight.md)。新增 Node 文字核心，8 unit／5 integration tests 通過；尚未完成真實 STT→LLM→Windows 輸入框。使用者已授權安裝開發所需工具，產品交付仍維持 npm portable。以下研究 checkpoint 為接手前背景。
+2026-10-24 Windows 接手成果：產品與 private repo 改名為 **notype**（本機資料夾仍為 notype_study）。GitHub CLI、CMake、Bun、Rust、MSVC／Windows SDK 已安裝，Rust／C++ 編譯及執行驗證通過；Vulkan 安裝被取消、尚未完成。文字核心與固定英文合成 WAV→CPU STT→HTTP fixture→SQLite→Edge 文字框已接通，11 unit／5 integration／1 runtime smoke 通過。麥克風熱鍵、繁中品質、原生跨 App 送字、公司 API 與完整 portable 產品仍待完成。詳見 [preflight](docs/verification/windows11-preflight.md)。使用者已授權安裝開發所需工具，產品交付仍維持 npm portable。以下研究 checkpoint 為接手前背景。
 
 - 研究、選型比較、15 項產品決策、兩份 ADR、測試目錄規範與 GitHub issues 已保存。
 - 研究定稿 commit：[bdbcb13](https://github.com/swchen44/notype/commit/bdbcb13bdb2a3f529236b0e690344522351c5e54)。本交接文件屬於其後續更新，請以 clone 後的 `HEAD` 與 live issues 核對最新狀態。

@@ -16,4 +16,6 @@
 
 GUI 驗收使用非機密文字、測試文件或草稿；所有 App 手動 Enter，Terminal 首版以自然語言 prompt 為主；原輸入目標改變或無法確認時保留待選結果。
 
-執行：`npm.cmd run test:integration`。目前在開發 Windows 驗證 loopback HTTP、SQLite 重啟復原、無 WAV 重試及 callback 交付。公司 Windows、真實 STT 與實際 App 仍未驗收。
+執行：`npm.cmd run test:integration`。目前在開發 Windows 驗證 loopback HTTP、SQLite 重啟復原、無 WAV 重試及 callback 交付。
+
+另以 `npm.cmd run test:runtime` 驗證固定英文合成 WAV、實際 whisper.cpp CPU 辨識與全新 Edge 測試文字框，前置檔案與結果見 [receipt](../../docs/verification/windows11-preflight.md)。公司 Windows、繁中辨識品質、原生跨 App 輸入與完整 portable 產品仍未驗收。

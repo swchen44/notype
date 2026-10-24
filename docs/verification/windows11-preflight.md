@@ -36,15 +36,28 @@ PowerShell execution policy 阻擋 npm.ps1；改用 npm.cmd，不變更 policy�
 - GitHub CLI 2.80.0：winget GitHub.cli，安裝成功且 gh --version 通過。
 - CMake 4.1.1：winget Kitware.CMake，安裝成功且 cmake --version 通過。
 - Bun 1.2.22：winget 安裝成功；固定 Handy source 執行 `bun install --frozen-lockfile` 成功（342 packages），`bun run build` 成功（tsc + Vite 6.4.1，2123 modules）。有上游 chunk 大於 500 kB 警告，無 build error。這只是上游前端 build，不是 notype native build。
-- Rust：stable x86_64-pc-windows-msvc，rustc 1.99.1（58cf8f9c3）、cargo 1.99.1（5f94df478），minimal profile 加 rustfmt/clippy。Rust metadata smoke 編譯成功；當時 link smoke 因 MSVC 尚未裝完而找不到 link.exe。工具鏈已安裝，但最後 rustup 自我更新另回報找不到 updater 檔案；不把此錯誤當工具鏈未安裝，也不宣稱 native linking 已通過。
+- Rust：stable x86_64-pc-windows-msvc，rustc 1.99.1（58cf8f9c3）、cargo 1.99.1（5f94df478）、rustfmt 1.10.0、clippy 0.1.99，minimal profile。最初 link smoke 因 MSVC 未裝完找不到 link.exe；安裝完成後已成功編譯、連結並執行。Rustup 自我更新另曾回報找不到 updater 檔案，工具鏈與格式／lint 命令本身已驗證可用。
 - Vulkan SDK：winget 下載及 hash 驗證完成，但 Windows 回報 0x800704c7（使用者取消），未重新啟動安裝；尚未安裝驗收。
-- Visual Studio Build Tools：已通過 UAC、原始下載恢復並進入 MSVC 14.44 元件安裝，完整安裝／SDK／linking 結果待接續記錄。另下載官方 vs_installer.opc 作備援，SHA256 `222cc676d30cfa4aeb3de b2ff73933f06a2c07fba4c6e5acdc168cf3ee4f17b2`（以下更正），備援提升權限提示被取消，未執行備援腳本；原安裝仍繼續。
+- Visual Studio Build Tools 2022：17.14.42（installationVersion 17.14.37806.7），MSVC 19.44.35229.0，Windows SDK 10.0.26100.0，MSBuild 17.14.60。23:49 安裝完成，bootstrapper exit 0；SDK installer exit 0、restarting No，vswhere isComplete/isLaunchable true、isRebootRequired false。Rust linking 與 CMake C++ build/run 均通過。
+- 原 VS bootstrapper 的下載自行恢復；另下載的官方 vs_installer.opc 僅作備援，SHA256 `222cc676d30cfa4aeb3deb2ff73933f06a2c07fba4c6e5acdc168cf3ee4f17b2`。備援提升權限提示被取消，未執行備援腳本，沒有重啟原安裝。
 - VS winget 首次卡在 source2.msix 註冊；尚未啟動 VS installer，停止該 winget 程序後，改由 https://aka.ms/vs/17/release/vs_BuildTools.exe 取得官方 bootstrapper。Authenticode Valid，簽署者 Microsoft Corporation。
 - VS 參數：`--wait --quiet --norestart --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended`。不自動重新開機。
 
 GitHub CLI 初始未登入，既有 Git Credential Manager 可存取 private repo；最初讀取與留言用 GitHub connector。Repository 改名使用 Git credential 在記憶體中呼叫 GitHub API，未列印或保存 token。
 
 後續以 gh CLI 配合既有 Git credential（僅 process environment）重新核對 `swchen44/notype` 仍為 private，issues #2–#7 均保留且 open；已在 #2 留下進度。
+
+### 編譯驗證（與產品測試分開）
+
+在 `VsDevCmd.bat -arch=x64 -host_arch=x64` 環境，`cmd.exe /d /c .local/verify-toolchain.cmd` exit 0：
+
+1. `rustc .local/toolchain-smoke.rs -o .local/toolchain-rust.exe`，再執行 exe，輸出 `notype toolchain smoke`。
+2. `cmake -S .local/smoke-src -B .local/smoke-build -G "Visual Studio 17 2022" -A x64`，CMake 正確辨識 MSVC 19.44.35229.0 與 SDK 10.0.26100.0。
+3. `cmake --build .local/smoke-build --config Release`，再執行 `notype_smoke.exe`，輸出 `notype C++ tools smoke`。
+
+兩個程式分別是 Rust `fn main() { println!("notype toolchain smoke"); }`，以及 C++ `#include <iostream>` 加 `int main() { std::cout << "notype C++ tools smoke\n"; }`。CMake 使用 `project(notype_smoke CXX)` 與 `add_executable(notype_smoke main.cpp)`；產物留在忽略追蹤的 `.local/`。
+
+這證明目前開發機可編譯及執行 x64 Rust／C++，不等同 Handy native build、冷機 portable 或產品發布通過。重新開啟 terminal 可取得已更新 PATH；一般 PowerShell 的 npm 請繼續使用 npm.cmd。
 
 ## 發行檔取得（未執行）
 
@@ -83,8 +96,10 @@ $cache = Join-Path $env:LOCALAPPDATA 'notype-study/build-cache'
 $env:NOTYPE_WHISPER_EXE = "$cache/whisper-v1.8.6/Release/whisper-cli.exe"
 $env:NOTYPE_WHISPER_MODEL = "$cache/ggml-tiny.en-verified.bin"
 $env:NOTYPE_SMOKE_WAV = "$cache/smoke-zira.wav"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/integration/runtime/generate-smoke.ps1 -OutputPath $env:NOTYPE_SMOKE_WAV
 npm.cmd ci --ignore-scripts
 npm.cmd run test:runtime
 ```
 
-備援 vs_installer.opc 正確 SHA256：`222cc676d30cfa4aeb3deb2ff73933f06a2c07fba4c6e5acdc168cf3ee4f17b2`。
+上述 ExecutionPolicy Bypass 只適用於該次 fixture 產生程序，不更改系統 policy。Handy 的 `cargo fetch --locked --target x86_64-pc-windows-msvc` 已嘗試並取得部分 Git 相依，但為優先完成 SDK 安裝而停止；未完成 fetch，未執行 Handy native build。
+

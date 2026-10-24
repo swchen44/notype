@@ -9,7 +9,7 @@
 - [x] AGENTS、glossary、兩份 ADR、unit／integration 測試目錄規範與 GitHub tracker。
 - [x] 使用者選定自己的 Windows 11 開發；將交接說明與可貼用 prompt 保存於 repo。
 
-已開始 Windows 開發：完成環境查核與文字流程核心（8 unit、5 integration tests）。產品名稱及 private repo 已改為 notype；真實錄音/STT、Windows App、公司 API 與 portable 完整流程仍未完成。見 [開發驗證紀錄](docs/verification/windows11-preflight.md)。
+已完成 Windows 環境查核、開發工具安裝及 Rust／C++ 編譯驗證。產品名稱及 private repo 已改為 notype。文字核心與固定英文合成 WAV→CPU STT→HTTP fixture→SQLite→Edge 文字框已接通（11 unit、5 integration、1 runtime smoke 通過）。麥克風熱鍵、繁中品質、原生跨 App 送字、公司 API 與完整 portable 產品仍未完成。見 [開發驗證紀錄](docs/verification/windows11-preflight.md)。
 
 ## 接續順序
 
