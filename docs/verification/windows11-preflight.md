@@ -102,4 +102,3 @@ npm.cmd run test:runtime
 ```
 
 上述 ExecutionPolicy Bypass 只適用於該次 fixture 產生程序，不更改系統 policy。Handy 的 `cargo fetch --locked --target x86_64-pc-windows-msvc` 已嘗試並取得部分 Git 相依，但為優先完成 SDK 安裝而停止；未完成 fetch，未執行 Handy native build。
-
