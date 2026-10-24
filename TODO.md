@@ -18,7 +18,7 @@
 
 整合分支：`implement/notype-mvp`，起點 `be6f0a5`。每個實作 ticket 使用獨立 branch／worktree 與已確認的 public seams 做 TDD，合入整合分支後再啟動被解鎖的工作；最後對起點到整合分支的完整 diff 做 Standards／Spec review。本輪不建立 PR，不把公司／目標環境尚未執行的驗收當作完成。
 
-目前 #9／#10 已合入整合分支，#11 正在實作；issues 保持 open 直到 review／驗收完成。桌面政策 3 tests、真實 native 設定／重啟 1 test 通過；共用核心 Windows／Linux 各 17 tests 加 1 文件範例通過，Linux CI 也通過既有 Node 11 unit／5 integration。見 [桌面基線](docs/verification/windows-desktop-baseline.md) 與 [核心 portability receipt](docs/verification/shared-core-portability.md)。
+目前 #9～#11 已合入整合分支，最新合併點 `5ad1698`；#12 語言及 #17 三場景／提示詞正在平行實作。Issues 保持 open 直到 review／驗收完成。#11 通過 core 19、desktop 7、native 5 項，含可見歷史／設定、HTTP、重啟及唯讀匯入；合併後 Node 16、core 19 與前端建置通過。見 [桌面流程 receipt](docs/verification/desktop-workflow.md)、[桌面基線](docs/verification/windows-desktop-baseline.md) 與 [核心 portability receipt](docs/verification/shared-core-portability.md)。
 
 | Ticket | 阻擋來源 | 可展示／驗收成果 |
 | --- | --- | --- |
@@ -26,9 +26,10 @@
 | [#10 共用 Rust 核心](https://github.com/swchen44/notype/issues/10) | 無 | 原稿到 HTTP fixture、SQLite 歷史、重啟／重試／取消與受保護交付；無 Tauri／Windows 相依 |
 | [#11 桌面文字流程](https://github.com/swchen44/notype/issues/11) | #9、#10 | 正式錄音／STT 接核心，失敗待選、歷史搜尋／複製／刪除與無 WAV 重試 |
 | [#12 語言完整切片](https://github.com/swchen44/notype/issues/12) | #11 | 繁／簡介面與繁／簡中英辨識，獨立設定、偏好保存、固定模型／音訊驗收 |
-| [#13 錄音與原生交付](https://github.com/swchen44/notype/issues/13) | #11 | 熱鍵／Esc、當次音訊清理、Windows 原目標保護、去重與手動 Enter |
-| [#14 npm portable](https://github.com/swchen44/notype/issues/14) | #12、#13 | 完整預編譯 App／runtime／模型 tarball、cold launch、更新資料保留 |
-| [#15 公司 API 驗收](https://github.com/swchen44/notype/issues/15) | #11；公司 contract／連線／憑證 | 真實文字整理與錯誤／取消 receipt，目前 needs-info；真正需要 key 時才詢問 |
+| [#17 三場景與提示詞](https://github.com/swchen44/notype/issues/17) | #11 | 三場景路由、獨立可編輯／還原提示詞、翻譯目標／領域／語氣／術語對照、快照與歷史 migration；部分意圖／情境／回譯決策待使用者回答 |
+| [#13 錄音與原生交付](https://github.com/swchen44/notype/issues/13) | #11、#17 | 三場景點按開始／獨立停止鍵／Esc、共享前綴手勢、當次音訊清理、Windows 原目標保護、去重與手動 Enter |
+| [#14 npm portable](https://github.com/swchen44/notype/issues/14) | #12、#13、#17 | 完整預編譯 App／runtime／模型 tarball、cold launch、更新資料保留 |
+| [#15 公司 API 驗收](https://github.com/swchen44/notype/issues/15) | #11、#17；公司連線／憑證／政策 | Chat Completions 格式已確認；真實三場景品質、錯誤／取消及公司資料政策仍待驗證，目前 needs-info；真正需要 key 時才詢問 |
 | [#16 目標環境驗收](https://github.com/swchen44/notype/issues/16) | #14、#15；目標 App／帳號／Proxy | 五個 App、公司 Proxy、兩模式品質與 p95、更新資料保留；尚缺環境時保持未完成 |
 
 GitHub 已建立 #8 的原生 sub-issue 關係及 blocking edges。原 #2～#7 保留為對應主題的驗收追蹤，不因新增實作切片而提前結案。
