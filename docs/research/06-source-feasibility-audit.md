@@ -1,6 +1,6 @@
 # Handy 固定版本原始碼可行性追查
 
-查核日期：2026-10-24。主體為 **Handy v0.9.8，commit `14f6f0d31cb22a4268acfbddba3052820fd0a06e`**，另靜態檢查同版 Windows x64 setup.exe。本輪已確認的目標是 Windows amd64／x64、個人 pilot、核心 dictation MVP，並接受修改現有開源 App；輸入主要為繁中夾英文、忠實整理，首批目標為 browser／VS Code／Teams／Outlook／Windows Terminal。本文件是使用者授權下載 GitHub 後的事實研究；其他產品取捨仍待 grilling 訪談確認。 使用者後續已確認公司版不可用 installer；本文 installer 僅為先前下載的靜態研究輸入，從未執行，不能作為交付方案。LLM 失敗的產品決策已改為保留原稿並停下待選，以下仍清楚標示 upstream 行為。
+查核日期：2026-10-24。主體為 **Handy v0.9.8，commit `14f6f0d31cb22a4268acfbddba3052820fd0a06e`**，另靜態檢查同版 Windows x64 setup.exe。本輪已確認的目標是 Windows amd64／x64、個人 pilot、核心 dictation MVP，並接受修改現有開源 App；輸入主要為繁中夾英文、忠實整理，首批目標為 browser／VS Code／Teams／Outlook／Windows Terminal。本文件是使用者授權下載 GitHub 後的事實研究；產品決策後續已收斂於 10-confirmed-windows-mvp.md；本文保留上游事實與工程建議。 使用者後續已確認公司版不可用 installer；本文 installer 僅為先前下載的靜態研究輸入，從未執行，不能作為交付方案。LLM 失敗的產品決策已改為保留原稿並停下待選，以下仍清楚標示 upstream 行為。
 
 完整 source archive 已從 GitHub codeload 取得，4,513,305 bytes，SHA-256 `a6bcd28cfb83dee566328432ce1d15e2a4f881d0dee8af8ca7a4d2f5499488f6`。工作副本在 `/private/tmp/handy-stable-source-audit/Handy-14f6f0d31cb22a4268acfbddba3052820fd0a06e`，沒有執行 App、Cargo build、套件安裝、公司 API 或發布。選讀身分另見 [audit metadata](evidence/github/handy-stable-source-audit.json)。
 
@@ -12,7 +12,7 @@
 | 已有 portable mode、`Data/models` 與本機模型掃描 | npm／wheel 配送可重用資料路徑，不一定要先修改辨識核心 |
 | 本機預載模型可以被啟動時偵測及選取；model load 取得本機 path | 模型可隨公司套件預先放好，不必把初次辨識綁在 public model download |
 | 自訂文字 LLM 已支援 base URL、model、Bearer key、prompt | 相容的公司 API 可用設定接入，特殊 schema／SSO／mTLS 仍需 adapter 或改碼 |
-| LLM 整理失敗時回到原逐字稿，後續仍可自動貼上 | 這是產品行為，需要使用者決定是否接受；原碼沒有把所有失敗都改成「停下待確認」 |
+| LLM 整理失敗時回到原逐字稿，後續仍可自動貼上 | 本產品已選失敗待選；原碼沒有把所有失敗都改成「停下待確認」 |
 | 專案根 package 是 private、postinstall 會呼叫 Bun；Windows build 另需 Rust／C++／CMake／Vulkan 等 | 研究案應另做配送 wrapper，內含預編譯 payload；不能把原始碼目錄當成可直接 npm 發行的產品 |
 
 表內依據為下列固定 source；第 9 節另記錄實際 release asset 的 parser-emitted DLL 清單。兩者均不等於 Windows 安裝或效能驗證。
@@ -70,7 +70,7 @@ CompanyHandy/
   Data/models/<fixed-model-files>
 ```
 
-這是 source 機制，**不代表 GitHub 已有本次驗證過的官方 portable ZIP**。公司 package wrapper 若把持久 Data 放在 npm／pip 自己管理的安裝目錄，更新或解除安裝可能影響資料；較穩定的設計是把 payload staging 到明確的每使用者可寫目錄，保留 Data，再啟動 exe。此處為工程建議，尚待訪談決定資料位置與更新方式。
+這是 source 機制，**不代表 GitHub 已有本次驗證過的官方 portable ZIP**。公司 package wrapper 若把持久 Data 放在 npm／pip 自己管理的安裝目錄，更新或解除安裝可能影響資料；較穩定的設計是把 payload staging 到明確的每使用者可寫目錄，保留 Data，再啟動 exe。此處為工程建議；持久資料須與npm版本目錄分開，具體位置與更新須在Windows實作驗證。
 
 ## 5. 自訂文字 LLM 與失敗行為
 

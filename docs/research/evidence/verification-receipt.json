@@ -1,45 +1,58 @@
 {
-  "checked_at_utc": "2026-10-24T10:26:40.736692+00:00",
-  "scope": "Repo configuration, Markdown and recorded source identity checks. Product unit/integration tests are scaffold only and have not run. No installer or App executed.",
+  "checked_at_utc": "2026-10-24T11:07:14.413429+00:00",
+  "scope": "Final research/decision/document identity checks. No product code, product tests, Windows runtime or npm publication.",
   "checks": {
     "json_parse": {
       "status": "passed",
-      "files": 10
+      "files": 11
     },
     "markdown": {
       "status": "passed",
-      "files": 18,
-      "local_links": 44,
-      "reference_definitions": 63
+      "files": 23,
+      "local_links": 63,
+      "reference_definitions": 73
     },
     "tool_python_parse": {
       "status": "passed",
       "files": 2,
       "python": "3.13.2"
     },
-    "agent_skills_configuration": {
+    "repo_configuration": {
       "status": "passed",
-      "root_file": "AGENTS.md",
-      "tracker": "GitHub Issues",
+      "root_instruction": "AGENTS.md",
       "domain_layout": "single-context",
-      "canonical_triage_roles": [
-        "needs-triage",
-        "needs-info",
-        "ready-for-agent",
-        "ready-for-human",
-        "wontfix"
-      ]
-    },
-    "product_test_scaffold": {
-      "status": "scaffold-only",
-      "directories": [
+      "glossary": true,
+      "accepted_adrs": 2,
+      "test_directories": [
         "tests/unittest",
         "tests/integration"
+      ]
+    },
+    "confirmed_decisions": {
+      "status": "passed",
+      "ids": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15
       ],
-      "product_test_files": 0,
-      "product_tests_run": false,
-      "framework": "not-yet-selected",
-      "scope": "Documentation and directory conventions only; no product test pass claimed"
+      "interview_complete": true
+    },
+    "handy_history_source_hashes": {
+      "status": "passed",
+      "files": 13,
+      "runtime_executed": false
     },
     "github_saved_source_hashes": {
       "status": "passed",
@@ -61,13 +74,21 @@
       "limitations_preserved": true,
       "windows_runtime_verified": false
     },
-    "prior_source_checks_scope": "Previous source/static-payload verification retained; these are not new runtime or product-test results.",
+    "prior_source_checks_scope": "Earlier source/static-payload checks preserved with their limits; these do not constitute new Windows runtime tests.",
+    "product_tests": {
+      "status": "not-performed",
+      "scaffold_only": true,
+      "product_test_files": 0,
+      "framework": "not selected",
+      "windows_runtime": "not-performed",
+      "p95_goal": "<=5 seconds, not measured"
+    },
     "research_inventory": {
       "candidate_repositories": 8,
-      "research_markdown_files": 10,
+      "research_markdown_files": 12,
+      "github_issues_created": 7,
       "product_implementation_started": false,
-      "interview_complete": false,
-      "github_issues_created": 6
+      "product_package_published": false
     }
   },
   "artifacts_excluding_this_receipt": [
@@ -83,43 +104,58 @@
     },
     {
       "path": "03-windows-intranet-architecture.md",
-      "bytes": 11923,
-      "sha256": "40a3e57cfa97c5a8505c815a5b0fa968755267d39ab893ec6185c3b30a1442ac"
+      "bytes": 12153,
+      "sha256": "86fef287dabcc9cf27cd212de416116b9ce303db2d9e407ac85167eb5f021e43"
     },
     {
       "path": "04-method-and-evidence.md",
-      "bytes": 8833,
-      "sha256": "fe7092bb061298170f24083fe13e0223fd1aa326f877a280ac95a225ac0266aa"
+      "bytes": 9334,
+      "sha256": "7c35464e889f8e31bb2069074b8ff964e8a5df4112da4cc27410035030e0bc81"
     },
     {
       "path": "05-performance-and-package-delivery.md",
-      "bytes": 8829,
-      "sha256": "0afddf5dedf500a9c14cdb8e6854523902f844ea3c1322e48d1975cd480fc77c"
+      "bytes": 8948,
+      "sha256": "cb79a07d9484bffd7cdd30fd8405678a3185339fc45ac29f66a1b51c952df926"
     },
     {
       "path": "06-source-feasibility-audit.md",
-      "bytes": 17873,
-      "sha256": "6f3412f17fc7a2387ddbd4f783c7ea0f147c053bf91c1a0c54b2ec782ff7120d"
+      "bytes": 17943,
+      "sha256": "0dbf1a14c47f0ffc86eb3e9ce75cdc474a48be3d7d3e193a998b5a8119bf561a"
     },
     {
       "path": "07-windows-handoff.md",
-      "bytes": 7080,
-      "sha256": "b61c01b95b02c97d09bbd077b4ba0f23e5bac2eb081c3892ec57ebad20ca5d67"
+      "bytes": 7911,
+      "sha256": "1dae75860b121167ba241f29fbf32b8cf7cb40161599547ff68fef62b481f56e"
     },
     {
       "path": "08-decision-log.md",
-      "bytes": 3866,
-      "sha256": "d6c85f4cc2b57e41129bb25bfd53b14ad3b91c0c6c883bd3779fbdfbc7387d77"
+      "bytes": 4831,
+      "sha256": "2aac674c4f066574c05d4f057859fba4e9e1ec654014fce78e1fbf00ab7941f2"
+    },
+    {
+      "path": "09-history-source-audit.md",
+      "bytes": 12774,
+      "sha256": "a64c85c39ea488d5939fd737762dd96a3c9c9f75a480a6a461d9540806047305"
+    },
+    {
+      "path": "10-confirmed-windows-mvp.md",
+      "bytes": 6124,
+      "sha256": "c8ec74a2bb1807e0eeaf448f2a1cfc7f20d263211df57991e9a02be002239f3f"
     },
     {
       "path": "HISTORY.md",
-      "bytes": 1936,
-      "sha256": "e7d141b7772a9a2cabd8347ba71aea426d4eafec646bcf4659172bee35a714aa"
+      "bytes": 2607,
+      "sha256": "ff2998be36549cd8a8d54d3fe8b79c85f9befc22de1331a1ffee6d0746a427bd"
     },
     {
       "path": "README.md",
-      "bytes": 4875,
-      "sha256": "edf997dc2df52046036912875a3ae46db51ea8ffdc2642266f8348f58bcb9a3b"
+      "bytes": 5511,
+      "sha256": "cc3931450b3f526c03e2899754dae92cd00ba6e9053d57f4800b3c11f434e663"
+    },
+    {
+      "path": "evidence/github/handy-history-source-audit.json",
+      "bytes": 3681,
+      "sha256": "9d5075d14ec5685864e88d2137bcdf840557fd70418fae65edf9991c983aa981"
     },
     {
       "path": "evidence/github/handy-stable-source-audit.json",
@@ -128,8 +164,8 @@
     },
     {
       "path": "evidence/github/project-tracking.json",
-      "bytes": 2185,
-      "sha256": "71b93b46f3a7befff8a4b2e3ca9ad7fc8228b1d13b742e7515674f2428dceeae"
+      "bytes": 3512,
+      "sha256": "0fcb11a03e36102d88935598d25dda356c73bae9c72f136ce72aadc456fd53d4"
     },
     {
       "path": "evidence/github/repository-metadata.json",

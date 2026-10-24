@@ -1,0 +1,112 @@
+{
+  "checked_date": "2026-10-24",
+  "repository": "cjpais/Handy",
+  "ref": "14f6f0d31cb22a4268acfbddba3052820fd0a06e",
+  "tag_context": "v0.9.8",
+  "acquisition": "Previously downloaded fixed-commit codeload archive; no new package installation or app execution",
+  "source_scope": "Actual tar member bytes, no text normalization",
+  "files": [
+    {
+      "path": "src-tauri/src/managers/history.rs",
+      "bytes": 25098,
+      "sha256": "d82e3e6df2fb3600e149cb6701d8e1acdc7ad6e69f717269c37751a6bfd17717"
+    },
+    {
+      "path": "src-tauri/src/commands/history.rs",
+      "bytes": 4452,
+      "sha256": "4b66f83b461841703ee5adc8642282acd74967005df3d6a29871c6e682ac193e"
+    },
+    {
+      "path": "src-tauri/src/actions.rs",
+      "bytes": 38977,
+      "sha256": "2a58448f037515379ced850ae839caf972fa645fb44565247679899caca0982d"
+    },
+    {
+      "path": "src-tauri/src/settings.rs",
+      "bytes": 65754,
+      "sha256": "2681767e10723a29cf870fa272eba28380eb4c2e706524e2ecd637c030818956"
+    },
+    {
+      "path": "src/components/settings/history/HistorySettings.tsx",
+      "bytes": 12861,
+      "sha256": "91fa61fb2385c10c048af7af8bcf422b8f8258e87783dd7dee02cb84b3edde3b"
+    },
+    {
+      "path": "src/components/settings/history/clipboard.ts",
+      "bytes": 358,
+      "sha256": "057e8cd6ac5ac5fc71d5264e01fa8f7608167aeac98392157fe7aec5512db07e"
+    },
+    {
+      "path": "src-tauri/src/tray.rs",
+      "bytes": 27021,
+      "sha256": "a4e49d4a64f924cc68b928bc9e399b0cf9048dc6323001aa2bd82753452442b0"
+    },
+    {
+      "path": "src-tauri/src/portable.rs",
+      "bytes": 6599,
+      "sha256": "2141872fee4f2a4d6ec54d86ee320da3ad64722aa77ed04d127a95ec2b2a2b50"
+    },
+    {
+      "path": "src-tauri/tauri.conf.json",
+      "bytes": 2184,
+      "sha256": "7823d708b60c46e6e67d9f79fdab25918fbe52bc17537d6c622bab21a373a61e"
+    },
+    {
+      "path": "src/components/update-checker/portableInstaller.ts",
+      "bytes": 1865,
+      "sha256": "1bdf54b8ec45bc2ed615bc1d152517f43e3d1bb2f067b6458b6a457201a6b5fe"
+    },
+    {
+      "path": "src/components/settings/HistoryLimit.tsx",
+      "bytes": 1515,
+      "sha256": "950fd33adc80cebf39cfc6b1ff4564669bec261b6c2f85b4dde8f4a58de26d44"
+    },
+    {
+      "path": "src/components/settings/RecordingRetentionPeriod.tsx",
+      "bytes": 2238,
+      "sha256": "194e3c8ce2a91e07ba998078745c9218283cab451c29f3ec31c4fe20bc333d6b"
+    },
+    {
+      "path": "src-tauri/src/cli.rs",
+      "bytes": 2005,
+      "sha256": "74aa01f19e4e223f3106b1de77b67bda436cc3ba44a580ec1883b0def0720707"
+    }
+  ],
+  "history_schema_fields": [
+    "id",
+    "file_name",
+    "timestamp",
+    "saved",
+    "title",
+    "transcription_text",
+    "post_processed_text",
+    "post_process_prompt",
+    "post_process_requested"
+  ],
+  "observations": {
+    "text_insert_gated_by_wav_saved": true,
+    "text_and_audio_retention_independent": false,
+    "never_retention_means": "no automatic cleanup",
+    "default_unsaved_history_limit": 5,
+    "history_ui_copy_field": "transcription_text",
+    "tray_copy_preference": "post_processed_text then transcription_text",
+    "retry_command_requires_wav": true
+  },
+  "negative_search": {
+    "scope": [
+      "src/**/*.ts",
+      "src/**/*.tsx",
+      "src-tauri/src/**/*.rs"
+    ],
+    "terms": [
+      "history.*export",
+      "export.*history",
+      "history.*search",
+      "search.*history"
+    ],
+    "interpretation": "No product history search/export implementation found in this bounded search and focused manager/command/UI reading; not proof about every version or arbitrary code path"
+  },
+  "runtime_executed": false,
+  "history_database_opened": false,
+  "implementation_changed": false
+}

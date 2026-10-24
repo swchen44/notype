@@ -7,28 +7,16 @@
   "local_git_initialization": "not performed: .git filesystem write denied; remote commits use authenticated GitHub API",
   "issues": [
     {
-      "html_url": "https://github.com/swchen44/notype_study/issues/1",
-      "number": 1,
+      "html_url": "https://github.com/swchen44/notype_study/issues/7",
+      "number": 7,
       "state": "open",
-      "title": "[Design] 收斂 amd64 portable MVP 規格與 grilling 決策"
+      "title": "[History] 長期文字歷史與當次錄音分離保存"
     },
     {
-      "html_url": "https://github.com/swchen44/notype_study/issues/2",
-      "number": 2,
+      "html_url": "https://github.com/swchen44/notype_study/issues/6",
+      "number": 6,
       "state": "open",
-      "title": "[Windows] 驗證 amd64 無 installer 的 portable 啟動基線"
-    },
-    {
-      "html_url": "https://github.com/swchen44/notype_study/issues/3",
-      "number": 3,
-      "state": "open",
-      "title": "[STT] 量測本機繁中夾英文辨識品質與端到端延遲"
-    },
-    {
-      "html_url": "https://github.com/swchen44/notype_study/issues/4",
-      "number": 4,
-      "state": "open",
-      "title": "[LLM] 接公司文字 API 並在失敗時保留逐字稿待選"
+      "title": "[Packaging] 以公開 npm 配送完整 x64 portable App 與模型"
     },
     {
       "html_url": "https://github.com/swchen44/notype_study/issues/5",
@@ -37,10 +25,28 @@
       "title": "[Input] 驗收瀏覽器、VS Code、Teams、Outlook、Windows Terminal"
     },
     {
-      "html_url": "https://github.com/swchen44/notype_study/issues/6",
-      "number": 6,
+      "html_url": "https://github.com/swchen44/notype_study/issues/4",
+      "number": 4,
       "state": "open",
-      "title": "[Packaging] 經公司 Proxy 配送完整 x64 portable App 與模型"
+      "title": "[LLM] 接公司文字 API 並在失敗時保留逐字稿待選"
+    },
+    {
+      "html_url": "https://github.com/swchen44/notype_study/issues/3",
+      "number": 3,
+      "state": "open",
+      "title": "[STT] 量測本機繁中夾英文辨識品質與端到端延遲"
+    },
+    {
+      "html_url": "https://github.com/swchen44/notype_study/issues/2",
+      "number": 2,
+      "state": "open",
+      "title": "[Windows] 驗證 amd64 無 installer 的 portable 啟動基線"
+    },
+    {
+      "html_url": "https://github.com/swchen44/notype_study/issues/1",
+      "number": 1,
+      "state": "open",
+      "title": "[Design] 收斂 amd64 portable MVP 規格與 grilling 決策"
     }
   ],
   "product_package_published": false,
@@ -63,5 +69,52 @@
     "product_test_framework_selected": false,
     "product_tests_implemented": false,
     "product_tests_executed": false
-  }
+  },
+  "interview_decisions_confirmed": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15
+  ],
+  "product_distribution": {
+    "channel": "npm-only",
+    "package_visibility": "public generic product package",
+    "company_config": "local endpoint/model/key",
+    "github_private": true
+  },
+  "history_policy": {
+    "storage": "local",
+    "fields": [
+      "raw transcript",
+      "polished result",
+      "timestamp",
+      "status"
+    ],
+    "retention": "until manual deletion",
+    "operations": [
+      "search",
+      "copy",
+      "delete"
+    ],
+    "audio": "current session processing only"
+  },
+  "decision_status": "Q1-Q15 confirmed; research finalized; implementation is Windows follow-up",
+  "technical_unknowns": [
+    "Company API contract and auth/CA",
+    "Target Windows hardware/runtime/build tools",
+    "Model selection and measured performance",
+    "Npm publisher and corporate Proxy technical acceptance"
+  ],
+  "snapshot_note": "Issue snapshot is recorded before final research commit and design-issue closure; live GitHub is authoritative."
 }

@@ -17,3 +17,9 @@
 - 本地 `.git` 寫入受工作區限制，改用 GitHub API 建立遠端 history；不宣稱本地 Git 初始化完成。
 - 使用者選定 `AGENTS.md` 並採用設定草稿；已寫入 issue tracker、triage labels、domain docs，GitHub 五個 labels 已核對存在。
 - 使用者指定 `tests/unittest/` 與 `tests/integration/`；建立目錄與測試規範。產品測試尚未實作，Windows runtime 尚未執行。
+
+- Q7／Q8 採建議：Terminal 自然語言 prompt、所有 App 手動 Enter；CPU baseline 與短錄音放開到貼上 p95≤5秒為待驗證目標。
+- Q9 固定 npm-only，不做 Python wheel；Q10 增加長期文字歷史，具體欄位／期限／錄音政策待 Q11。
+
+- Q11～Q15 全部採建議：長期本機文字歷史與當次錄音分離、公開通用npm與本機公司設定、按住熱鍵／Esc、最小LLM上下文、原輸入目標一致才自動貼。
+- 15項訪談決策收斂；補glossary、兩份ADR與Windows MVP定稿。History source audit確認需要拆開WAV gate／cleanup、加入文字LLM重試與歷史搜尋UI；新增追蹤issue #7。

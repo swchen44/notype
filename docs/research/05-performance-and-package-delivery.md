@@ -1,6 +1,6 @@
 # 效能、Rust 與 npm／pip 套件配送
 
-查核日期：2026-10-24。本文件納入使用者後續補充：重視效能、希望減少相依，公司有 pip／npm Proxy，且可把自製套件上傳到 Proxy 能取得的來源。已確認只做 Windows amd64，**不可使用 installer、setup／MSI 或 runtime bootstrapper**。這是架構與配送研究，尚未建立或上傳正式 npm／pip 套件。
+查核日期：2026-10-24。本文件納入使用者後續補充：重視效能、希望減少相依，公司有 pip／npm Proxy，且可把自製套件上傳到 Proxy 能取得的來源。已確認只做 Windows amd64，**不可使用 installer、setup／MSI 或 runtime bootstrapper**。產品現已選定 **npm-only 配送**，不另做 Python wheel。下文的 pip／wheel 是選型比較資料，不是首版交付範圍。尚未建立或上傳正式產品套件。
 
 ## 1. 效能重要，是否就要用 Rust？
 
@@ -71,7 +71,7 @@ company-dictation-model-whisper（另行固定版本）
   model-identity.json
 ```
 
-程式包與模型包分開，可以讓 App 更新時沿用相同模型；是否適合拆包，要看實際模型大小與公司套件來源的單檔／package 上限。x64／arm64 亦可各自發行，避免所有人下載兩份 native binary。模型包的 cache 路徑與版本應由 App 明確管理。
+程式包與模型包分開，可以讓 App 更新時沿用相同模型；是否適合拆包，要看實際模型大小與公司套件來源的單檔／package 上限。本產品只發 Windows amd64／x64，arm64 不在範圍。模型包的 cache 路徑與版本應由 App 明確管理。
 
 要確認 `npm pack`／wheel 裡確實含有 exe、DLL 與權重，而非只放下載 URL。[npm 官方開發文件](https://docs.npmjs.com/cli/v12/using-npm/developers/) 說明可用 `npm pack` 檢查實際發行內容；wheel 也可直接列出 ZIP 成員與核對 manifest。兩種套件均需實測安裝後的檔案位置、執行權限與模型 discovery。
 
@@ -79,13 +79,13 @@ company-dictation-model-whisper（另行固定版本）
 
 Python 開發時可用 [`pip download`](https://pip.pypa.io/en/stable/cli/pip_download/) 建立 wheelhouse，固定依賴與 Windows／Python 平台。這能支援集中取得與離線安裝；模型權重不會因安裝 Python library 就必然包含在 wheelhouse。
 
-公司內部 endpoint 預設值可放不含秘密的 config；API key、token、實際逐字稿及使用者歷史不應放進可分發套件。發布時才需要確定實際 registry、package scope、可見性與憑證。本次研究沒有選定發布目的地或執行 upload。
+公司內部 endpoint 預設值可放不含秘密的 config；API key、token、實際逐字稿及使用者歷史不應放進可分發套件。已確認通用產品包以公開 npm 為發布方向；精確 package scope／名稱、publisher 權限及 registry 限制仍須查核。本次沒有建立或發布產品包。
 
 ## 5. 對目前選型的影響
 
 1. **Handy 仍是先行驗證基底。** 已有 Rust core、本機 STT 與自訂文字 LLM；可先量測，再決定包裝為公司用 portable 或套件 payload。
 2. **若確定要自建，Rust＋native STT＋npm／wheel 配送值得優先設計。** 其理由是控制常駐資源與終端安裝相依；效能仍須以相同模型實測，並先確認 Rust build 工具取得方式。
-3. **Python 是可用的 PoC／正式候選。** pip Proxy 降低相依取得難度，native STT 可避免純 Python 推論假設；若量測已符合需求，沒有證據要求為語言本身重寫。
+3. **Python 是比較／研究候選。** pip Proxy 降低相依取得難度，native STT 可避免純 Python 推論假設；若量測已符合需求，沒有證據要求為語言本身重寫。
 4. **OpenTypeless 的 Windows local mode 是 HTTP STT client。** 對「相依與安裝步驟少」的要求，額外本機 ASR server 需要計入，而不能只看它的 Rust／Tauri 標籤。[開源比較](02-open-source-alternatives.md)
 
 最終驗收應同時測量 STT／LLM／總延遲、常駐 RAM、啟動時間、下載體積，以及乾淨 Windows 安裝後是否還會取得額外檔案。這些項目本次均未測量。

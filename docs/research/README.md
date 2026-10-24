@@ -2,7 +2,7 @@
 
 查核日期：2026-10-24。
 
-**目前已固定 Windows amd64／x64 與不能使用 installer，建議先以 Handy 的 portable source 機制建立可驗收檔案包，驗證「本機語音辨識 → 公司文字 LLM 整理 → 貼回游標」。** 自製版本可採 Rust core，透過 npm／Python wheel 配送預編譯 Windows App、DLL 與模型；Python＋native STT 也應保留作為可量測的候選。效能不能僅由外層語言判定。
+**研究與Q1～Q15決策已收斂，先讀 [Windows MVP 定稿](10-confirmed-windows-mvp.md)。** 產品為Windows amd64 portable App，只用公開通用npm包配送，公司設定留本機；本機STT→公司文字LLM→原輸入目標交付，並保留可搜尋的長期文字歷史。優先評估修改Handy，效能與runtime仍須在公司Windows驗收。
 
 ## 已確認的需求
 
@@ -11,11 +11,13 @@
 - 公司 pip／npm 有 Proxy；可將自製套件上傳到 Proxy 能取得的來源。
 - 尚未指定 software stack；重視效能與可封裝性。
 - 只做 amd64／x64；禁止 installer、setup／MSI 及 runtime bootstrapper。
+- 產品只做公開通用 npm 配送，公司設定本機保存；需要本機長期文字歷史及搜尋／複製／刪除，錄音只供當次處理。
+- Terminal 首版以自然語言 prompt 為主；所有 App 手動 Enter。CPU baseline，短錄音 p95≤5秒是待驗證目標。
 - 先供本人使用；輸出繁中夾英文忠實整理，LLM 失敗停下待選。
 - 首批目標：瀏覽器文字框、VS Code、Teams、Outlook、Windows Terminal。
-- GitHub repo 已建立為 private，保存研究、Git history 與 issues；訪談仍在進行。
+- GitHub repo 已建立為 private，保存研究、Git history 與 issues；Q1～Q15 訪談決策已收斂。
 
-完整的已確認／待決狀態以 [決策紀錄](08-decision-log.md) 為準。公司 API 的 wire format、認證／TLS、實際 Windows 硬體、Rust build 工具取得方式及 package registry 仍未知。本次沒有呼叫公司端點或發布套件。
+完整的已確認決策／驗證邊界以 [決策紀錄](08-decision-log.md) 為準。公司 API 的 wire format、認證／TLS、實際 Windows 硬體、Rust build 工具取得方式、npm publisher 權限與 Proxy 技術條件仍未驗證。本次沒有呼叫公司端點或發布套件。
 
 ## 研究文件
 
@@ -28,7 +30,9 @@
 | [05：效能與套件配送](05-performance-and-package-delivery.md) | Rust／Python native engine 的差異；npm／wheel 內含 exe、DLL、模型的 Proxy 配送方案 |
 | [06：Handy source 與 payload](06-source-feasibility-audit.md) | 固定版本 portable／模型／LLM／paste 路徑、Windows x64 發布物靜態檢查 |
 | [07：Windows 接手](07-windows-handoff.md) | 無 installer 限制下的 preflight、實作／驗收順序與接手 prompt |
-| [08：決策紀錄](08-decision-log.md) | grilling 已確認選項、待決問題與設計樹 |
+| [08：決策紀錄](08-decision-log.md) | Q1～Q15 已確認選項、設計樹與驗證邊界 |
+| [09：文字歷史 source audit](09-history-source-audit.md) | WAV／文字保存耦合、UI／重試／retention 與 npm 更新接縫 |
+| [10：Windows MVP 定稿](10-confirmed-windows-mvp.md) | 最終行為、必改 source 接縫、測試與 Windows 接手順序 |
 | [工作紀錄](HISTORY.md) | 工作里程碑，精確變更以 Git commits 為準 |
 
 ## 優先候選
@@ -47,6 +51,7 @@
 - Typeless `app.asar` SHA-256、89 個來源與 6 個 native libraries 的身分紀錄。
 - REA summary、初次 integrity error、17 筆原始 byte range／有限 literal substitution 對照摘錄。
 - 8 個 GitHub repository 的 metadata／發布資產描述，以及 70 個選讀 source snapshot 的 hash；source snapshot 計數含不同 ref／scope。
+- Handy history 的13個固定source成員hash，及source／Windows payload靜態追查。
 - 兩支只用 Python 標準函式庫的研究工具，用來讀取選定 ASAR 來源與靜態替換字串查表。
 
 Typeless 的兩個 unpacked native 模組有宣告／實際 hash 差異；REA graph 為 partial。本機套件不能揭露完整伺服器模型與 prompt。已另做 Handy x64 發布物 hash／靜態解包研究，沒有執行其 installer。公司版交付不使用 installer。本次未執行聽寫、Windows runtime、效能測試、公司 API 呼叫或 npm／pip package upload；這些邊界均保留在各文件。

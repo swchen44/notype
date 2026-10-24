@@ -1,6 +1,6 @@
 # 公司 Windows 內網版：架構與安裝方案
 
-查核日期：2026-10-24。使用者已確認：**公司目前只有文字輸入的 LLM API**，pip／npm 有公司 Proxy，也可自行上傳發行套件供 Proxy 取得。只做 amd64／x64，**禁止 installer／MSI／runtime bootstrapper**，希望減少啟動後的下載與 runtime 相依。以下是研究後的實作建議，尚未建置 App、連線公司 API 或在公司 Windows 驗收。
+查核日期：2026-10-24。使用者已確認：**公司目前只有文字輸入的 LLM API**，pip／npm 有公司 Proxy，也可自行上傳發行套件供 Proxy 取得。只做 amd64／x64，**禁止 installer／MSI／runtime bootstrapper**，希望減少啟動後的下載與 runtime 相依。產品已選 npm-only 配送及長期文字歷史；Terminal 首版是自然語言 prompt，所有 App 手動 Enter；CPU baseline 與短錄音 p95≤5秒是待驗證目標。最終行為以 [MVP 定稿](10-confirmed-windows-mvp.md) 為準。其餘為研究建議，尚未建置 App、連線公司 API 或在公司 Windows 驗收。
 
 ## 1. 建議採用的路線
 

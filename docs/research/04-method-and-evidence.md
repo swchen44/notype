@@ -11,7 +11,9 @@
 | GitHub 是否有相近開源專案 | 已找到 8 個候選並比較 | 固定 main／stable source、release metadata、endpoint 與安裝形式；沒有執行候選 App |
 | 公司只有文字 LLM 時如何做 | 已提出具體架構 | 本機 STT＋文字 API adapter＋送字；公司 endpoint／硬體未提供，沒有整合驗證 |
 | 效能是否必須用 Rust | 已分析取捨 | 區分 native engine、外層語言、模型與 API 延遲；無公司 benchmark |
-| npm／pip Proxy 如何配送 | 已提出發行結構 | 預編譯 App／DLL／模型放入套件，registry／scope 與發布憑證尚未選定；沒有 upload |
+| npm／pip Proxy 如何配送 | 已提出發行結構 | 已選公開通用 npm-only，預編譯 App／DLL／模型放入套件；scope／發布權限待查核，沒有產品 upload |
+| 訪談與產品決策 | Q1～Q15 已確認 | npm-only、長期文字歷史、錄音當次、最小上下文及焦點政策已定；詳見 10 與 08 |
+| 長期文字與錄音如何分離 | 已追查上游 persistence／retention 接縫 | 13個固定 source 成員 hash；修改與 Windows runtime 尚未執行 |
 
 ## 2. 本機 Typeless 的實際證據
 
@@ -24,6 +26,7 @@
 | [GitHub repository metadata](evidence/github/repository-metadata.json) | 8 個 repo 的 main SHA、可用 stable release、資產名稱／URL／API 宣告 digest；沒有下載資產實算 hash |
 | [GitHub source identities](evidence/github/source-file-identities.json) | 70 個選讀 connector source snapshot 的 hash；不是 Git blob object ID，也不是 release binary 身分 |
 | [Handy source／payload audit](evidence/github/handy-stable-source-audit.json) | 固定 source 成員、Windows x64 發布物實算 digest／靜態解包檔案身分與提取限制；沒有執行 installer |
+| [Handy history audit](evidence/github/handy-history-source-audit.json) | 13個固定 source 成員、WAV gate／共同清理／UI／重試觀察與 bounded search |
 | [外部第一方來源索引](evidence/primary-sources.json) | 官方政策、API／打包文件與查核日期 |
 | [本地查核 receipt](evidence/verification-receipt.json) | 文件／JSON／連結及研究工具的本地查核結果；不代表產品 runtime 通過 |
 
