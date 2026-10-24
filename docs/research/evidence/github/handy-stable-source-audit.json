@@ -1,0 +1,510 @@
+{
+  "checked_date": "2026-10-24",
+  "repository": "cjpais/Handy",
+  "ref": "14f6f0d31cb22a4268acfbddba3052820fd0a06e",
+  "tag_context": "v0.9.8, previously resolved stable tag",
+  "acquisition_url": "https://codeload.github.com/cjpais/Handy/tar.gz/14f6f0d31cb22a4268acfbddba3052820fd0a06e",
+  "archive_bytes": 4513305,
+  "archive_sha256": "a6bcd28cfb83dee566328432ce1d15e2a4f881d0dee8af8ca7a4d2f5499488f6",
+  "source_scope": "Selected actual tar archive member bytes; no normalization; unlike connector snapshots this hash does not append a final newline",
+  "files": [
+    {
+      "path": "BUILD.md",
+      "bytes": 9457,
+      "sha256": "e9091155d244d769d050c231a48a1f85c6a5a81e0c8723bb50cff4bf467042b3"
+    },
+    {
+      "path": "README.md",
+      "bytes": 24036,
+      "sha256": "d67313601eac716bebea041122ec70cfac7969a689eb28ee1b1a3f4bdf0d5ee8"
+    },
+    {
+      "path": "LICENSE",
+      "bytes": 1064,
+      "sha256": "3564e8ec14055ed54f896e8660a62627ea4fc3a1b64f72b798593df00e1f4edc"
+    },
+    {
+      "path": "package.json",
+      "bytes": 2324,
+      "sha256": "57e2d995b4befa2ede85f3dcbd97f39882676fced5f4d2e45635cdc6a14d66a0"
+    },
+    {
+      "path": "src-tauri/Cargo.toml",
+      "bytes": 8062,
+      "sha256": "e0aa1e36460269d4830cb72ccca67c67c0f0d3350db7ac0cf780a5f1d6d7516f"
+    },
+    {
+      "path": "src-tauri/tauri.conf.json",
+      "bytes": 2184,
+      "sha256": "7823d708b60c46e6e67d9f79fdab25918fbe52bc17537d6c622bab21a373a61e"
+    },
+    {
+      "path": "src-tauri/tauri.windows.conf.json",
+      "bytes": 108,
+      "sha256": "3412dba85a00eee84b604632934a77227286f3ef7c932dba5b6391ec74c163d4"
+    },
+    {
+      "path": ".github/workflows/build.yml",
+      "bytes": 47477,
+      "sha256": "359260cef54014e5cf32dd6761d6827e6fb39c26188091573ea0fd4f2ea7e5af"
+    },
+    {
+      "path": "src-tauri/build.rs",
+      "bytes": 24642,
+      "sha256": "b4c27ebb871d6a61cccc1ecd8e6ae7a9b1217ecc57a1e9b96eddb43ac850c550"
+    },
+    {
+      "path": "src-tauri/nsis/installer.nsi",
+      "bytes": 35880,
+      "sha256": "bcaf92eb786847314f69922687d8d41f805949e34c0976ad620455a691071fe1"
+    },
+    {
+      "path": "src-tauri/src/managers/model.rs",
+      "bytes": 127633,
+      "sha256": "0af6aeb669f280c141b221473254310a47e04a7a5fbf5e0b0f22733872d8376d"
+    },
+    {
+      "path": "src-tauri/src/managers/transcription.rs",
+      "bytes": 105222,
+      "sha256": "9ca5e6a20128b44cd728240f13ee40b247baa43b006bac3f44d8b31fef038081"
+    },
+    {
+      "path": "src-tauri/src/portable.rs",
+      "bytes": 6599,
+      "sha256": "2141872fee4f2a4d6ec54d86ee320da3ad64722aa77ed04d127a95ec2b2a2b50"
+    },
+    {
+      "path": "src/components/onboarding/Onboarding.tsx",
+      "bytes": 9590,
+      "sha256": "76d1e99612d3edebf22556a9dcb39563ad98f90043aeff36d25a9d0578904511"
+    },
+    {
+      "path": "src/components/update-checker/UpdateChecker.tsx",
+      "bytes": 9399,
+      "sha256": "24ac01ae46bece3f2e364bb080a20665859e7efc3403c74f18a1f3fba89994ce"
+    },
+    {
+      "path": "src-tauri/src/settings.rs",
+      "bytes": 65754,
+      "sha256": "2681767e10723a29cf870fa272eba28380eb4c2e706524e2ecd637c030818956"
+    },
+    {
+      "path": "src-tauri/src/llm_client.rs",
+      "bytes": 23758,
+      "sha256": "6f82b75724cf66c9bb284b9dbf55bddf73ca5424ae3cf906adb5f93248c97c93"
+    },
+    {
+      "path": "src-tauri/src/actions.rs",
+      "bytes": 38977,
+      "sha256": "2a58448f037515379ced850ae839caf972fa645fb44565247679899caca0982d"
+    },
+    {
+      "path": "src-tauri/src/shortcut/handler.rs",
+      "bytes": 2614,
+      "sha256": "49358bf04c25a005c7fa1dcd50dc5ef0e0328defc799300d284fb8019af3567a"
+    },
+    {
+      "path": "src-tauri/src/transcription_coordinator.rs",
+      "bytes": 61313,
+      "sha256": "4b18ccaa6aa0a1c0f69c08e7aea4acf9b3bbe394c11f3f07851cca8944bfdb08"
+    },
+    {
+      "path": "src-tauri/src/clipboard.rs",
+      "bytes": 35876,
+      "sha256": "073e01aeb70c02b8fc23e1fa9af01e448305c1fa2c32e3311dcc12f6c2570f17"
+    }
+  ],
+  "runtime_executed": false,
+  "windows_binary_inspected": true,
+  "package_published": false,
+  "windows_shipped_artifact_probe": {
+    "date": "2026-10-24",
+    "asset_name": "Handy_0.9.8_x64-setup.exe",
+    "url": "https://github.com/cjpais/Handy/releases/download/v0.9.8/Handy_0.9.8_x64-setup.exe",
+    "expected_bytes": 19615736,
+    "observed_bytes": 19615736,
+    "github_api_digest": "sha256:4212edb5658ec2867855fc2ee83ac16ec5bbad09db3c2da8d3d9d5f8bd5eeccc",
+    "observed_sha256": "4212edb5658ec2867855fc2ee83ac16ec5bbad09db3c2da8d3d9d5f8bd5eeccc",
+    "size_and_digest_match": true,
+    "parser": "7-Zip (z) 26.03 arm64, existing /opt/homebrew/bin/7zz",
+    "archive_format": "PE containing NSIS-3 Unicode, LZMA:23 solid",
+    "installer_stub_machine": "0x14c",
+    "main_payload_machine": "0x8664",
+    "listing_exit_code": 0,
+    "extraction_exit_code": 0,
+    "extracted_files": 50,
+    "extracted_bytes": 102981396,
+    "root_dll_count": 23,
+    "members": [
+      {
+        "path": "$PLUGINSDIR/System.dll",
+        "listed_bytes": 12288,
+        "emitted_bytes": 12288,
+        "emitted_sha256": "8b4c47c4cf5e76ec57dd5a050d5acd832a0d532ee875d7b44f6cdaf68f90d37c",
+        "pe_coff_machine": "0x14c"
+      },
+      {
+        "path": "$PLUGINSDIR/modern-wizard.bmp",
+        "listed_bytes": 26494,
+        "emitted_bytes": 26494,
+        "emitted_sha256": "3ad2dc318056d0a2024af1804ea741146cfc18cc404649a44610cbf8b2056cf2",
+        "pe_coff_machine": null
+      },
+      {
+        "path": "$PLUGINSDIR/nsDialogs.dll",
+        "listed_bytes": 9728,
+        "emitted_bytes": 9728,
+        "emitted_sha256": "b1350f487692057c8ffde75dcc55287a52a3272240d4d4912f24464b27551fc0",
+        "pe_coff_machine": "0x14c"
+      },
+      {
+        "path": "$PLUGINSDIR/nsis_tauri_utils.dll",
+        "listed_bytes": 49944,
+        "emitted_bytes": 49944,
+        "emitted_sha256": "fad6d17bdac93a63d5629f29c704b9f555db46b038e7a1ad4cc2c872da2a57bd",
+        "pe_coff_machine": "0x14c"
+      },
+      {
+        "path": "$PLUGINSDIR/StartMenu.dll",
+        "listed_bytes": 13316,
+        "emitted_bytes": 7680,
+        "emitted_sha256": "fe330320459637d8dd2b5d84d07925c38ec264152ffd3b1760a4d44d76536caa",
+        "pe_coff_machine": "0x14c"
+      },
+      {
+        "path": "$PLUGINSDIR/NSISdl.dll",
+        "listed_bytes": 15360,
+        "emitted_bytes": 15360,
+        "emitted_sha256": "ddf40229dd9d6b268902d8dea88c8a04aacf1af218dd29f6dcd35babc54ac08d",
+        "pe_coff_machine": "0x14c"
+      },
+      {
+        "path": "handy.exe",
+        "listed_bytes": 30401312,
+        "emitted_bytes": 30401312,
+        "emitted_sha256": "9a1d2246b64322cb334960a5b3830b0d125070735c355648c498076ec7c0a0ff",
+        "pe_coff_machine": "0x8664"
+      },
+      {
+        "path": "resources/default_settings.json",
+        "listed_bytes": 337,
+        "emitted_bytes": 337,
+        "emitted_sha256": "fad8a883d051fc6e1b3f0c536732248a49d48a1284138e252d4036c503b1904a",
+        "pe_coff_machine": null
+      },
+      {
+        "path": "resources/handy.png",
+        "listed_bytes": 768,
+        "emitted_bytes": 768,
+        "emitted_sha256": "e160aca4bde798d741a304e325bb9cb50a6ad1a56dde4fc18c6482a4afbce4b8",
+        "pe_coff_machine": null
+      },
+      {
+        "path": "resources/handy_warning.png",
+        "listed_bytes": 2261,
+        "emitted_bytes": 2261,
+        "emitted_sha256": "44cc11e4ab3550ad05022f1b96efe1b6a0b3da6f708daaa6778e0c2e1ad86895",
+        "pe_coff_machine": null
+      },
+      {
+        "path": "resources/marimba_start.wav",
+        "listed_bytes": 102268,
+        "emitted_bytes": 102268,
+        "emitted_sha256": "ec58fb613b5102eca54689a6b42c389f1aa46154db80c27fea756879dfc6f39a",
+        "pe_coff_machine": null
+      },
+      {
+        "path": "resources/marimba_stop.wav",
+        "listed_bytes": 139068,
+        "emitted_bytes": 139068,
+        "emitted_sha256": "682f408a066eadcccd5bc09e4055629bdd985f7ef222954a34f7e05ca1a456b2",
+        "pe_coff_machine": null
+      },
+      {
+        "path": "resources/models/gigaam_vocab.txt",
+        "listed_bytes": 2264,
+        "emitted_bytes": 2264,
+        "emitted_sha256": "40331e217254acbf8e93690d2e950943747d503e0beec9db7f1e2c34866911c1",
+        "pe_coff_machine": null
+      },
+      {
+        "path": "resources/models/silero_vad_v4.onnx",
+        "listed_bytes": 1807522,
+        "emitted_bytes": 1807522,
+        "emitted_sha256": "a35ebf52fd3ce5f1469b2a36158dba761bc47b973ea3382b3186ca15b1f5af28",
+        "pe_coff_machine": null
+      },
+      {
+        "path": "resources/pop_start.wav",
+        "listed_bytes": 107870,
+        "emitted_bytes": 107870,
+        "emitted_sha256": "18dcc6fdeab5889f2e216da45d29c2df0a94f006fff6cfaee352f0df52a4779b",
+        "pe_coff_machine": null
+      },
+      {
+        "path": "resources/pop_stop.wav",
+        "listed_bytes": 101586,
+        "emitted_bytes": 101586,
+        "emitted_sha256": "3c6dd27332c8613f533824979c470d32a62c326cdac35f1edea668602430d90d",
+        "pe_coff_machine": null
+      },
+      {
+        "path": "resources/recording.png",
+        "listed_bytes": 678,
+        "emitted_bytes": 678,
+        "emitted_sha256": "aa723ebda2520622911abb0468754e264ab64ee4b967c8413e68fd165d9b64dd",
+        "pe_coff_machine": null
+      },
+      {
+        "path": "resources/transcribing.png",
+        "listed_bytes": 756,
+        "emitted_bytes": 756,
+        "emitted_sha256": "29822fa1a77e79af9a01790e2baf317a8e47c6be581bec6067bbbd62d7ff3976",
+        "pe_coff_machine": null
+      },
+      {
+        "path": "resources/tray_idle.png",
+        "listed_bytes": 1048,
+        "emitted_bytes": 1048,
+        "emitted_sha256": "b554fd1013bd2f8312eab255c47278ed76ce2808aabecbd8648f961d45afbe9d",
+        "pe_coff_machine": null
+      },
+      {
+        "path": "resources/tray_idle_dark.png",
+        "listed_bytes": 1522,
+        "emitted_bytes": 1522,
+        "emitted_sha256": "c0e672564f498316ad5b7a9f78bd703aec8722eca25f3e2fe19d23beaf114cd6",
+        "pe_coff_machine": null
+      },
+      {
+        "path": "resources/tray_idle_warning.png",
+        "listed_bytes": 1464,
+        "emitted_bytes": 1464,
+        "emitted_sha256": "4fad013a4a2ce5e7a88d8df2271c221c6524b5e2cb316b7b3d4abc4efa7ce687",
+        "pe_coff_machine": null
+      },
+      {
+        "path": "resources/tray_idle_warning_dark.png",
+        "listed_bytes": 1237,
+        "emitted_bytes": 1237,
+        "emitted_sha256": "8030ee0dea7666a2fd32a7045a7dee3e062a3d2b39438898d8fe1e8777806ea4",
+        "pe_coff_machine": null
+      },
+      {
+        "path": "resources/tray_recording.png",
+        "listed_bytes": 1461,
+        "emitted_bytes": 1461,
+        "emitted_sha256": "51596aa529120696e46309f9b135ac4f199158849810373e9c88f85daf59e395",
+        "pe_coff_machine": null
+      },
+      {
+        "path": "resources/tray_recording_dark.png",
+        "listed_bytes": 1308,
+        "emitted_bytes": 1308,
+        "emitted_sha256": "ce2cb47c930b73d59a0d30f26aa1c6d369a106f64a4afe5571d60a29ae63ec56",
+        "pe_coff_machine": null
+      },
+      {
+        "path": "resources/tray_transcribing.png",
+        "listed_bytes": 1559,
+        "emitted_bytes": 1559,
+        "emitted_sha256": "7b03376131c570d2a67eeac29410c983c6b5483ec188f8d520ff09d28202d0e9",
+        "pe_coff_machine": null
+      },
+      {
+        "path": "resources/tray_transcribing_dark.png",
+        "listed_bytes": 1461,
+        "emitted_bytes": 1461,
+        "emitted_sha256": "af81a67d3df7226b48247271fd309394e46a5fcf17aaa6d2d9da11b917d8bf64",
+        "pe_coff_machine": null
+      },
+      {
+        "path": "ggml-base.dll",
+        "listed_bytes": 701720,
+        "emitted_bytes": 701720,
+        "emitted_sha256": "c88419ca1c7e025629e239752acf9226fcc7bd898f5f66480d1202a215c4d507",
+        "pe_coff_machine": "0x8664"
+      },
+      {
+        "path": "ggml-cpu-alderlake.dll",
+        "listed_bytes": 1022744,
+        "emitted_bytes": 1022744,
+        "emitted_sha256": "c2b4efdaee77c73f6242a09475f2684b0279932c25400357ebc3bd4a2f1c7aad",
+        "pe_coff_machine": "0x8664"
+      },
+      {
+        "path": "ggml-cpu-cannonlake.dll",
+        "listed_bytes": 1133336,
+        "emitted_bytes": 1133336,
+        "emitted_sha256": "3a891b76a472d162a5eb9d79d16f48834d5f9bb7d994a3d98c8f62d3f73b7bfe",
+        "pe_coff_machine": "0x8664"
+      },
+      {
+        "path": "ggml-cpu-cascadelake.dll",
+        "listed_bytes": 1129240,
+        "emitted_bytes": 1129240,
+        "emitted_sha256": "7d9f6616ec7ff3f4ce7518b05632889aa0e8b6cf24f0d4153567532766bed5af",
+        "pe_coff_machine": "0x8664"
+      },
+      {
+        "path": "ggml-cpu-haswell.dll",
+        "listed_bytes": 1025312,
+        "emitted_bytes": 1025312,
+        "emitted_sha256": "ff4e2f24f4ee446eb46328bdacd76010baa417ff4c189e8f7deedeb9fe61ac55",
+        "pe_coff_machine": "0x8664"
+      },
+      {
+        "path": "ggml-cpu-icelake.dll",
+        "listed_bytes": 1129240,
+        "emitted_bytes": 1129240,
+        "emitted_sha256": "fa74f31e1861bb6dc7fbe7a972a97885ade1a98128264c9b5948550af74828f6",
+        "pe_coff_machine": "0x8664"
+      },
+      {
+        "path": "ggml-cpu-sandybridge.dll",
+        "listed_bytes": 989472,
+        "emitted_bytes": 989472,
+        "emitted_sha256": "d21fab70996844b81c6e0344040b88a18ae2bbffcd2376077651f22fc405bd83",
+        "pe_coff_machine": "0x8664"
+      },
+      {
+        "path": "ggml-cpu-skylakex.dll",
+        "listed_bytes": 1133336,
+        "emitted_bytes": 1133336,
+        "emitted_sha256": "edf8da77e34112b7c9f0efacd3ea0552080b4d6be8cd63199c82f92fc6e908f8",
+        "pe_coff_machine": "0x8664"
+      },
+      {
+        "path": "ggml-cpu-sse42.dll",
+        "listed_bytes": 890144,
+        "emitted_bytes": 890144,
+        "emitted_sha256": "c86b3f16758f8acfda5796038814b7de532996d4b7448d33b8c0ee18605ee999",
+        "pe_coff_machine": "0x8664"
+      },
+      {
+        "path": "ggml-cpu-x64.dll",
+        "listed_bytes": 893728,
+        "emitted_bytes": 893728,
+        "emitted_sha256": "fe07715ac9a0ff5d27af9e089b0be74d257f2413119dcd9ae91e09ce0c9fb1c4",
+        "pe_coff_machine": "0x8664"
+      },
+      {
+        "path": "ggml-vulkan.dll",
+        "listed_bytes": 42406168,
+        "emitted_bytes": 42406168,
+        "emitted_sha256": "1f98e5c0e809a340c40f4057e9f73e0ac26ea32b5490e98327125798c8110728",
+        "pe_coff_machine": "0x8664"
+      },
+      {
+        "path": "ggml.dll",
+        "listed_bytes": 78624,
+        "emitted_bytes": 78624,
+        "emitted_sha256": "79fe7c80104fa5069aff71a84d7e9ad547ef9b94bdf3d6476514220f1accbf49",
+        "pe_coff_machine": "0x8664"
+      },
+      {
+        "path": "msvcp140.dll",
+        "listed_bytes": 643512,
+        "emitted_bytes": 643512,
+        "emitted_sha256": "7c26614e1d733892c2deac7e245ce115504b1d80592dd0a01b08e3e5a55f89ca",
+        "pe_coff_machine": "0x8664"
+      },
+      {
+        "path": "msvcp140_1.dll",
+        "listed_bytes": 35768,
+        "emitted_bytes": 35768,
+        "emitted_sha256": "206c931bf90fdad8816de3b5e2ef80b2bcaa9406c89ecc05fe6fddffe251e982",
+        "pe_coff_machine": "0x8664"
+      },
+      {
+        "path": "msvcp140_2.dll",
+        "listed_bytes": 274872,
+        "emitted_bytes": 274872,
+        "emitted_sha256": "d50d7883f20d1dc6191768d3746f52dd9cac89c346ffaed5be1f110c2f34a838",
+        "pe_coff_machine": "0x8664"
+      },
+      {
+        "path": "msvcp140_atomic_wait.dll",
+        "listed_bytes": 57792,
+        "emitted_bytes": 57792,
+        "emitted_sha256": "3d0cbfaa1bf3eecf5a3f4491d2960ee803cb994f30292c6adc4a07c498f60e2b",
+        "pe_coff_machine": "0x8664"
+      },
+      {
+        "path": "msvcp140_codecvt_ids.dll",
+        "listed_bytes": 31160,
+        "emitted_bytes": 31160,
+        "emitted_sha256": "8a65c7596ef2e6938731f5a1058e7e40145b6d97967cc649231a076b9a608d78",
+        "pe_coff_machine": "0x8664"
+      },
+      {
+        "path": "onnxruntime.dll",
+        "listed_bytes": 14148680,
+        "emitted_bytes": 14148680,
+        "emitted_sha256": "114947d633e6844ce3c4b51ef6678f776628571d08a5763859c61642c8dcca9c",
+        "pe_coff_machine": "0x8664"
+      },
+      {
+        "path": "transcribe.dll",
+        "listed_bytes": 1872160,
+        "emitted_bytes": 1872160,
+        "emitted_sha256": "765e4723dba20404b7ac7108998249599539cbd4ce93f2245b4ec6b2ff6a9a2a",
+        "pe_coff_machine": "0x8664"
+      },
+      {
+        "path": "vcomp140.dll",
+        "listed_bytes": 212920,
+        "emitted_bytes": 212920,
+        "emitted_sha256": "95d4ce4a6802d1e18b5e0e1722cc30ea72ca7e033f83828f05c0b7b993fe7cbf",
+        "pe_coff_machine": "0x8664"
+      },
+      {
+        "path": "vcruntime140.dll",
+        "listed_bytes": 178616,
+        "emitted_bytes": 178616,
+        "emitted_sha256": "d1f4225df2cd877dbf130d5668a021dce3f94118455ff5ec952061c30afc9ce7",
+        "pe_coff_machine": "0x8664"
+      },
+      {
+        "path": "vcruntime140_1.dll",
+        "listed_bytes": 50112,
+        "emitted_bytes": 50112,
+        "emitted_sha256": "a7146c08f89fe5b04541ab507cdb59ff7b44534d4ba3c668a426c6450a03434e",
+        "pe_coff_machine": "0x8664"
+      },
+      {
+        "path": "vcruntime140_threads.dll",
+        "listed_bytes": 38840,
+        "emitted_bytes": 38840,
+        "emitted_sha256": "40f39e8cee5f5a531b4010e18b807e8fe265b908dc58f959ecb7ebc6ea6cb11a",
+        "pe_coff_machine": "0x8664"
+      },
+      {
+        "path": "uninstall.exe",
+        "listed_bytes": null,
+        "emitted_bytes": 104656,
+        "emitted_sha256": "170201e4c9bebae0bb75f2cefc8c2bef28175a7b54787754cc18f470d5d80539",
+        "pe_coff_machine": "0x14c"
+      }
+    ],
+    "listed_vs_emitted_size_differences": [
+      {
+        "path": "$PLUGINSDIR/StartMenu.dll",
+        "listed_bytes": 13316,
+        "emitted_bytes": 7680
+      }
+    ],
+    "listing_sha256": "eeba709231daf5290850522fdad4b5233074da93153acf566b52889e2dd660b4",
+    "extraction_log_sha256": "453212ea321b9f39ba68a0b6b954f20363f2c59fa720dc604154852d50112b9b",
+    "target_execution": false,
+    "signature_verification": "not-performed",
+    "dependency_closure": "not-established",
+    "limitations": [
+      "Static parser-emitted files are not an observed Windows installation.",
+      "An NSIS installer may transform, rename, generate, conditionally install or download files; these actions were not executed.",
+      "StartMenu.dll listed versus emitted size differs; cause not investigated.",
+      "Only PE COFF Machine fields were read; PE imports and transitive OS/driver requirements were not exhaustively inspected.",
+      "No runtime, inference, Windows startup, GPU, WebView2, company API or proxy acceptance."
+    ]
+  }
+}

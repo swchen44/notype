@@ -1,0 +1,25 @@
+{
+  "checked_date": "2026-10-24",
+  "scope": "First-party sources supporting 01, 03, 05. Candidate repository refs and release metadata are separately recorded under evidence/github. These are source references, not runtime verification.",
+  "sources": [
+    {"title": "Typeless product features", "url": "https://www.typeless.com/", "use": "Official feature descriptions"},
+    {"title": "Typeless FAQ", "url": "https://www.typeless.com/help/faqs", "use": "Accessibility, microphone, system-wide insertion descriptions"},
+    {"title": "Typeless Ask anything", "url": "https://www.typeless.com/ask-anything", "use": "Selected text editing, questions, search, delivery descriptions"},
+    {"title": "Typeless Privacy Policy", "url": "https://www.typeless.com/privacy", "document_date": "2026-10-13", "use": "Vendor statement about cloud processing and optional history sync"},
+    {"title": "Typeless Data Controls", "url": "https://www.typeless.com/data-controls", "document_date": "2026-10-13", "use": "Vendor statement explicitly describing cloud transcription"},
+    {"title": "whisper.cpp v1.9.4 model documentation", "url": "https://github.com/ggml-org/whisper.cpp/blob/v1.9.4/models/README.md", "use": "Model formats, multilingual versus English models"},
+    {"title": "whisper.cpp v1.9.4 model download script", "url": "https://github.com/ggml-org/whisper.cpp/blob/v1.9.4/models/download-ggml-model.sh", "use": "Separate model acquisition and model host"},
+    {"title": "faster-whisper", "url": "https://github.com/SYSTRAN/faster-whisper", "use": "CTranslate2 native inference, runtime requirements; upstream benchmarks are not reused as company measurements"},
+    {"title": "Rust Reference: linkage", "url": "https://doc.rust-lang.org/reference/linkage.html", "use": "Static versus dynamic linkage boundaries"},
+    {"title": "Microsoft SendInput", "url": "https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-sendinput", "use": "UIPI and input-injection integrity constraints"},
+    {"title": "Tauri Windows Installer", "url": "https://v2.tauri.app/distribute/windows-installer/", "use": "WebView2 bootstrapper, offline and fixed runtime options"},
+    {"title": "PyInstaller operating mode", "url": "https://pyinstaller.org/en/stable/operating-mode.html", "observed_docs_version": "6.22.3", "use": "Interpreter bundling and OS-specific builds"},
+    {"title": "Electron application packaging", "url": "https://www.electronjs.org/docs/latest/tutorial/application-distribution", "use": "Bundled desktop distribution"},
+    {"title": "Electron installation", "url": "https://www.electronjs.org/docs/latest/tutorial/installation", "use": "npm package versus binary acquisition"},
+    {"title": "npm package.json", "url": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json/", "use": "files, bin, os and cpu metadata"},
+    {"title": "npm developer guide", "url": "https://docs.npmjs.com/cli/v12/using-npm/developers/", "use": "Checking tarball contents using npm pack"},
+    {"title": "Python wheel format", "url": "https://packaging.python.org/en/latest/specifications/binary-distribution-format/", "use": "Binary distribution and platform-tagged wheel payloads"},
+    {"title": "Python entry points", "url": "https://packaging.python.org/en/latest/specifications/entry-points/", "use": "console_scripts and Windows gui_scripts launchers"},
+    {"title": "pip download", "url": "https://pip.pypa.io/en/stable/cli/pip_download/", "observed_docs_version": "26.2.2", "use": "Collecting packages into a wheelhouse"}
+  ]
+}

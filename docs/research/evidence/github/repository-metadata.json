@@ -1,0 +1,881 @@
+{
+  "checked_date": "2026-10-24",
+  "method": "GitHub connector get_repo and approved REST GET via github_fetch; source head and latest non-prerelease are separate observations; selected release tag commits additionally resolved via GET commits/tag",
+  "repositories": [
+    {
+      "repo": "cjpais/Handy",
+      "default_branch": "main",
+      "archived": false,
+      "head_sha": "5a9451e70aedc90648ce2befd9d7e0304746f9c1",
+      "head_date": "2026-10-21T05:45:09Z",
+      "release": {
+        "tag": "v0.9.8",
+        "published_at": "2026-10-03T02:42:15Z",
+        "url": "https://github.com/cjpais/Handy/releases/tag/v0.9.8",
+        "assets": [
+          {
+            "name": "Handy-0.9.8-1.aarch64.rpm",
+            "bytes": 95363161,
+            "url": "https://github.com/cjpais/Handy/releases/download/v0.9.8/Handy-0.9.8-1.aarch64.rpm",
+            "digest": "sha256:98009c417153bea4414e2f02d8afde3075b178629df0fde1e4ccc23b051f4d1f"
+          },
+          {
+            "name": "Handy-0.9.8-1.aarch64.rpm.sig",
+            "bytes": 416,
+            "url": "https://github.com/cjpais/Handy/releases/download/v0.9.8/Handy-0.9.8-1.aarch64.rpm.sig",
+            "digest": "sha256:51f2d21912a1a30ff8e8dee1084f16c8f3d904d3096ddba72f8de3d3f347634f"
+          },
+          {
+            "name": "Handy-0.9.8-1.x86_64.rpm",
+            "bytes": 104787529,
+            "url": "https://github.com/cjpais/Handy/releases/download/v0.9.8/Handy-0.9.8-1.x86_64.rpm",
+            "digest": "sha256:7038045edb560bb5497503541b1c43ce6b467b796169d20accd4e17210c60baf"
+          },
+          {
+            "name": "Handy-0.9.8-1.x86_64.rpm.sig",
+            "bytes": 412,
+            "url": "https://github.com/cjpais/Handy/releases/download/v0.9.8/Handy-0.9.8-1.x86_64.rpm.sig",
+            "digest": "sha256:81afa0456743c5aab97ceaf39294b38bf5fd1bd22135cd86d3c3dd2bc3d38c00"
+          },
+          {
+            "name": "Handy_0.9.8_aarch64.AppImage",
+            "bytes": 121915912,
+            "url": "https://github.com/cjpais/Handy/releases/download/v0.9.8/Handy_0.9.8_aarch64.AppImage",
+            "digest": "sha256:0b6d2194cc33d6c6747558c42b4b2e820b3335d3a8b18b66b44d1c3d45fa9391"
+          },
+          {
+            "name": "Handy_0.9.8_aarch64.AppImage.sig",
+            "bytes": 420,
+            "url": "https://github.com/cjpais/Handy/releases/download/v0.9.8/Handy_0.9.8_aarch64.AppImage.sig",
+            "digest": "sha256:b4318f09fadb778b291f25081447934d761236b52b0a5208f8c315707e4ed596"
+          },
+          {
+            "name": "Handy_0.9.8_aarch64.dmg",
+            "bytes": 19558818,
+            "url": "https://github.com/cjpais/Handy/releases/download/v0.9.8/Handy_0.9.8_aarch64.dmg",
+            "digest": "sha256:81ac05aaaf4fafa62826bb40c5cf0bc0c813fb6fc8255497480e762620779417"
+          },
+          {
+            "name": "Handy_0.9.8_amd64.AppImage",
+            "bytes": 128682488,
+            "url": "https://github.com/cjpais/Handy/releases/download/v0.9.8/Handy_0.9.8_amd64.AppImage",
+            "digest": "sha256:d683dc96762f9a47975045ab480392d33a5b491968fb336dcac47e2f65e7184f"
+          },
+          {
+            "name": "Handy_0.9.8_amd64.AppImage.sig",
+            "bytes": 416,
+            "url": "https://github.com/cjpais/Handy/releases/download/v0.9.8/Handy_0.9.8_amd64.AppImage.sig",
+            "digest": "sha256:cbad58457ded10fbb9f2f32121a0e45e4151f8161c1c6f265f3f24384865bba7"
+          },
+          {
+            "name": "Handy_0.9.8_amd64.deb",
+            "bytes": 41941410,
+            "url": "https://github.com/cjpais/Handy/releases/download/v0.9.8/Handy_0.9.8_amd64.deb",
+            "digest": "sha256:4efe1fdcc2b68e95612e866810ccb23e06bbdf004a4e857de0862b0c6927caa8"
+          },
+          {
+            "name": "Handy_0.9.8_amd64.deb.sig",
+            "bytes": 408,
+            "url": "https://github.com/cjpais/Handy/releases/download/v0.9.8/Handy_0.9.8_amd64.deb.sig",
+            "digest": "sha256:63462161a0abf3a6e70b7d30f18a1fc41e6fb6608744cddaf74ea1260525d7c8"
+          },
+          {
+            "name": "Handy_0.9.8_arm64-setup.exe",
+            "bytes": 13404760,
+            "url": "https://github.com/cjpais/Handy/releases/download/v0.9.8/Handy_0.9.8_arm64-setup.exe",
+            "digest": "sha256:c023ff141c76417dd7891dd1454b25de09e3fbcfeb6a560373655fdb66140a4d"
+          },
+          {
+            "name": "Handy_0.9.8_arm64-setup.exe.sig",
+            "bytes": 416,
+            "url": "https://github.com/cjpais/Handy/releases/download/v0.9.8/Handy_0.9.8_arm64-setup.exe.sig",
+            "digest": "sha256:3d6d8e239ce9a35c4125fbe0a372215a91ffb7df2f384c794c626823f21175f0"
+          },
+          {
+            "name": "Handy_0.9.8_arm64.deb",
+            "bytes": 36815050,
+            "url": "https://github.com/cjpais/Handy/releases/download/v0.9.8/Handy_0.9.8_arm64.deb",
+            "digest": "sha256:19f9bf54a67ed5743609a4d24b21d0adac082430d88d9d370426d60583536b84"
+          },
+          {
+            "name": "Handy_0.9.8_arm64.deb.sig",
+            "bytes": 408,
+            "url": "https://github.com/cjpais/Handy/releases/download/v0.9.8/Handy_0.9.8_arm64.deb.sig",
+            "digest": "sha256:358a4d4d2a006c6281620f8b2772de6bee6dcdc329c372775b721df4cdb94d99"
+          },
+          {
+            "name": "Handy_0.9.8_arm64_en-US.msi",
+            "bytes": 29843456,
+            "url": "https://github.com/cjpais/Handy/releases/download/v0.9.8/Handy_0.9.8_arm64_en-US.msi",
+            "digest": "sha256:8b167429564ae2d80172586cf136177d87ec6bb40a1aea77be9c55638dc47e45"
+          },
+          {
+            "name": "Handy_0.9.8_arm64_en-US.msi.sig",
+            "bytes": 416,
+            "url": "https://github.com/cjpais/Handy/releases/download/v0.9.8/Handy_0.9.8_arm64_en-US.msi.sig",
+            "digest": "sha256:ec5eada40a86c8b04041feed7d22b510cc10d8afb88fe8412c2d5ebfc2457a76"
+          },
+          {
+            "name": "Handy_0.9.8_x64-setup.exe",
+            "bytes": 19615736,
+            "url": "https://github.com/cjpais/Handy/releases/download/v0.9.8/Handy_0.9.8_x64-setup.exe",
+            "digest": "sha256:4212edb5658ec2867855fc2ee83ac16ec5bbad09db3c2da8d3d9d5f8bd5eeccc"
+          },
+          {
+            "name": "Handy_0.9.8_x64-setup.exe.sig",
+            "bytes": 416,
+            "url": "https://github.com/cjpais/Handy/releases/download/v0.9.8/Handy_0.9.8_x64-setup.exe.sig",
+            "digest": "sha256:9ae36f6bb7315be88700c4317ffe7a0c6e228f98b8fa490d95c1a5e2110c91b7"
+          },
+          {
+            "name": "Handy_0.9.8_x64.dmg",
+            "bytes": 22238504,
+            "url": "https://github.com/cjpais/Handy/releases/download/v0.9.8/Handy_0.9.8_x64.dmg",
+            "digest": "sha256:03b3edb44eef448187643c40af8626202881374f952c9cc3039848ff6f9c1b1b"
+          },
+          {
+            "name": "Handy_0.9.8_x64_en-US.msi",
+            "bytes": 36802560,
+            "url": "https://github.com/cjpais/Handy/releases/download/v0.9.8/Handy_0.9.8_x64_en-US.msi",
+            "digest": "sha256:b1484c774b60af6bb77f28401e1a3b74170346666f082b0e854ccadda6658a29"
+          },
+          {
+            "name": "Handy_0.9.8_x64_en-US.msi.sig",
+            "bytes": 416,
+            "url": "https://github.com/cjpais/Handy/releases/download/v0.9.8/Handy_0.9.8_x64_en-US.msi.sig",
+            "digest": "sha256:95a0955fe4da56393eef0c2eb9426edc448a54e0f274ab22843b2e3a7ef27c3a"
+          },
+          {
+            "name": "Handy_aarch64.app.tar.gz",
+            "bytes": 19950735,
+            "url": "https://github.com/cjpais/Handy/releases/download/v0.9.8/Handy_aarch64.app.tar.gz",
+            "digest": "sha256:e6931a14805eac47878e5e80ba7de9395cebaf355d4b7e231fbdac532169e9a4"
+          },
+          {
+            "name": "Handy_aarch64.app.tar.gz.sig",
+            "bytes": 404,
+            "url": "https://github.com/cjpais/Handy/releases/download/v0.9.8/Handy_aarch64.app.tar.gz.sig",
+            "digest": "sha256:162750474aa7741f975dec2e865e2aee5e2b3d297e03c2bdf3bd9ffbdd07c879"
+          },
+          {
+            "name": "Handy_x64.app.tar.gz",
+            "bytes": 22403409,
+            "url": "https://github.com/cjpais/Handy/releases/download/v0.9.8/Handy_x64.app.tar.gz",
+            "digest": "sha256:07623a104a59932ce1bff3a08ebc0ab81e5dbf404089a8da6141cefa6ee687bc"
+          },
+          {
+            "name": "Handy_x64.app.tar.gz.sig",
+            "bytes": 404,
+            "url": "https://github.com/cjpais/Handy/releases/download/v0.9.8/Handy_x64.app.tar.gz.sig",
+            "digest": "sha256:e5df9b7f7a950233ac863934926aac0b1ea022dca4b6d1fce9926e2fa103f1bc"
+          },
+          {
+            "name": "latest.json",
+            "bytes": 10308,
+            "url": "https://github.com/cjpais/Handy/releases/download/v0.9.8/latest.json",
+            "digest": "sha256:357b7d8d4fe7971aa2326acc0fdfdc108df9c63a9b72d207337c5286a1001563"
+          }
+        ],
+        "source_sha": "14f6f0d31cb22a4268acfbddba3052820fd0a06e"
+      }
+    },
+    {
+      "repo": "OpenWhispr/openwhispr",
+      "default_branch": "main",
+      "archived": false,
+      "head_sha": "7a6ae826de9ec1caf65f3a6e769475dab2ae829f",
+      "head_date": "2026-10-23T10:19:57Z",
+      "release": {
+        "tag": "v1.10.4",
+        "published_at": "2026-10-22T08:21:23Z",
+        "url": "https://github.com/OpenWhispr/openwhispr/releases/tag/v1.10.4",
+        "assets": [
+          {
+            "name": "latest-arm64-mac.yml",
+            "bytes": 518,
+            "url": "https://github.com/OpenWhispr/openwhispr/releases/download/v1.10.4/latest-arm64-mac.yml",
+            "digest": "sha256:4cb61d33fa2f3a0802bb40abbd34a78a3512fcec78dcec44c446348426a8b71d"
+          },
+          {
+            "name": "latest-linux.yml",
+            "bytes": 730,
+            "url": "https://github.com/OpenWhispr/openwhispr/releases/download/v1.10.4/latest-linux.yml",
+            "digest": "sha256:016dfc38eb6096d5dfa4a2f2f43e886b366c4fd3bf5f50af750c8096db71b881"
+          },
+          {
+            "name": "latest-mac.yml",
+            "bytes": 518,
+            "url": "https://github.com/OpenWhispr/openwhispr/releases/download/v1.10.4/latest-mac.yml",
+            "digest": "sha256:4cb61d33fa2f3a0802bb40abbd34a78a3512fcec78dcec44c446348426a8b71d"
+          },
+          {
+            "name": "latest-x64-mac.yml",
+            "bytes": 500,
+            "url": "https://github.com/OpenWhispr/openwhispr/releases/download/v1.10.4/latest-x64-mac.yml",
+            "digest": "sha256:a8d6ac28ef12c2399727b8ed2fb6027bc6a214778baec39b9eef49b6be4c58c7"
+          },
+          {
+            "name": "latest.yml",
+            "bytes": 352,
+            "url": "https://github.com/OpenWhispr/openwhispr/releases/download/v1.10.4/latest.yml",
+            "digest": "sha256:585875385a9b681000c2d08013065ce137f56d5214fdd6311f543a2255eaa3f9"
+          },
+          {
+            "name": "OpenWhispr-1.10.4-arm64-mac.zip",
+            "bytes": 327897402,
+            "url": "https://github.com/OpenWhispr/openwhispr/releases/download/v1.10.4/OpenWhispr-1.10.4-arm64-mac.zip",
+            "digest": "sha256:7995f03289dde4daee4731da0fedc2e80598fdeefffc8aead73c6f8760e93b64"
+          },
+          {
+            "name": "OpenWhispr-1.10.4-arm64-mac.zip.blockmap",
+            "bytes": 329049,
+            "url": "https://github.com/OpenWhispr/openwhispr/releases/download/v1.10.4/OpenWhispr-1.10.4-arm64-mac.zip.blockmap",
+            "digest": "sha256:62b1751d0a12862b836812e7d670185d01c29d1aa22576f1f79bab8ae19dd603"
+          },
+          {
+            "name": "OpenWhispr-1.10.4-arm64.dmg",
+            "bytes": 329179558,
+            "url": "https://github.com/OpenWhispr/openwhispr/releases/download/v1.10.4/OpenWhispr-1.10.4-arm64.dmg",
+            "digest": "sha256:6b8daae5a8fcc77738ddc8232231c9f950556777f7969777f4289e69b4aa578e"
+          },
+          {
+            "name": "OpenWhispr-1.10.4-arm64.dmg.blockmap",
+            "bytes": 344007,
+            "url": "https://github.com/OpenWhispr/openwhispr/releases/download/v1.10.4/OpenWhispr-1.10.4-arm64.dmg.blockmap",
+            "digest": "sha256:07f3db53f04b22b714a9bfb9b45347aa8fdbe56b8564fda8a16c20d7e1bc5b0f"
+          },
+          {
+            "name": "OpenWhispr-1.10.4-linux-amd64.deb",
+            "bytes": 459537368,
+            "url": "https://github.com/OpenWhispr/openwhispr/releases/download/v1.10.4/OpenWhispr-1.10.4-linux-amd64.deb",
+            "digest": "sha256:595cbe4d0a6a1a626376b678c89ce5eb9baf603fee20e8a297c46c0517648cea"
+          },
+          {
+            "name": "OpenWhispr-1.10.4-linux-x64.tar.gz",
+            "bytes": 525637612,
+            "url": "https://github.com/OpenWhispr/openwhispr/releases/download/v1.10.4/OpenWhispr-1.10.4-linux-x64.tar.gz",
+            "digest": "sha256:bb26198c43fa0060f474289c8d56c1c008c5a11380554314ecfdc8f04755b7f4"
+          },
+          {
+            "name": "OpenWhispr-1.10.4-linux-x86_64.AppImage",
+            "bytes": 533165664,
+            "url": "https://github.com/OpenWhispr/openwhispr/releases/download/v1.10.4/OpenWhispr-1.10.4-linux-x86_64.AppImage",
+            "digest": "sha256:e784940d98a84c1a531d750fcb2c482e08856019f86638b0bd0cebfc8f375876"
+          },
+          {
+            "name": "OpenWhispr-1.10.4-linux-x86_64.rpm",
+            "bytes": 427382956,
+            "url": "https://github.com/OpenWhispr/openwhispr/releases/download/v1.10.4/OpenWhispr-1.10.4-linux-x86_64.rpm",
+            "digest": "sha256:33e06f16d86e4bbcf12ccfbc1ae5d6791432f161709ca9136d2037d45fed5af7"
+          },
+          {
+            "name": "OpenWhispr-1.10.4-mac.zip",
+            "bytes": 328264806,
+            "url": "https://github.com/OpenWhispr/openwhispr/releases/download/v1.10.4/OpenWhispr-1.10.4-mac.zip",
+            "digest": "sha256:58f2ad50c8e8e5f8c980317e3090456e9ac40447d2f9070e1eb201c3d0582d8c"
+          },
+          {
+            "name": "OpenWhispr-1.10.4-mac.zip.blockmap",
+            "bytes": 339102,
+            "url": "https://github.com/OpenWhispr/openwhispr/releases/download/v1.10.4/OpenWhispr-1.10.4-mac.zip.blockmap",
+            "digest": "sha256:4f2d9ae629b4995e1396e3462b3276154dd003c3bef650aeb86703c119dbe811"
+          },
+          {
+            "name": "OpenWhispr-1.10.4.dmg",
+            "bytes": 329418779,
+            "url": "https://github.com/OpenWhispr/openwhispr/releases/download/v1.10.4/OpenWhispr-1.10.4.dmg",
+            "digest": "sha256:d082ddc4c28bf5bda352441b9971a17497408ee5ee6765830260e09837e38ed2"
+          },
+          {
+            "name": "OpenWhispr-1.10.4.dmg.blockmap",
+            "bytes": 343839,
+            "url": "https://github.com/OpenWhispr/openwhispr/releases/download/v1.10.4/OpenWhispr-1.10.4.dmg.blockmap",
+            "digest": "sha256:0221f96a63fc351f046d08dcff357ae5dcbb073506b683711deaa8ea2ec61300"
+          },
+          {
+            "name": "OpenWhispr-Setup-1.10.4.exe",
+            "bytes": 254288056,
+            "url": "https://github.com/OpenWhispr/openwhispr/releases/download/v1.10.4/OpenWhispr-Setup-1.10.4.exe",
+            "digest": "sha256:f95d0e98611ccf7f5f0c9187caed430ff820fb4b68a4123cd80308b1e08e507f"
+          },
+          {
+            "name": "OpenWhispr-Setup-1.10.4.exe.blockmap",
+            "bytes": 265219,
+            "url": "https://github.com/OpenWhispr/openwhispr/releases/download/v1.10.4/OpenWhispr-Setup-1.10.4.exe.blockmap",
+            "digest": "sha256:3bc37ebda6f80a20ba3e29bb867ccf5e0a21cc3f4d1c5a289a4a42b302cce7c0"
+          }
+        ],
+        "source_sha": "ba6d61820b4c56d7b08012c61c2ae6b43f3152f3"
+      }
+    },
+    {
+      "repo": "EpicenterHQ/epicenter",
+      "default_branch": "main",
+      "archived": false,
+      "head_sha": "7cc869b4a1295e2566b61e1a4d5967a89f413b9b",
+      "head_date": "2026-10-17T04:38:05Z",
+      "release": {
+        "tag": "v7.11.0",
+        "published_at": "2025-12-27T02:38:16Z",
+        "url": "https://github.com/EpicenterHQ/epicenter/releases/tag/v7.11.0",
+        "assets": [
+          {
+            "name": "latest.json",
+            "bytes": 5475,
+            "url": "https://github.com/EpicenterHQ/epicenter/releases/download/v7.11.0/latest.json",
+            "digest": "sha256:3c735a6400d236bcb7644cee3f46ea94eb18f014aa1ac68d8a8cb10cd1dc8178"
+          },
+          {
+            "name": "Whispering-7.11.0-1.x86_64.rpm",
+            "bytes": 17992421,
+            "url": "https://github.com/EpicenterHQ/epicenter/releases/download/v7.11.0/Whispering-7.11.0-1.x86_64.rpm",
+            "digest": "sha256:d507fa31dc8f941f2350aab9169ed271ddb28c147a34a99e3da83d8bdeb6fd6e"
+          },
+          {
+            "name": "Whispering-7.11.0-1.x86_64.rpm.sig",
+            "bytes": 420,
+            "url": "https://github.com/EpicenterHQ/epicenter/releases/download/v7.11.0/Whispering-7.11.0-1.x86_64.rpm.sig",
+            "digest": "sha256:190397e1d5e69defefffda41aca9a78892c0e7e4802d9556633f4344fa438a10"
+          },
+          {
+            "name": "Whispering_7.11.0_aarch64.dmg",
+            "bytes": 15606745,
+            "url": "https://github.com/EpicenterHQ/epicenter/releases/download/v7.11.0/Whispering_7.11.0_aarch64.dmg",
+            "digest": "sha256:7c15883a5562e594633e2636db5abbc8197b8ae93c4714711bf802b531eaf2d0"
+          },
+          {
+            "name": "Whispering_7.11.0_amd64.AppImage",
+            "bytes": 102181368,
+            "url": "https://github.com/EpicenterHQ/epicenter/releases/download/v7.11.0/Whispering_7.11.0_amd64.AppImage",
+            "digest": "sha256:c08916d175c2fc6df95e06cdd535514d72e7459d047e0879a5568977f55d7304"
+          },
+          {
+            "name": "Whispering_7.11.0_amd64.AppImage.sig",
+            "bytes": 424,
+            "url": "https://github.com/EpicenterHQ/epicenter/releases/download/v7.11.0/Whispering_7.11.0_amd64.AppImage.sig",
+            "digest": "sha256:feb580b4c31d56109a22a3775b1c2590d8d8d9c4f0157dbb4c8cdf227ed67309"
+          },
+          {
+            "name": "Whispering_7.11.0_amd64.deb",
+            "bytes": 17991762,
+            "url": "https://github.com/EpicenterHQ/epicenter/releases/download/v7.11.0/Whispering_7.11.0_amd64.deb",
+            "digest": "sha256:c1fa1ffa19122fbe4e3a8f91a16c6b0f04c1e577f2403a207cf196edb228e28d"
+          },
+          {
+            "name": "Whispering_7.11.0_amd64.deb.sig",
+            "bytes": 416,
+            "url": "https://github.com/EpicenterHQ/epicenter/releases/download/v7.11.0/Whispering_7.11.0_amd64.deb.sig",
+            "digest": "sha256:6160b1da33c83fff377b47c416607860e068b0ac5eb060cc5301efabe3003508"
+          },
+          {
+            "name": "Whispering_7.11.0_x64-setup.exe",
+            "bytes": 13421289,
+            "url": "https://github.com/EpicenterHQ/epicenter/releases/download/v7.11.0/Whispering_7.11.0_x64-setup.exe",
+            "digest": "sha256:004ef3165a7a8b737e34603c5c1e9d53ccb222ca5c5c3e0e70e4f996a480d270"
+          },
+          {
+            "name": "Whispering_7.11.0_x64-setup.exe.sig",
+            "bytes": 424,
+            "url": "https://github.com/EpicenterHQ/epicenter/releases/download/v7.11.0/Whispering_7.11.0_x64-setup.exe.sig",
+            "digest": "sha256:46328375f86e79f248e5e709a6722da2ee5f465b0aa22bf1d7b5333fc109dc83"
+          },
+          {
+            "name": "Whispering_7.11.0_x64_en-US.msi",
+            "bytes": 23764992,
+            "url": "https://github.com/EpicenterHQ/epicenter/releases/download/v7.11.0/Whispering_7.11.0_x64_en-US.msi",
+            "digest": "sha256:e6d56e8503334b5efe8451ccbde31f90505fbe657aa53f36736367e152cc6f9c"
+          },
+          {
+            "name": "Whispering_7.11.0_x64_en-US.msi.sig",
+            "bytes": 424,
+            "url": "https://github.com/EpicenterHQ/epicenter/releases/download/v7.11.0/Whispering_7.11.0_x64_en-US.msi.sig",
+            "digest": "sha256:cfe32e431dce836953aede71e9a03c89460156ec5040c41b9f33d9110ca1e9c8"
+          },
+          {
+            "name": "Whispering_aarch64.app.tar.gz",
+            "bytes": 14755307,
+            "url": "https://github.com/EpicenterHQ/epicenter/releases/download/v7.11.0/Whispering_aarch64.app.tar.gz",
+            "digest": "sha256:e6ad1bf211199655aa8bf6cf3b0981e57c6225093fa82e1b283dbefddeef03eb"
+          },
+          {
+            "name": "Whispering_aarch64.app.tar.gz.sig",
+            "bytes": 408,
+            "url": "https://github.com/EpicenterHQ/epicenter/releases/download/v7.11.0/Whispering_aarch64.app.tar.gz.sig",
+            "digest": "sha256:2ebeabf8c4cd605e9133ef007d01bc24b2d1823d991517e6fa57adf4195e66a3"
+          }
+        ],
+        "source_sha": "a6b15c28db9076742d7ae7014f8ec9f97aa615d1"
+      }
+    },
+    {
+      "repo": "Beingpax/VoiceInk",
+      "default_branch": "main",
+      "archived": false,
+      "head_sha": "0019d7a37d803e2dc95c122df63cdf7567979828",
+      "head_date": "2026-10-24T03:59:51Z",
+      "release": {
+        "tag": "v2.21",
+        "published_at": "2026-09-28T14:30:01Z",
+        "url": "https://github.com/Beingpax/VoiceInk/releases/tag/v2.21",
+        "assets": [
+          {
+            "name": "VoiceInk.dmg",
+            "bytes": 51053559,
+            "url": "https://github.com/Beingpax/VoiceInk/releases/download/v2.21/VoiceInk.dmg",
+            "digest": "sha256:e7920b2f5b55bab65529d687428663ffe7aec55e7e162f50c5ce450f6572f2fd"
+          }
+        ],
+        "source_sha": null
+      }
+    },
+    {
+      "repo": "ideaplexa/voicetypr",
+      "default_branch": "main",
+      "archived": false,
+      "head_sha": "f86e571df5bd5c0a4d8950095167b45185fa59d4",
+      "head_date": "2026-10-15T17:22:44Z",
+      "release": {
+        "tag": "v2.0.9",
+        "published_at": "2026-10-09T23:05:19Z",
+        "url": "https://github.com/ideaplexa/voicetypr/releases/tag/v2.0.9",
+        "assets": [
+          {
+            "name": "latest.json",
+            "bytes": 1841,
+            "url": "https://github.com/ideaplexa/voicetypr/releases/download/v2.0.9/latest.json",
+            "digest": "sha256:fa84ba03e4620d9e4f19404508206df3d29fc3656d78340b23b6e957d2ddbb29"
+          },
+          {
+            "name": "Voicetypr_2.0.9_aarch64.app.tar.gz",
+            "bytes": 67128365,
+            "url": "https://github.com/ideaplexa/voicetypr/releases/download/v2.0.9/Voicetypr_2.0.9_aarch64.app.tar.gz",
+            "digest": "sha256:f6cd176d0a2188cb92bc1870ec12fd44f6db97d1d329a6325bb4725c9bb536c2"
+          },
+          {
+            "name": "Voicetypr_2.0.9_aarch64.app.tar.gz.sig",
+            "bytes": 396,
+            "url": "https://github.com/ideaplexa/voicetypr/releases/download/v2.0.9/Voicetypr_2.0.9_aarch64.app.tar.gz.sig",
+            "digest": "sha256:971068624135f78a4ade2ba260216b7e8eb823070cafc2019b27bff4628b8a2a"
+          },
+          {
+            "name": "Voicetypr_2.0.9_aarch64.dmg",
+            "bytes": 67295630,
+            "url": "https://github.com/ideaplexa/voicetypr/releases/download/v2.0.9/Voicetypr_2.0.9_aarch64.dmg",
+            "digest": "sha256:68bb281abd64b0dff22dbb2dc5773b9bdecd286efeab93450d26420c17e17f74"
+          },
+          {
+            "name": "Voicetypr_2.0.9_x64-setup.exe",
+            "bytes": 348667354,
+            "url": "https://github.com/ideaplexa/voicetypr/releases/download/v2.0.9/Voicetypr_2.0.9_x64-setup.exe",
+            "digest": "sha256:6a27b6fcaebd049b13ac48a6ce72b401da45310fbfe85e2d6909803e777f2e09"
+          },
+          {
+            "name": "Voicetypr_2.0.9_x64-setup.exe.sig",
+            "bytes": 420,
+            "url": "https://github.com/ideaplexa/voicetypr/releases/download/v2.0.9/Voicetypr_2.0.9_x64-setup.exe.sig",
+            "digest": "sha256:744f54435da492c36a753fc7c55dfb7bf64c7edc637496c9a3b954a7d3b8ef64"
+          },
+          {
+            "name": "Voicetypr_2.0.9_x86_64.app.tar.gz",
+            "bytes": 79142190,
+            "url": "https://github.com/ideaplexa/voicetypr/releases/download/v2.0.9/Voicetypr_2.0.9_x86_64.app.tar.gz",
+            "digest": "sha256:b0a9e7b08e6dea94d69f48aa48d294e2168b4d1abe4a01f8328cdb6b31bd0f08"
+          },
+          {
+            "name": "Voicetypr_2.0.9_x86_64.app.tar.gz.sig",
+            "bytes": 396,
+            "url": "https://github.com/ideaplexa/voicetypr/releases/download/v2.0.9/Voicetypr_2.0.9_x86_64.app.tar.gz.sig",
+            "digest": "sha256:29216ef76ec1f87ffa53edffad45a17e84ca7fb01f12a5cdc18200b22da58c03"
+          },
+          {
+            "name": "Voicetypr_2.0.9_x86_64.dmg",
+            "bytes": 79191045,
+            "url": "https://github.com/ideaplexa/voicetypr/releases/download/v2.0.9/Voicetypr_2.0.9_x86_64.dmg",
+            "digest": "sha256:651eb1d1371f3df8026bc48491571d1f8b85b2aa36cc25b92f1abf57d9ac9206"
+          }
+        ],
+        "source_sha": "082285c05fa4f1ed3c523073de48f982ceb3731a"
+      }
+    },
+    {
+      "repo": "stofll/sotto",
+      "default_branch": "main",
+      "archived": false,
+      "head_sha": "c8d6d54a4837a7b4fccefd45e70ad8e6d5e6dd5b",
+      "head_date": "2026-10-22T21:28:35Z",
+      "release": {
+        "tag": "v0.3.5",
+        "published_at": "2026-10-10T05:43:29Z",
+        "url": "https://github.com/stofll/Sotto/releases/tag/v0.3.5",
+        "assets": [
+          {
+            "name": "latest.json",
+            "bytes": 2436,
+            "url": "https://github.com/stofll/Sotto/releases/download/v0.3.5/latest.json",
+            "digest": "sha256:6e82dfac5633722f175b9daa46a9cf837b57df0949b5739ccfab83734b14da7f"
+          },
+          {
+            "name": "licenses-npm-dev.json",
+            "bytes": 47743,
+            "url": "https://github.com/stofll/Sotto/releases/download/v0.3.5/licenses-npm-dev.json",
+            "digest": "sha256:28cb535237ada01f27d43bb1b1c241269abe544d6eded149809a2db61e7aa8b9"
+          },
+          {
+            "name": "licenses-npm-prod.json",
+            "bytes": 1442,
+            "url": "https://github.com/stofll/Sotto/releases/download/v0.3.5/licenses-npm-prod.json",
+            "digest": "sha256:98dfd49a39ba7706d810409d3cb84abda1c8c0981476441cfddd696a19c558a5"
+          },
+          {
+            "name": "native-components.json",
+            "bytes": 2178,
+            "url": "https://github.com/stofll/Sotto/releases/download/v0.3.5/native-components.json",
+            "digest": "sha256:4239d30ae7dd0c0f99c14af56ad855084f56fd06ccd5a269809383b1c5299f22"
+          },
+          {
+            "name": "sbom-npm.cdx.json",
+            "bytes": 348597,
+            "url": "https://github.com/stofll/Sotto/releases/download/v0.3.5/sbom-npm.cdx.json",
+            "digest": "sha256:2c0cbd0a41eed3d61a12d5e0d6078514b042ae1ed49a23c944c5740ca3667155"
+          },
+          {
+            "name": "sbom-rust-setup.cdx.json",
+            "bytes": 543618,
+            "url": "https://github.com/stofll/Sotto/releases/download/v0.3.5/sbom-rust-setup.cdx.json",
+            "digest": "sha256:0850a9c064e85cbd7f19aa342f688ac1b418ea48772ceece3f0a60c182d2025d"
+          },
+          {
+            "name": "sbom-rust.cdx.json",
+            "bytes": 850390,
+            "url": "https://github.com/stofll/Sotto/releases/download/v0.3.5/sbom-rust.cdx.json",
+            "digest": "sha256:d2adba8c94b81aba5a261cebeadf134fddae1d82fd6be9ba30e8cf53d90ea504"
+          },
+          {
+            "name": "SHA256SUMS.txt",
+            "bytes": 1366,
+            "url": "https://github.com/stofll/Sotto/releases/download/v0.3.5/SHA256SUMS.txt",
+            "digest": "sha256:bc3ee81793ccc9c6e604d6f810eb20f27d0bbc30ab4ec7e5dc0ddab7376defc6"
+          },
+          {
+            "name": "Sotto-v0.3.5-windows-x64-portable.zip",
+            "bytes": 21955514,
+            "url": "https://github.com/stofll/Sotto/releases/download/v0.3.5/Sotto-v0.3.5-windows-x64-portable.zip",
+            "digest": "sha256:e73cc409ed550633c4b0045e13f9af684852ea374d4d01b16ef40ff7abb3704d"
+          },
+          {
+            "name": "Sotto_0.3.5_aarch64.dmg",
+            "bytes": 21323265,
+            "url": "https://github.com/stofll/Sotto/releases/download/v0.3.5/Sotto_0.3.5_aarch64.dmg",
+            "digest": "sha256:9d8928ca9bedca0b970aa293331f73eb55cc0f0f49b1d00dc88dcf68304fd75f"
+          },
+          {
+            "name": "Sotto_0.3.5_x64-setup-ui.exe",
+            "bytes": 23948288,
+            "url": "https://github.com/stofll/Sotto/releases/download/v0.3.5/Sotto_0.3.5_x64-setup-ui.exe",
+            "digest": "sha256:aaf988e5b0de1d496d0c92f56adfd0c88dcf35b07158bd91d748868d53bbb1b3"
+          },
+          {
+            "name": "Sotto_0.3.5_x64-setup-ui.exe.sig",
+            "bytes": 436,
+            "url": "https://github.com/stofll/Sotto/releases/download/v0.3.5/Sotto_0.3.5_x64-setup-ui.exe.sig",
+            "digest": "sha256:6f1a12169cfe65f1aa2336db1858594f32ed1c138f2025fa3821721003ed5451"
+          },
+          {
+            "name": "Sotto_0.3.5_x64-setup.exe",
+            "bytes": 14394727,
+            "url": "https://github.com/stofll/Sotto/releases/download/v0.3.5/Sotto_0.3.5_x64-setup.exe",
+            "digest": "sha256:bcb29b2fbe96fb1ed83f81495fe2f6c76e84f73f83cf11b80b6dbf8f73ae8a61"
+          },
+          {
+            "name": "Sotto_0.3.5_x64-setup.exe.sig",
+            "bytes": 432,
+            "url": "https://github.com/stofll/Sotto/releases/download/v0.3.5/Sotto_0.3.5_x64-setup.exe.sig",
+            "digest": "sha256:012c2957edd6a5428ec9b85f8d850eff9129aed72b426d538819c729f6943fa6"
+          },
+          {
+            "name": "Sotto_aarch64.app.tar.gz",
+            "bytes": 19189891,
+            "url": "https://github.com/stofll/Sotto/releases/download/v0.3.5/Sotto_aarch64.app.tar.gz",
+            "digest": "sha256:dd9918b5c81ce0f2c2265fbe4ed0e24fb1630993518b08a016e1b3e9036c3e3d"
+          },
+          {
+            "name": "Sotto_aarch64.app.tar.gz.sig",
+            "bytes": 420,
+            "url": "https://github.com/stofll/Sotto/releases/download/v0.3.5/Sotto_aarch64.app.tar.gz.sig",
+            "digest": "sha256:e6fe31f6f6edcef57ca40a74a87649e22559e0ff38cc70ba26e4339a81a2db2e"
+          }
+        ],
+        "source_sha": "645effd86d31e76f7a9ca9f534874eb80983d41c"
+      }
+    },
+    {
+      "repo": "shaneholloman/omni-dictate-windows-gui",
+      "default_branch": "main",
+      "archived": false,
+      "head_sha": "e861670bc8b8d693743b9300d25f6a24b1ad13dd",
+      "head_date": "2026-07-08T07:09:35Z",
+      "release": null
+    },
+    {
+      "repo": "tover0314-w/opentypeless",
+      "default_branch": "main",
+      "archived": false,
+      "head_sha": "f5ad60298f535e0fff716a749802138ee409dea7",
+      "head_date": "2026-10-13T10:01:16Z",
+      "release": {
+        "tag": "v1.1.61",
+        "published_at": "2026-09-29T06:51:01Z",
+        "url": "https://github.com/tover0314-w/opentypeless/releases/tag/v1.1.61",
+        "assets": [
+          {
+            "name": "latest.json",
+            "bytes": 9215,
+            "url": "https://github.com/tover0314-w/opentypeless/releases/download/v1.1.61/latest.json",
+            "digest": "sha256:15ac527cd51f63d639c8df1ab6d4869e6d19f4d23b8b81a07fa28842f1b3aa1a"
+          },
+          {
+            "name": "OpenTypeless-1.1.61-1.aarch64.rpm",
+            "bytes": 7284612,
+            "url": "https://github.com/tover0314-w/opentypeless/releases/download/v1.1.61/OpenTypeless-1.1.61-1.aarch64.rpm",
+            "digest": "sha256:c8f7b52a4aeb6c812db52c5400541dd43d6d265f54096642b4360a777d9c588d"
+          },
+          {
+            "name": "OpenTypeless-1.1.61-1.aarch64.rpm.asc",
+            "bytes": 833,
+            "url": "https://github.com/tover0314-w/opentypeless/releases/download/v1.1.61/OpenTypeless-1.1.61-1.aarch64.rpm.asc",
+            "digest": "sha256:1bc5a5f384fe191ed82a0ef7df6edf4cc7bfbedfb4800972929b10847fd440c5"
+          },
+          {
+            "name": "OpenTypeless-1.1.61-1.aarch64.rpm.sig",
+            "bytes": 424,
+            "url": "https://github.com/tover0314-w/opentypeless/releases/download/v1.1.61/OpenTypeless-1.1.61-1.aarch64.rpm.sig",
+            "digest": "sha256:8cc578d4fca88b01514b7f4674be8e90a6dd56c90958271b1bb1a7649a6f4c47"
+          },
+          {
+            "name": "OpenTypeless-1.1.61-1.x86_64.rpm",
+            "bytes": 7568773,
+            "url": "https://github.com/tover0314-w/opentypeless/releases/download/v1.1.61/OpenTypeless-1.1.61-1.x86_64.rpm",
+            "digest": "sha256:1f88f12cf112723e49d3c85767a7bfd7dd810a2f770af66e0803e48a459645ac"
+          },
+          {
+            "name": "OpenTypeless-1.1.61-1.x86_64.rpm.asc",
+            "bytes": 833,
+            "url": "https://github.com/tover0314-w/opentypeless/releases/download/v1.1.61/OpenTypeless-1.1.61-1.x86_64.rpm.asc",
+            "digest": "sha256:6b3ee4a21bd8569bb1d5652f6bbc7adaab7e38ac337534644c53033eb1a19803"
+          },
+          {
+            "name": "OpenTypeless-1.1.61-1.x86_64.rpm.sig",
+            "bytes": 424,
+            "url": "https://github.com/tover0314-w/opentypeless/releases/download/v1.1.61/OpenTypeless-1.1.61-1.x86_64.rpm.sig",
+            "digest": "sha256:2e1323f9e506a040f7c51ebec08188e9d850ffb28d0aa1d5c7d4aa9fcaa2ebea"
+          },
+          {
+            "name": "OpenTypeless-Linux-aarch64-GPG-KEY.asc",
+            "bytes": 3346,
+            "url": "https://github.com/tover0314-w/opentypeless/releases/download/v1.1.61/OpenTypeless-Linux-aarch64-GPG-KEY.asc",
+            "digest": "sha256:6b7c69cf0c711768f457dc4bf40b9dcce0c6f59f0896f55ec826e5fd684f812f"
+          },
+          {
+            "name": "OpenTypeless-Linux-x86_64-GPG-KEY.asc",
+            "bytes": 3346,
+            "url": "https://github.com/tover0314-w/opentypeless/releases/download/v1.1.61/OpenTypeless-Linux-x86_64-GPG-KEY.asc",
+            "digest": "sha256:6b7c69cf0c711768f457dc4bf40b9dcce0c6f59f0896f55ec826e5fd684f812f"
+          },
+          {
+            "name": "OpenTypeless-provenance-linux-aarch64.json",
+            "bytes": 2282,
+            "url": "https://github.com/tover0314-w/opentypeless/releases/download/v1.1.61/OpenTypeless-provenance-linux-aarch64.json",
+            "digest": "sha256:32f0fb6d670a7978b599118a6b5f5da1710bbcf79764bb836e8f72b68e3ba15e"
+          },
+          {
+            "name": "OpenTypeless-provenance-linux-aarch64.json.sig",
+            "bytes": 436,
+            "url": "https://github.com/tover0314-w/opentypeless/releases/download/v1.1.61/OpenTypeless-provenance-linux-aarch64.json.sig",
+            "digest": "sha256:73b722b6a45b945a5b28230f3558803cb220f030ac00cd74198b33b56f96bb2b"
+          },
+          {
+            "name": "OpenTypeless-provenance-linux-x86_64.json",
+            "bytes": 2269,
+            "url": "https://github.com/tover0314-w/opentypeless/releases/download/v1.1.61/OpenTypeless-provenance-linux-x86_64.json",
+            "digest": "sha256:fbb35862df3ec3993ea2536b1ff4d851ef0071b40e4a3759b8d3b11cb99aef37"
+          },
+          {
+            "name": "OpenTypeless-provenance-linux-x86_64.json.sig",
+            "bytes": 436,
+            "url": "https://github.com/tover0314-w/opentypeless/releases/download/v1.1.61/OpenTypeless-provenance-linux-x86_64.json.sig",
+            "digest": "sha256:53692142ff956235d541ae69efd6d2aecab882e83f0649b19242645048cbd786"
+          },
+          {
+            "name": "OpenTypeless-provenance-macos-universal.json",
+            "bytes": 770,
+            "url": "https://github.com/tover0314-w/opentypeless/releases/download/v1.1.61/OpenTypeless-provenance-macos-universal.json",
+            "digest": "sha256:dd34292935a7594ca6c812319de34387e4947c8c06e6c0112437af5e471c9d48"
+          },
+          {
+            "name": "OpenTypeless-provenance-macos-universal.json.sig",
+            "bytes": 440,
+            "url": "https://github.com/tover0314-w/opentypeless/releases/download/v1.1.61/OpenTypeless-provenance-macos-universal.json.sig",
+            "digest": "sha256:cdf9f5e2e0cc1c955d7f6f5000f7d56b9984e0d7b908af197095b4834663574b"
+          },
+          {
+            "name": "OpenTypeless-provenance-windows-x86_64.json",
+            "bytes": 1099,
+            "url": "https://github.com/tover0314-w/opentypeless/releases/download/v1.1.61/OpenTypeless-provenance-windows-x86_64.json",
+            "digest": "sha256:02180bb26ab6d7d8f8dd2e80ae8b212f5f11f908979bb557faf46b97b6c1127c"
+          },
+          {
+            "name": "OpenTypeless-provenance-windows-x86_64.json.sig",
+            "bytes": 440,
+            "url": "https://github.com/tover0314-w/opentypeless/releases/download/v1.1.61/OpenTypeless-provenance-windows-x86_64.json.sig",
+            "digest": "sha256:0a3be95bedef81ffd02ff4c5bf294cc0ea88495d724e12b0624ed0564ca89310"
+          },
+          {
+            "name": "OpenTypeless_1.1.61_aarch64.AppImage",
+            "bytes": 85166600,
+            "url": "https://github.com/tover0314-w/opentypeless/releases/download/v1.1.61/OpenTypeless_1.1.61_aarch64.AppImage",
+            "digest": "sha256:5dc9a34b5e3a924379de80a1ab72ca4334b02eeee18ff8ba2dc4898a7dd48f4f"
+          },
+          {
+            "name": "OpenTypeless_1.1.61_aarch64.AppImage.asc",
+            "bytes": 833,
+            "url": "https://github.com/tover0314-w/opentypeless/releases/download/v1.1.61/OpenTypeless_1.1.61_aarch64.AppImage.asc",
+            "digest": "sha256:e45ea0388a572d3a7bce01b9ec0414e143588286f536551177dbb6f6d65049f1"
+          },
+          {
+            "name": "OpenTypeless_1.1.61_aarch64.AppImage.sig",
+            "bytes": 428,
+            "url": "https://github.com/tover0314-w/opentypeless/releases/download/v1.1.61/OpenTypeless_1.1.61_aarch64.AppImage.sig",
+            "digest": "sha256:0671d438f05ba82a367ef03ac80c8ce61e5d2b3aedc5d1bb02caa11e6f7d10d3"
+          },
+          {
+            "name": "OpenTypeless_1.1.61_amd64.AppImage",
+            "bytes": 87304696,
+            "url": "https://github.com/tover0314-w/opentypeless/releases/download/v1.1.61/OpenTypeless_1.1.61_amd64.AppImage",
+            "digest": "sha256:72c34e417f9a64c2f7f1c2a2c2c931d7bd8f1d7f166e63148c29ed6e22caf3b5"
+          },
+          {
+            "name": "OpenTypeless_1.1.61_amd64.AppImage.asc",
+            "bytes": 833,
+            "url": "https://github.com/tover0314-w/opentypeless/releases/download/v1.1.61/OpenTypeless_1.1.61_amd64.AppImage.asc",
+            "digest": "sha256:3f815c19b71ee3aded276974e1671f6bbbfe5441fb7831891777e50afe571a31"
+          },
+          {
+            "name": "OpenTypeless_1.1.61_amd64.AppImage.sig",
+            "bytes": 428,
+            "url": "https://github.com/tover0314-w/opentypeless/releases/download/v1.1.61/OpenTypeless_1.1.61_amd64.AppImage.sig",
+            "digest": "sha256:bde9b153db0c9fbb89075fe3843932832894def8c381455243caea60681e4212"
+          },
+          {
+            "name": "OpenTypeless_1.1.61_amd64.deb",
+            "bytes": 7567674,
+            "url": "https://github.com/tover0314-w/opentypeless/releases/download/v1.1.61/OpenTypeless_1.1.61_amd64.deb",
+            "digest": "sha256:31443ad570137942758b5a0e98d92d1cef61ea63f7c69557b3c28dda782d2436"
+          },
+          {
+            "name": "OpenTypeless_1.1.61_amd64.deb.asc",
+            "bytes": 833,
+            "url": "https://github.com/tover0314-w/opentypeless/releases/download/v1.1.61/OpenTypeless_1.1.61_amd64.deb.asc",
+            "digest": "sha256:9de4a11209ebdc31f5308abca65b355984a08b6c4551845993fc22569aa7c08a"
+          },
+          {
+            "name": "OpenTypeless_1.1.61_amd64.deb.sig",
+            "bytes": 420,
+            "url": "https://github.com/tover0314-w/opentypeless/releases/download/v1.1.61/OpenTypeless_1.1.61_amd64.deb.sig",
+            "digest": "sha256:b994404fcb31b207bce30a5ba775e94d92c4b476b1f8aa037e77a488fb559294"
+          },
+          {
+            "name": "OpenTypeless_1.1.61_arm64.deb",
+            "bytes": 7283126,
+            "url": "https://github.com/tover0314-w/opentypeless/releases/download/v1.1.61/OpenTypeless_1.1.61_arm64.deb",
+            "digest": "sha256:4596c68b2881270635692c718b78650df218d5043710cf246b0a4db5c39a0359"
+          },
+          {
+            "name": "OpenTypeless_1.1.61_arm64.deb.asc",
+            "bytes": 833,
+            "url": "https://github.com/tover0314-w/opentypeless/releases/download/v1.1.61/OpenTypeless_1.1.61_arm64.deb.asc",
+            "digest": "sha256:7cc1f856f828cb714d913b7f25b13f4047553e2879f2bfbf193bcea2afe66492"
+          },
+          {
+            "name": "OpenTypeless_1.1.61_arm64.deb.sig",
+            "bytes": 420,
+            "url": "https://github.com/tover0314-w/opentypeless/releases/download/v1.1.61/OpenTypeless_1.1.61_arm64.deb.sig",
+            "digest": "sha256:4b41e867b99851095e95f58c0e991509fc87acecf341c2286697f324ece8a76d"
+          },
+          {
+            "name": "OpenTypeless_1.1.61_universal.dmg",
+            "bytes": 15043316,
+            "url": "https://github.com/tover0314-w/opentypeless/releases/download/v1.1.61/OpenTypeless_1.1.61_universal.dmg",
+            "digest": "sha256:0c3e7029d31e2a64a4a5674f4a23960fb6d3ab5b30472a7d9f379d318002bfb2"
+          },
+          {
+            "name": "OpenTypeless_1.1.61_x64-setup.exe",
+            "bytes": 4964818,
+            "url": "https://github.com/tover0314-w/opentypeless/releases/download/v1.1.61/OpenTypeless_1.1.61_x64-setup.exe",
+            "digest": "sha256:1f3914d5aaac45324274661b4ec5c84a484417969b5dd38a34d86caf7f1f53c8"
+          },
+          {
+            "name": "OpenTypeless_1.1.61_x64-setup.exe.sig",
+            "bytes": 424,
+            "url": "https://github.com/tover0314-w/opentypeless/releases/download/v1.1.61/OpenTypeless_1.1.61_x64-setup.exe.sig",
+            "digest": "sha256:a9d494669f0aa54f83a49bc57ece34a1dc2cf00a7f2ec13a4a6a679c15aabfa3"
+          },
+          {
+            "name": "OpenTypeless_1.1.61_x64_en-US.msi",
+            "bytes": 6868992,
+            "url": "https://github.com/tover0314-w/opentypeless/releases/download/v1.1.61/OpenTypeless_1.1.61_x64_en-US.msi",
+            "digest": "sha256:9536eb9290a1a7fafda3f5a709c8980f3a692d6280834cd11d834e9696df7abb"
+          },
+          {
+            "name": "OpenTypeless_1.1.61_x64_en-US.msi.sig",
+            "bytes": 424,
+            "url": "https://github.com/tover0314-w/opentypeless/releases/download/v1.1.61/OpenTypeless_1.1.61_x64_en-US.msi.sig",
+            "digest": "sha256:b376b0461f39b6d6c13b78f16ebdb80cfd374e8092675ddeb545e39c70d77316"
+          },
+          {
+            "name": "OpenTypeless_universal.app.tar.gz",
+            "bytes": 13781523,
+            "url": "https://github.com/tover0314-w/opentypeless/releases/download/v1.1.61/OpenTypeless_universal.app.tar.gz",
+            "digest": "sha256:66b35947f0422f0ccbb8af989f25418e4db6c4afe1ad275ab479ffe20abd58de"
+          },
+          {
+            "name": "OpenTypeless_universal.app.tar.gz.sig",
+            "bytes": 424,
+            "url": "https://github.com/tover0314-w/opentypeless/releases/download/v1.1.61/OpenTypeless_universal.app.tar.gz.sig",
+            "digest": "sha256:1ebff1b16a677fdf940ebb4ea2df9513184fd0f5f236d82cbe0988b0f6c08afa"
+          },
+          {
+            "name": "SHA256SUMS-linux-aarch64.txt",
+            "bytes": 299,
+            "url": "https://github.com/tover0314-w/opentypeless/releases/download/v1.1.61/SHA256SUMS-linux-aarch64.txt",
+            "digest": "sha256:a5b8da7be0891736ffde2b3f4a890b7f9a60d1ad9656c53188b7cc0446baf448"
+          },
+          {
+            "name": "SHA256SUMS-linux-aarch64.txt.asc",
+            "bytes": 833,
+            "url": "https://github.com/tover0314-w/opentypeless/releases/download/v1.1.61/SHA256SUMS-linux-aarch64.txt.asc",
+            "digest": "sha256:9b350eca50d2c324f07e808ecd5bcb6a071b93ce77233fd58cd4134dd472e637"
+          },
+          {
+            "name": "SHA256SUMS-linux-x86_64.txt",
+            "bytes": 296,
+            "url": "https://github.com/tover0314-w/opentypeless/releases/download/v1.1.61/SHA256SUMS-linux-x86_64.txt",
+            "digest": "sha256:1e422e109dd7a84cc56e61d0d9d2cba039bec6d5d1b7a7c3fc7e90dd4fec9c0b"
+          },
+          {
+            "name": "SHA256SUMS-linux-x86_64.txt.asc",
+            "bytes": 833,
+            "url": "https://github.com/tover0314-w/opentypeless/releases/download/v1.1.61/SHA256SUMS-linux-x86_64.txt.asc",
+            "digest": "sha256:a3a6597cffca0e75890f2a46e3cdc16c947bf3a1a498c6fe0e69ca5c7e215193"
+          },
+          {
+            "name": "SHA256SUMS-windows-x86_64.txt",
+            "bytes": 202,
+            "url": "https://github.com/tover0314-w/opentypeless/releases/download/v1.1.61/SHA256SUMS-windows-x86_64.txt",
+            "digest": "sha256:704382b950d070b4fe6e8755cf5d8414e1150f02769607bc0c4ae2d18a271bc5"
+          }
+        ],
+        "source_sha": "72914e8db005d1811f46f2dc50bfd91d1660ae01"
+      }
+    }
+  ]
+}

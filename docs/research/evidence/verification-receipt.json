@@ -1,0 +1,155 @@
+{
+  "checked_at_utc": "2026-10-24T09:17:36.960396+00:00",
+  "scope": "Document/source/static parser identity verification only. GitHub project publication is separate from product packages. Installer is a static research input only and was never executed; company delivery prohibits installers.",
+  "checks": {
+    "json_parse": {
+      "status": "passed",
+      "files": 10
+    },
+    "markdown": {
+      "status": "passed",
+      "files": 11,
+      "local_links": 38,
+      "reference_definitions": 63
+    },
+    "tool_python_parse": {
+      "status": "passed",
+      "files": 2,
+      "python": "3.13.2"
+    },
+    "github_saved_source_hashes": {
+      "status": "passed",
+      "verified": 70,
+      "total": 70
+    },
+    "typeless_recorded_source_reproduction": {
+      "status": "passed",
+      "source_identities": 89,
+      "exact_original_excerpts": 17,
+      "app_runtime_executed": false
+    },
+    "handy_static_source_and_payload": {
+      "status": "passed",
+      "source_members": 21,
+      "parser_emitted_files": 50,
+      "asset_digest_matches": true,
+      "target_executed": false,
+      "limitations_preserved": true,
+      "windows_runtime_verified": false
+    },
+    "research_inventory": {
+      "candidate_repositories": 8,
+      "research_markdown_files": 10,
+      "product_implementation_started": false,
+      "interview_complete": false,
+      "github_issues_created": 6
+    }
+  },
+  "artifacts_excluding_this_receipt": [
+    {
+      "path": "01-typeless-macos-analysis.md",
+      "bytes": 11488,
+      "sha256": "0cb4775113a66a51dce3ea569ebbc9afa8c907eff1a4d0b4ef252d2e4bf1f2e6"
+    },
+    {
+      "path": "02-open-source-alternatives.md",
+      "bytes": 25518,
+      "sha256": "e0c4a34d7caa04c5f6ffa7a666b76e0adf2cca976d99975c35b2dbd1ec0e910e"
+    },
+    {
+      "path": "03-windows-intranet-architecture.md",
+      "bytes": 11923,
+      "sha256": "40a3e57cfa97c5a8505c815a5b0fa968755267d39ab893ec6185c3b30a1442ac"
+    },
+    {
+      "path": "04-method-and-evidence.md",
+      "bytes": 8833,
+      "sha256": "fe7092bb061298170f24083fe13e0223fd1aa326f877a280ac95a225ac0266aa"
+    },
+    {
+      "path": "05-performance-and-package-delivery.md",
+      "bytes": 8829,
+      "sha256": "0afddf5dedf500a9c14cdb8e6854523902f844ea3c1322e48d1975cd480fc77c"
+    },
+    {
+      "path": "06-source-feasibility-audit.md",
+      "bytes": 17873,
+      "sha256": "6f3412f17fc7a2387ddbd4f783c7ea0f147c053bf91c1a0c54b2ec782ff7120d"
+    },
+    {
+      "path": "07-windows-handoff.md",
+      "bytes": 6582,
+      "sha256": "d663685e44f149d58feaac61562170056ceec9bfe38631b687e1e299d90c60b8"
+    },
+    {
+      "path": "08-decision-log.md",
+      "bytes": 3593,
+      "sha256": "ef776b5658d23698119c79f4047128aac4775cd4d10e7c339bd8ca593458f113"
+    },
+    {
+      "path": "HISTORY.md",
+      "bytes": 1634,
+      "sha256": "9d6e44ff318f1ddb827b4ceac798626ec9606b371b7cbba3b21f314c3c260b62"
+    },
+    {
+      "path": "README.md",
+      "bytes": 4875,
+      "sha256": "edf997dc2df52046036912875a3ae46db51ea8ffdc2642266f8348f58bcb9a3b"
+    },
+    {
+      "path": "evidence/github/handy-stable-source-audit.json",
+      "bytes": 18559,
+      "sha256": "c60af467b3ef35ecbd4ff1eb3c319c3528e9eb06621cffee8074d0ecedb98d65"
+    },
+    {
+      "path": "evidence/github/project-tracking.json",
+      "bytes": 1685,
+      "sha256": "1ef641e7553f101643ee0ec3f879b22edeb215e5865f95fb7098346b6e70533a"
+    },
+    {
+      "path": "evidence/github/repository-metadata.json",
+      "bytes": 44479,
+      "sha256": "68ab91a3fef9359fead1df5102ba96def0c4abecf24d22c9f75c37f5bb4facfd"
+    },
+    {
+      "path": "evidence/github/source-file-identities.json",
+      "bytes": 26890,
+      "sha256": "e46920a539bfb1642a8a11ea9f483e510c458c7b6fc5f3867e858f35f080c7fc"
+    },
+    {
+      "path": "evidence/primary-sources.json",
+      "bytes": 3550,
+      "sha256": "7745a667c0680ce37dec2a7b6de877a5288ee40536fa69559acd0513517ffa2f"
+    },
+    {
+      "path": "evidence/typeless-artifact-identity.json",
+      "bytes": 21078,
+      "sha256": "ee16815cf31d4b43e888873a6aa49fce3e1cdaeb24541b8b90076f580f9432b2"
+    },
+    {
+      "path": "evidence/typeless-rea-initial-integrity-error.json",
+      "bytes": 1377,
+      "sha256": "e543d372c7fc723d8d3e09dd7861ef80ac56e463dacbea32ca7432db6648ddfa"
+    },
+    {
+      "path": "evidence/typeless-rea-summary.json",
+      "bytes": 21167,
+      "sha256": "b8048af75a099fede3a8723fb1c7caf52695281d10dd770e3f39d657198738f3"
+    },
+    {
+      "path": "evidence/typeless-static-excerpts.json",
+      "bytes": 51694,
+      "sha256": "368da17e9036b15043fe543c5a1123186806c41dd8d1142cb9fec1b4d0a515b6"
+    },
+    {
+      "path": "tools/extract_app_sources.py",
+      "bytes": 2961,
+      "sha256": "2f6e0c1e16bed47d8065c89985b7f3439e411e2e0f8ef81f979530fe23df20b7"
+    },
+    {
+      "path": "tools/static_literal_decode.py",
+      "bytes": 3898,
+      "sha256": "aab1aac91f1e52ca6d830168c9afabb19a5ce66d42465e4150ff881bd656e143"
+    }
+  ]
+}

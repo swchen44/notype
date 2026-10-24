@@ -1,0 +1,635 @@
+{
+  "checked_date": "2026-10-24",
+  "files": [
+    {
+      "scope": "focused",
+      "repo": "Beingpax/VoiceInk",
+      "ref": "0019d7a37d803e2dc95c122df63cdf7567979828",
+      "path": "VoiceInk/Features/ModelLibrary/State/CustomAIProviderManager.swift",
+      "bytes": 10342,
+      "sha256": "6b8a862beebd65afb61b8c44ec9842f60599173bb229e814d166e023c0079b29",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "focused",
+      "repo": "Beingpax/VoiceInk",
+      "ref": "0019d7a37d803e2dc95c122df63cdf7567979828",
+      "path": "VoiceInk/Infrastructure/Providers/Enhancement/Chat/AIChatCompletionService.swift",
+      "bytes": 7010,
+      "sha256": "0eef667418300927f297a0e029fa2d6525837766967e33e72cfd168cab3efbba",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "focused",
+      "repo": "EpicenterHQ/epicenter",
+      "ref": "7cc869b4a1295e2566b61e1a4d5967a89f413b9b",
+      "path": "apps/whispering/LICENSE",
+      "bytes": 34624,
+      "sha256": "a5839d07c4afa9549421dfe2846757a193c5ef096714dc4bf31628dad635b26a",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "focused",
+      "repo": "EpicenterHQ/epicenter",
+      "ref": "7cc869b4a1295e2566b61e1a4d5967a89f413b9b",
+      "path": "apps/whispering/src/lib/post-processing.ts",
+      "bytes": 1782,
+      "sha256": "0435ab0ec47928cf0c4bd73cea978494c3d87e711833bff42ba3bc21dac0b09d",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "focused",
+      "repo": "EpicenterHQ/epicenter",
+      "ref": "7cc869b4a1295e2566b61e1a4d5967a89f413b9b",
+      "path": "docs/guides/custom-endpoint-transformations.md",
+      "bytes": 24879,
+      "sha256": "e15a6ed9af197d0983b8a74cdd1f547f7d6f58625992c78a6bec03c6f24a05fc",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "focused",
+      "repo": "OpenWhispr/openwhispr",
+      "ref": "7a6ae826de9ec1caf65f3a6e769475dab2ae829f",
+      "path": "examples/custom-asr-shim/README.md",
+      "bytes": 4646,
+      "sha256": "31533418089b2f068ff9fe6c56f58075e72ee340bee33e6fde2fdc110fd9a942",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "focused",
+      "repo": "OpenWhispr/openwhispr",
+      "ref": "7a6ae826de9ec1caf65f3a6e769475dab2ae829f",
+      "path": "src/components/SelfHostedPanel.tsx",
+      "bytes": 3549,
+      "sha256": "2a864624104ab395cad288bb1ceab71c1f0fc8e65ae3e701b918e924f5a0b9b5",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "focused",
+      "repo": "OpenWhispr/openwhispr",
+      "ref": "7a6ae826de9ec1caf65f3a6e769475dab2ae829f",
+      "path": "src/helpers/clipboard.js",
+      "bytes": 89397,
+      "sha256": "57a85a1b11e84eb97a7ca97cfd8e9866310d475c56ef8a150a1e573dfc218612",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "focused",
+      "repo": "OpenWhispr/openwhispr",
+      "ref": "7a6ae826de9ec1caf65f3a6e769475dab2ae829f",
+      "path": "src/helpers/selfHostedTranscription.js",
+      "bytes": 1260,
+      "sha256": "123b3b2eec9b1e72aa3c3dd653198ab7657e1c4cc6afafa67107fdf7864f520c",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "focused",
+      "repo": "OpenWhispr/openwhispr",
+      "ref": "7a6ae826de9ec1caf65f3a6e769475dab2ae829f",
+      "path": "src/services/ai/inferenceProviders/lan.ts",
+      "bytes": 1497,
+      "sha256": "198f4ff7e9c9cb611d3f04a5f7d5dd11bb80be67397161540edccf7c4f146c89",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "focused",
+      "repo": "OpenWhispr/openwhispr",
+      "ref": "7a6ae826de9ec1caf65f3a6e769475dab2ae829f",
+      "path": "src/services/ai/inferenceProviders/openai.ts",
+      "bytes": 17446,
+      "sha256": "b9c569465335da5ed3f81fe926a71667311d0d5e53354788c2be3c6825d931e5",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "focused",
+      "repo": "cjpais/Handy",
+      "ref": "5a9451e70aedc90648ce2befd9d7e0304746f9c1",
+      "path": "src/components/settings/PostProcessingSettingsApi/BaseUrlField.tsx",
+      "bytes": 1068,
+      "sha256": "374a2881eb51dedfa7bc8686b593d05ad29bee3d2eec55eb25a3958c7dd8e768",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "focused",
+      "repo": "cjpais/Handy",
+      "ref": "5a9451e70aedc90648ce2befd9d7e0304746f9c1",
+      "path": "src-tauri/src/clipboard.rs",
+      "bytes": 38004,
+      "sha256": "ba258890c94b8f88325d69c3455afc76f608650a1826c5c6edaeeebbae4eecb2",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "focused",
+      "repo": "cjpais/Handy",
+      "ref": "5a9451e70aedc90648ce2befd9d7e0304746f9c1",
+      "path": "src-tauri/src/llm_client.rs",
+      "bytes": 31448,
+      "sha256": "3779583202b3ad9a15504e7c5bfc30140fa1a86341176f7cfff756655986065b",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "focused",
+      "repo": "cjpais/Handy",
+      "ref": "5a9451e70aedc90648ce2befd9d7e0304746f9c1",
+      "path": "src-tauri/src/settings.rs",
+      "bytes": 68341,
+      "sha256": "d0145dcae172cc34c7f852c8c50ec37682e5cfc737a1301ec1be5627688aece5",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "focused",
+      "repo": "cjpais/Handy",
+      "ref": "5a9451e70aedc90648ce2befd9d7e0304746f9c1",
+      "path": "src-tauri/tauri.conf.json",
+      "bytes": 2228,
+      "sha256": "73651c54c43524da31eb68cac3bf5ec75b2cebe2d7bd9f057063e4b5dee65b5e",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "focused",
+      "repo": "ideaplexa/voicetypr",
+      "ref": "f86e571df5bd5c0a4d8950095167b45185fa59d4",
+      "path": "LICENSE",
+      "bytes": 34524,
+      "sha256": "e9df4c4e4e64b8168a71c3c67668dcffabbe8fca11d4ac4a7d5482562cd1679c",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "focused",
+      "repo": "ideaplexa/voicetypr",
+      "ref": "f86e571df5bd5c0a4d8950095167b45185fa59d4",
+      "path": "src-tauri/src/ai/providers.rs",
+      "bytes": 1391,
+      "sha256": "161ab30f3b1d1c3ba8cb4e8d1513f302d0efac361ebc77e7cca737ffdf971567",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "focused",
+      "repo": "ideaplexa/voicetypr",
+      "ref": "f86e571df5bd5c0a4d8950095167b45185fa59d4",
+      "path": "src-tauri/src/license/api_client.rs",
+      "bytes": 14699,
+      "sha256": "1cefa2908fb5ea6b001ea90554960efb2e60401250dafb5d378558eb17d2f00d",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "focused",
+      "repo": "ideaplexa/voicetypr",
+      "ref": "f86e571df5bd5c0a4d8950095167b45185fa59d4",
+      "path": "src-tauri/tauri.conf.json",
+      "bytes": 2352,
+      "sha256": "f1d2e63aabe3f0fda6dd71a2078c9f86677842300b15f7000864157aac7a6e50",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "focused",
+      "repo": "shaneholloman/omni-dictate-windows-gui",
+      "ref": "e861670bc8b8d693743b9300d25f6a24b1ad13dd",
+      "path": "LICENSE",
+      "bytes": 1098,
+      "sha256": "140a7e739b377d3f75b2d05834eefe8820caa72de87384e0e3ebe82d202a924d",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "focused",
+      "repo": "stofll/sotto",
+      "ref": "c8d6d54a4837a7b4fccefd45e70ad8e6d5e6dd5b",
+      "path": "desktop/package.json",
+      "bytes": 1539,
+      "sha256": "ccb9ef4eed981304d9c01e98154a27e2d3b40e92b5bdebf9a7dbe050107a24c5",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "focused",
+      "repo": "stofll/sotto",
+      "ref": "c8d6d54a4837a7b4fccefd45e70ad8e6d5e6dd5b",
+      "path": "desktop/src-tauri/src/ai/mod.rs",
+      "bytes": 11595,
+      "sha256": "dca929f8167cb982809ec1d8c01252c8150b3470437dc3d64f5607b6d6c476c5",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "focused",
+      "repo": "stofll/sotto",
+      "ref": "c8d6d54a4837a7b4fccefd45e70ad8e6d5e6dd5b",
+      "path": "desktop/src-tauri/src/ai/providers.rs",
+      "bytes": 58634,
+      "sha256": "e55d51637013c91e520eb9928ddb57f70d2340e06f23e66d9bb0c5db52c24523",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "focused",
+      "repo": "stofll/sotto",
+      "ref": "c8d6d54a4837a7b4fccefd45e70ad8e6d5e6dd5b",
+      "path": "desktop/src-tauri/src/clipboard.rs",
+      "bytes": 31923,
+      "sha256": "f086fe440a1bbb96aac69b528be904dfdfd6d836363684be971adae97a0f4467",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "focused",
+      "repo": "stofll/sotto",
+      "ref": "c8d6d54a4837a7b4fccefd45e70ad8e6d5e6dd5b",
+      "path": "docs/portable.md",
+      "bytes": 1238,
+      "sha256": "58637eae7d66a42d018e87a0600b1ab45b345dd60d51bf4367a9507f2fbb1501",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "focused",
+      "repo": "stofll/sotto",
+      "ref": "c8d6d54a4837a7b4fccefd45e70ad8e6d5e6dd5b",
+      "path": "docs/privacy.md",
+      "bytes": 11231,
+      "sha256": "17407abba4f4b98b162f8b4c8bc820d11bf36283284cf146aa560774e09154d4",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "focused",
+      "repo": "stofll/sotto",
+      "ref": "c8d6d54a4837a7b4fccefd45e70ad8e6d5e6dd5b",
+      "path": "docs/telemetry.md",
+      "bytes": 17920,
+      "sha256": "6ea4da363496bf616f8715c3dd2b741db69b99b779561d207032bb1e762385e5",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "focused",
+      "repo": "stofll/sotto",
+      "ref": "c8d6d54a4837a7b4fccefd45e70ad8e6d5e6dd5b",
+      "path": "docs/windows-setup.md",
+      "bytes": 8907,
+      "sha256": "62b08181b54926c7cb03d816735d256f586c058f5f44d60108d2231f1cab28dc",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "focused",
+      "repo": "tover0314-w/opentypeless",
+      "ref": "f5ad60298f535e0fff716a749802138ee409dea7",
+      "path": "LICENSE",
+      "bytes": 1083,
+      "sha256": "1586f004155ad2537963520a80016e40724d40e280afb5f9102ae0d04e3224b2",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "focused",
+      "repo": "tover0314-w/opentypeless",
+      "ref": "f5ad60298f535e0fff716a749802138ee409dea7",
+      "path": "README.md",
+      "bytes": 26377,
+      "sha256": "ef5dbfd3f627903a4ca1ee9418522a961ee12ca4d9b2ec20ebdb533dbcf8d420",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "focused",
+      "repo": "tover0314-w/opentypeless",
+      "ref": "f5ad60298f535e0fff716a749802138ee409dea7",
+      "path": "package.json",
+      "bytes": 2158,
+      "sha256": "8943e1f90c9c15b94e799658a006418d8dfb091eb74da0af299fb332f37091b4",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "focused",
+      "repo": "tover0314-w/opentypeless",
+      "ref": "f5ad60298f535e0fff716a749802138ee409dea7",
+      "path": "src/components/Settings/LlmPane.tsx",
+      "bytes": 24831,
+      "sha256": "32e4dbfef7c50c4e81c80a68ea95bae2baa694a00d1c613cd1c012a1ec2afdb0",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "focused",
+      "repo": "tover0314-w/opentypeless",
+      "ref": "f5ad60298f535e0fff716a749802138ee409dea7",
+      "path": "src/components/Settings/SttPane.tsx",
+      "bytes": 29792,
+      "sha256": "4bfe7939618d2d5c6e7feb106fe1f494b772b0693c7db35331554ba734965c1f",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "focused",
+      "repo": "tover0314-w/opentypeless",
+      "ref": "f5ad60298f535e0fff716a749802138ee409dea7",
+      "path": "src-tauri/src/lib.rs",
+      "bytes": 47936,
+      "sha256": "8c6aef240696c08d6c0d7e6973f29b86e2aef80f7e54034299a8e1a9e6d50afc",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "focused",
+      "repo": "tover0314-w/opentypeless",
+      "ref": "f5ad60298f535e0fff716a749802138ee409dea7",
+      "path": "src-tauri/src/llm/mod.rs",
+      "bytes": 10095,
+      "sha256": "5b5f9d08eedbe45bf3606e51219bea67858ffe28a1a20a931aa36ffb2ef7a410",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "focused",
+      "repo": "tover0314-w/opentypeless",
+      "ref": "f5ad60298f535e0fff716a749802138ee409dea7",
+      "path": "src-tauri/src/llm/openai.rs",
+      "bytes": 10786,
+      "sha256": "ff33ba13ad482cec4f7b6b740133bfa322767f3266b6be036ba970aac3760920",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "focused",
+      "repo": "tover0314-w/opentypeless",
+      "ref": "f5ad60298f535e0fff716a749802138ee409dea7",
+      "path": "src-tauri/src/stt/apple_speech.rs",
+      "bytes": 23781,
+      "sha256": "bee2c74b5d9169b5bd84d4acf699395bc16397b1993553201cbcddab03d22915",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "focused",
+      "repo": "tover0314-w/opentypeless",
+      "ref": "f5ad60298f535e0fff716a749802138ee409dea7",
+      "path": "src-tauri/src/stt/config.rs",
+      "bytes": 9010,
+      "sha256": "b6765c7614d99c9f4e2f6a6df39f9e120e82b1cc7c4cb00e2acdea68be79f540",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "focused",
+      "repo": "tover0314-w/opentypeless",
+      "ref": "f5ad60298f535e0fff716a749802138ee409dea7",
+      "path": "src-tauri/src/stt/mod.rs",
+      "bytes": 5530,
+      "sha256": "3f8234c98dfab23af09cbee34a02f5f2f779b1a43557ce869ff5f37429ec0f16",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "focused",
+      "repo": "tover0314-w/opentypeless",
+      "ref": "f5ad60298f535e0fff716a749802138ee409dea7",
+      "path": "src-tauri/src/stt/whisper_compat.rs",
+      "bytes": 12995,
+      "sha256": "369e4ce53e9989498d14f62f00c8dbdf62ba245146c7bbbf2c574b65f86454f9",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "focused",
+      "repo": "tover0314-w/opentypeless",
+      "ref": "f5ad60298f535e0fff716a749802138ee409dea7",
+      "path": "src-tauri/tauri.conf.json",
+      "bytes": 2789,
+      "sha256": "6f13bdc9e0addff864bf5a2757274c8cdf299b650ea1af73d4ab3dc875d64082",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "stable",
+      "repo": "EpicenterHQ/epicenter",
+      "ref": "a6b15c28db9076742d7ae7014f8ec9f97aa615d1",
+      "path": "apps/whispering/README.md",
+      "bytes": 47324,
+      "sha256": "81767453940178018488b1472f65191fdc872e427ddf9223e8387d3f1fda0b33",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "stable",
+      "repo": "EpicenterHQ/epicenter",
+      "ref": "a6b15c28db9076742d7ae7014f8ec9f97aa615d1",
+      "path": "docs/guides/custom-endpoint-transformations.md",
+      "bytes": 24893,
+      "sha256": "2c30d1b804ba375bff2152d9a5bdc5f27f2f1a5a40743cd99114b84334098591",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "stable",
+      "repo": "OpenWhispr/openwhispr",
+      "ref": "ba6d61820b4c56d7b08012c61c2ae6b43f3152f3",
+      "path": "src/components/SelfHostedPanel.tsx",
+      "bytes": 3549,
+      "sha256": "2a864624104ab395cad288bb1ceab71c1f0fc8e65ae3e701b918e924f5a0b9b5",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "stable",
+      "repo": "OpenWhispr/openwhispr",
+      "ref": "ba6d61820b4c56d7b08012c61c2ae6b43f3152f3",
+      "path": "src/helpers/selfHostedTranscription.js",
+      "bytes": 1260,
+      "sha256": "123b3b2eec9b1e72aa3c3dd653198ab7657e1c4cc6afafa67107fdf7864f520c",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "stable",
+      "repo": "OpenWhispr/openwhispr",
+      "ref": "ba6d61820b4c56d7b08012c61c2ae6b43f3152f3",
+      "path": "src/services/ai/inferenceProviders/lan.ts",
+      "bytes": 1497,
+      "sha256": "198f4ff7e9c9cb611d3f04a5f7d5dd11bb80be67397161540edccf7c4f146c89",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "stable",
+      "repo": "cjpais/Handy",
+      "ref": "14f6f0d31cb22a4268acfbddba3052820fd0a06e",
+      "path": "src-tauri/src/llm_client.rs",
+      "bytes": 23759,
+      "sha256": "6e8fd0fe8d9306259eda07d69b85a9907247cf7131902b445314560d237eb172",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "stable",
+      "repo": "cjpais/Handy",
+      "ref": "14f6f0d31cb22a4268acfbddba3052820fd0a06e",
+      "path": "src-tauri/src/settings.rs",
+      "bytes": 65755,
+      "sha256": "1c9b89469019c83bc36db24f5a6728a501209dae9f643574dd3a6fe18ed58509",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "stable",
+      "repo": "cjpais/Handy",
+      "ref": "14f6f0d31cb22a4268acfbddba3052820fd0a06e",
+      "path": "src-tauri/tauri.conf.json",
+      "bytes": 2185,
+      "sha256": "039f48d047fa737839f3a430c6cc3c1e4b2d53c20b692926bdd64acd87210397",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "stable",
+      "repo": "ideaplexa/voicetypr",
+      "ref": "082285c05fa4f1ed3c523073de48f982ceb3731a",
+      "path": "README.md",
+      "bytes": 7762,
+      "sha256": "5f120038a8d93d68be4fb217d88f2e7bce6d61ef767a653187a0de412825295d",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "stable",
+      "repo": "stofll/sotto",
+      "ref": "645effd86d31e76f7a9ca9f534874eb80983d41c",
+      "path": "desktop/src-tauri/src/ai/providers.rs",
+      "bytes": 58634,
+      "sha256": "e55d51637013c91e520eb9928ddb57f70d2340e06f23e66d9bb0c5db52c24523",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "stable",
+      "repo": "stofll/sotto",
+      "ref": "645effd86d31e76f7a9ca9f534874eb80983d41c",
+      "path": "docs/portable.md",
+      "bytes": 1238,
+      "sha256": "58637eae7d66a42d018e87a0600b1ab45b345dd60d51bf4367a9507f2fbb1501",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "stable",
+      "repo": "stofll/sotto",
+      "ref": "645effd86d31e76f7a9ca9f534874eb80983d41c",
+      "path": "docs/privacy.md",
+      "bytes": 10985,
+      "sha256": "3ac70d5fe3e01a9f5bbc84cb98f62bbb0bf5484c21910a5642269dda300a5e4b",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "stable",
+      "repo": "tover0314-w/opentypeless",
+      "ref": "72914e8db005d1811f46f2dc50bfd91d1660ae01",
+      "path": "LICENSE",
+      "bytes": 1083,
+      "sha256": "1586f004155ad2537963520a80016e40724d40e280afb5f9102ae0d04e3224b2",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "stable",
+      "repo": "tover0314-w/opentypeless",
+      "ref": "72914e8db005d1811f46f2dc50bfd91d1660ae01",
+      "path": "README.md",
+      "bytes": 26377,
+      "sha256": "ef5dbfd3f627903a4ca1ee9418522a961ee12ca4d9b2ec20ebdb533dbcf8d420",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "stable",
+      "repo": "tover0314-w/opentypeless",
+      "ref": "72914e8db005d1811f46f2dc50bfd91d1660ae01",
+      "path": "src/components/UpdatePrompt.tsx",
+      "bytes": 3666,
+      "sha256": "0dad6e7d4aa2c3b2de2fdff7127c3f7160ac2d5a724e6afba7e14e4e82c268bf",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "stable",
+      "repo": "tover0314-w/opentypeless",
+      "ref": "72914e8db005d1811f46f2dc50bfd91d1660ae01",
+      "path": "src/lib/api.ts",
+      "bytes": 10023,
+      "sha256": "53dd0a749cca9922a81f0b4178b21b585023951b3777300dfa1f656b1d9df0d9",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "stable",
+      "repo": "tover0314-w/opentypeless",
+      "ref": "72914e8db005d1811f46f2dc50bfd91d1660ae01",
+      "path": "src/stores/authStore.ts",
+      "bytes": 20245,
+      "sha256": "052eb453ac6d789871a44e498854e86f3d856b86f1e3b9cb5b2f6f340918b204",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "stable",
+      "repo": "tover0314-w/opentypeless",
+      "ref": "72914e8db005d1811f46f2dc50bfd91d1660ae01",
+      "path": "src-tauri/src/credentials.rs",
+      "bytes": 18555,
+      "sha256": "831737b37e05c14174c405c6d7918130dc21b7aa60280266093feb4e912feb11",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "stable",
+      "repo": "tover0314-w/opentypeless",
+      "ref": "72914e8db005d1811f46f2dc50bfd91d1660ae01",
+      "path": "src-tauri/src/llm/mod.rs",
+      "bytes": 10095,
+      "sha256": "5b5f9d08eedbe45bf3606e51219bea67858ffe28a1a20a931aa36ffb2ef7a410",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "stable",
+      "repo": "tover0314-w/opentypeless",
+      "ref": "72914e8db005d1811f46f2dc50bfd91d1660ae01",
+      "path": "src-tauri/src/llm/openai.rs",
+      "bytes": 10786,
+      "sha256": "ff33ba13ad482cec4f7b6b740133bfa322767f3266b6be036ba970aac3760920",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "stable",
+      "repo": "tover0314-w/opentypeless",
+      "ref": "72914e8db005d1811f46f2dc50bfd91d1660ae01",
+      "path": "src-tauri/src/llm/protocol.rs",
+      "bytes": 14775,
+      "sha256": "6bb8a2047be21b1a08fc7fc6fa89a411c0b12ccc24fbc6be30a9f21efe62857f",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "stable",
+      "repo": "tover0314-w/opentypeless",
+      "ref": "72914e8db005d1811f46f2dc50bfd91d1660ae01",
+      "path": "src-tauri/src/output/clipboard.rs",
+      "bytes": 12697,
+      "sha256": "c54cce636175f6bbea8bf6bca7ea631c80189a2ef70841d4b717e167e9ccbd3e",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "stable",
+      "repo": "tover0314-w/opentypeless",
+      "ref": "72914e8db005d1811f46f2dc50bfd91d1660ae01",
+      "path": "src-tauri/src/output/windows_sendinput.rs",
+      "bytes": 9660,
+      "sha256": "b866ac72ceec64fd8bf52b19bf48785043efb3fc48f55238847d2cbe2c4fe37c",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "stable",
+      "repo": "tover0314-w/opentypeless",
+      "ref": "72914e8db005d1811f46f2dc50bfd91d1660ae01",
+      "path": "src-tauri/src/storage/mod.rs",
+      "bytes": 134117,
+      "sha256": "bd5b9f80016b4b6610c7075f1b9f7d2336440e7152d27905d746f245417a3904",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "stable",
+      "repo": "tover0314-w/opentypeless",
+      "ref": "72914e8db005d1811f46f2dc50bfd91d1660ae01",
+      "path": "src-tauri/src/stt/config.rs",
+      "bytes": 9010,
+      "sha256": "b6765c7614d99c9f4e2f6a6df39f9e120e82b1cc7c4cb00e2acdea68be79f540",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "stable",
+      "repo": "tover0314-w/opentypeless",
+      "ref": "72914e8db005d1811f46f2dc50bfd91d1660ae01",
+      "path": "src-tauri/src/stt/mod.rs",
+      "bytes": 5530,
+      "sha256": "3f8234c98dfab23af09cbee34a02f5f2f779b1a43557ce869ff5f37429ec0f16",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "stable",
+      "repo": "tover0314-w/opentypeless",
+      "ref": "72914e8db005d1811f46f2dc50bfd91d1660ae01",
+      "path": "src-tauri/src/stt/whisper_compat.rs",
+      "bytes": 11172,
+      "sha256": "3c62573397f266fe92d2d6c36b93255c13bf858c7b074e84ec62a9411c132f51",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    },
+    {
+      "scope": "stable",
+      "repo": "tover0314-w/opentypeless",
+      "ref": "72914e8db005d1811f46f2dc50bfd91d1660ae01",
+      "path": "src-tauri/tauri.conf.json",
+      "bytes": 2789,
+      "sha256": "0e47067c12347c2faa56eda6440355e8129865ea322d2ec2106fdd7b6b174b64",
+      "note": "SHA256 of saved UTF-8 connector content, not Git blob object; no target execution"
+    }
+  ]
+}

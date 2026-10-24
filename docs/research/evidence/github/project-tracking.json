@@ -1,0 +1,48 @@
+{
+  "checked_date": "2026-10-24",
+  "repository": "swchen44/notype_study",
+  "url": "https://github.com/swchen44/notype_study",
+  "private": true,
+  "initial_commit_sha": "1124da52050efee4177e669208d4376b3d8dbbb5",
+  "local_git_initialization": "not performed: .git filesystem write denied; remote commits use authenticated GitHub API",
+  "issues": [
+    {
+      "html_url": "https://github.com/swchen44/notype_study/issues/1",
+      "number": 1,
+      "state": "open",
+      "title": "[Design] 收斂 amd64 portable MVP 規格與 grilling 決策"
+    },
+    {
+      "html_url": "https://github.com/swchen44/notype_study/issues/2",
+      "number": 2,
+      "state": "open",
+      "title": "[Windows] 驗證 amd64 無 installer 的 portable 啟動基線"
+    },
+    {
+      "html_url": "https://github.com/swchen44/notype_study/issues/3",
+      "number": 3,
+      "state": "open",
+      "title": "[STT] 量測本機繁中夾英文辨識品質與端到端延遲"
+    },
+    {
+      "html_url": "https://github.com/swchen44/notype_study/issues/4",
+      "number": 4,
+      "state": "open",
+      "title": "[LLM] 接公司文字 API 並在失敗時保留逐字稿待選"
+    },
+    {
+      "html_url": "https://github.com/swchen44/notype_study/issues/5",
+      "number": 5,
+      "state": "open",
+      "title": "[Input] 驗收瀏覽器、VS Code、Teams、Outlook、Windows Terminal"
+    },
+    {
+      "html_url": "https://github.com/swchen44/notype_study/issues/6",
+      "number": 6,
+      "state": "open",
+      "title": "[Packaging] 經公司 Proxy 配送完整 x64 portable App 與模型"
+    }
+  ],
+  "product_package_published": false,
+  "product_implementation_started": false
+}

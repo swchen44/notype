@@ -1,0 +1,17 @@
+{
+  "error": {
+    "code": "artifact_integrity_mismatch",
+    "category": "integrity_mismatch",
+    "message": "Declared ASAR integrity for unpacked entry node_modules/better-sqlite3/build/Release/better_sqlite3.node contradicts its companion file; packaging tools commonly sign or strip unpacked native binaries after writing the archive. If expected, rerun analyze_javascript_application with integrity_policy=record-and-continue (CLI: --integrity-policy record-and-continue) to retain observed bytes as untrusted; otherwise get a fresh copy.",
+    "retryable": false,
+    "remediation": {
+      "action": "Declared ASAR integrity for unpacked entry node_modules/better-sqlite3/build/Release/better_sqlite3.node contradicts its companion file; packaging tools commonly sign or strip unpacked native binaries after writing the archive. If expected, rerun analyze_javascript_application with integrity_policy=record-and-continue (CLI: --integrity-policy record-and-continue) to retain observed bytes as untrusted; otherwise get a fresh copy."
+    },
+    "details": {
+      "logical_path": "node_modules/better-sqlite3/build/Release/better_sqlite3.node",
+      "declared_sha256": "4c79e15889405bf635a16889b1f1c6945b4b2b65502919c8788ccc654c402bdd",
+      "calculated_sha256": "88f4a7052ef36a3349e4323e61d6b6c618872e92d0a59f1cb015abd5c83b68a7",
+      "unpacked": true
+    }
+  }
+}
