@@ -19,7 +19,7 @@ Product/window identity is notype / `io.github.swchen44.notype`; default paths c
 | `cargo fmt --manifest-path desktop/src-tauri/Cargo.toml -- --check` | Passed |
 | `node scripts/test-desktop-policy.mjs` | 3 unit tests passed, 0 failed/ignored |
 | `bun run --cwd desktop tauri build --no-bundle --debug` | Passed, Windows x64 CPU backend; 12 transcribe/ggml DLLs staged |
-| `NOTYPE_DESKTOP_EXE=... node --test tests/integration/desktop-settings.runtime.mjs` | 1 actual native integration test passed, 0 skipped, last run 4.28 s |
+| `NOTYPE_DESKTOP_EXE=... node --test tests/integration/desktop-settings.runtime.mjs` | 1 actual native integration test passed, 0 skipped; recorded runs 4.28–5.41 s |
 
 The native receipt launches the real executable twice with fresh external settings and all shortcuts unbound. It observes the notype window title and onboarding logo, reads the actual data root, constrains poisoned legacy policy flags, rejects both enable commands and the absent updater plugin, changes UI language through IPC and reads `zh-TW` back after restart. Microphone capture, paste, automatic Enter and live API calls are never invoked. Temporary test data is removed; default user settings are untouched.
 
