@@ -44,5 +44,24 @@
     }
   ],
   "product_package_published": false,
-  "product_implementation_started": false
+  "product_implementation_started": false,
+  "engineering_configuration": {
+    "root_instruction_file": "AGENTS.md",
+    "issue_tracker": "GitHub Issues",
+    "triage_labels": [
+      "needs-triage",
+      "needs-info",
+      "ready-for-agent",
+      "ready-for-human",
+      "wontfix"
+    ],
+    "domain_layout": "single-context",
+    "test_directories": [
+      "tests/unittest",
+      "tests/integration"
+    ],
+    "product_test_framework_selected": false,
+    "product_tests_implemented": false,
+    "product_tests_executed": false
+  }
 }

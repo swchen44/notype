@@ -1,6 +1,6 @@
 {
-  "checked_at_utc": "2026-10-24T09:17:36.960396+00:00",
-  "scope": "Document/source/static parser identity verification only. GitHub project publication is separate from product packages. Installer is a static research input only and was never executed; company delivery prohibits installers.",
+  "checked_at_utc": "2026-10-24T10:26:40.736692+00:00",
+  "scope": "Repo configuration, Markdown and recorded source identity checks. Product unit/integration tests are scaffold only and have not run. No installer or App executed.",
   "checks": {
     "json_parse": {
       "status": "passed",
@@ -8,14 +8,38 @@
     },
     "markdown": {
       "status": "passed",
-      "files": 11,
-      "local_links": 38,
+      "files": 18,
+      "local_links": 44,
       "reference_definitions": 63
     },
     "tool_python_parse": {
       "status": "passed",
       "files": 2,
       "python": "3.13.2"
+    },
+    "agent_skills_configuration": {
+      "status": "passed",
+      "root_file": "AGENTS.md",
+      "tracker": "GitHub Issues",
+      "domain_layout": "single-context",
+      "canonical_triage_roles": [
+        "needs-triage",
+        "needs-info",
+        "ready-for-agent",
+        "ready-for-human",
+        "wontfix"
+      ]
+    },
+    "product_test_scaffold": {
+      "status": "scaffold-only",
+      "directories": [
+        "tests/unittest",
+        "tests/integration"
+      ],
+      "product_test_files": 0,
+      "product_tests_run": false,
+      "framework": "not-yet-selected",
+      "scope": "Documentation and directory conventions only; no product test pass claimed"
     },
     "github_saved_source_hashes": {
       "status": "passed",
@@ -37,6 +61,7 @@
       "limitations_preserved": true,
       "windows_runtime_verified": false
     },
+    "prior_source_checks_scope": "Previous source/static-payload verification retained; these are not new runtime or product-test results.",
     "research_inventory": {
       "candidate_repositories": 8,
       "research_markdown_files": 10,
@@ -78,18 +103,18 @@
     },
     {
       "path": "07-windows-handoff.md",
-      "bytes": 6582,
-      "sha256": "d663685e44f149d58feaac61562170056ceec9bfe38631b687e1e299d90c60b8"
+      "bytes": 7080,
+      "sha256": "b61c01b95b02c97d09bbd077b4ba0f23e5bac2eb081c3892ec57ebad20ca5d67"
     },
     {
       "path": "08-decision-log.md",
-      "bytes": 3593,
-      "sha256": "ef776b5658d23698119c79f4047128aac4775cd4d10e7c339bd8ca593458f113"
+      "bytes": 3866,
+      "sha256": "d6c85f4cc2b57e41129bb25bfd53b14ad3b91c0c6c883bd3779fbdfbc7387d77"
     },
     {
       "path": "HISTORY.md",
-      "bytes": 1634,
-      "sha256": "9d6e44ff318f1ddb827b4ceac798626ec9606b371b7cbba3b21f314c3c260b62"
+      "bytes": 1936,
+      "sha256": "e7d141b7772a9a2cabd8347ba71aea426d4eafec646bcf4659172bee35a714aa"
     },
     {
       "path": "README.md",
@@ -103,8 +128,8 @@
     },
     {
       "path": "evidence/github/project-tracking.json",
-      "bytes": 1685,
-      "sha256": "1ef641e7553f101643ee0ec3f879b22edeb215e5865f95fb7098346b6e70533a"
+      "bytes": 2185,
+      "sha256": "71b93b46f3a7befff8a4b2e3ca9ad7fc8228b1d13b742e7515674f2428dceeae"
     },
     {
       "path": "evidence/github/repository-metadata.json",

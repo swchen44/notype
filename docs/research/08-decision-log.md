@@ -18,6 +18,8 @@
 | C4 | 不能使用 installer；需 portable 檔案包及所需 runtime／模型 | 使用者補充「不要installer 無法安裝」 |
 | C5 | 實作接點與 runtime 驗收從公司 Windows amd64 開始較合適 | 使用者提出並依目標 OS 給出建議；未開始實作 |
 | C6 | 建立 GitHub repo，保存 history 與 issue tracking | 使用者明確授權；repo 採 private |
+| C7 | 根目錄指引使用 `AGENTS.md`；GitHub Issues、五個預設 triage labels、single-context domain docs | 使用者確認 setup 草稿與檔名 |
+| C8 | 測試分為 `tests/unittest/` 與 `tests/integration/` | 使用者補充；框架隨 Windows 實作選定 |
 
 ## 2. 目前問題 frontier
 

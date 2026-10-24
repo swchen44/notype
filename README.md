@@ -23,6 +23,8 @@
 | [Windows 接手說明](docs/research/07-windows-handoff.md) | 在公司 Windows 開始實作與驗收的順序及接手 prompt |
 | [決策紀錄](docs/research/08-decision-log.md) | 已確認選項、未決訪談問題與設計樹 |
 | [工作紀錄](docs/research/HISTORY.md) | 研究／決策里程碑；程式碼演進以 Git commits 為準 |
+| [測試規範](tests/README.md) | `tests/unittest/` 與 `tests/integration/` 的範圍、執行與回報規則 |
+| [Agent skills](AGENTS.md) | Issue tracker、triage labels、domain docs 與測試目錄入口 |
 | [GitHub Issues](https://github.com/swchen44/notype_study/issues) | 待辦、驗收條件與後續 evidence receipt |
 
 此 repo 為 private。公司 endpoint、API key、token、實際工作錄音與逐字稿不屬於目前提交內容；未來 npm／pip package 的 registry 與可見性另行確認。此 repo 沒有發行公司 App 或模型包。

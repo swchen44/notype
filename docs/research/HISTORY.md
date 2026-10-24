@@ -15,3 +15,5 @@
 - 已建立 GitHub issues #1～#6，分別追蹤規格、portable 啟動、STT、LLM、送字與配送。
 - 開始 repo engineering skills setup：GitHub Issues 已確定；使用者確認五個預設 triage labels；根目錄指引檔名與設定草稿仍待確認。
 - 本地 `.git` 寫入受工作區限制，改用 GitHub API 建立遠端 history；不宣稱本地 Git 初始化完成。
+- 使用者選定 `AGENTS.md` 並採用設定草稿；已寫入 issue tracker、triage labels、domain docs，GitHub 五個 labels 已核對存在。
+- 使用者指定 `tests/unittest/` 與 `tests/integration/`；建立目錄與測試規範。產品測試尚未實作，Windows runtime 尚未執行。

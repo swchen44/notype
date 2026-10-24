@@ -63,7 +63,12 @@ exe/DLL/模型的套件；主要配送渠道及部分產品決策仍以決策紀
 Windows實際啟動、ASR品質/效能、公司API和五個App貼上分開記錄證據。
 每項變更對應issue及commit；成功與失敗都留下command、版本、狀態和未驗證邊界。
 套件publish與CI配置依後續明確授權範圍執行。
+
+遵循AGENTS.md與docs/agents/*.md。unit tests放tests/unittest/，integration tests放
+tests/integration/；選定stack後補可分開執行的命令，不能把目前的文件scaffold當測試通過。
 ```
+
+建議的 skills 流程：以 `grill-with-docs` 接續既有 Q7～Q10；收斂後用 `to-spec` 整理規格，再用 `to-tickets` 拆分含 blocking edges 的可驗證切片。換到 Windows 新 session 前可用 `handoff` 產生暫存交接文件，引用此 repo 既有文件及 issues。
 
 ## 6. GitHub 追蹤入口
 
