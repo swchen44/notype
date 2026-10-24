@@ -1,0 +1,41 @@
+[package]
+name = "notype-core"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.89"
+
+[workspace]
+
+[dependencies]
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+rusqlite = { version = "0.37", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time"] }
+tokio-util = "0.7"
+uuid = { version = "1", features = ["v4"] }
+
+[dev-dependencies]
+tempfile = "3"
+
+[[test]]
+name = "core-session"
+path = "../../tests/unittest/core_session.rs"
+
+[[test]]
+name = "core-persistence"
+path = "../../tests/integration/core_persistence.rs"
+
+[[test]]
+name = "core-http"
+path = "../../tests/integration/core_http.rs"
+
+[profile.dev]
+debug = 0
+incremental = false
+
+[profile.test]
+debug = 0
+incremental = false
