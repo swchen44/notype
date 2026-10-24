@@ -8,7 +8,7 @@
 
 implement-spec 進度：#9～#11 已合入 `implement/notype-mvp`，合併點 `5ad1698`。#11 通過 core 19、desktop 7、native 5 項，含可見設定→HTTP→歷史、無 WAV 原稿保存／重試、取消、重啟及唯讀匯入，見 [桌面流程 receipt](docs/verification/desktop-workflow.md)。合併後 core 19、Node 16 及前端建置通過。既有核心跨 OS 證據見 [portability receipt](docs/verification/shared-core-portability.md)；目前 #12 語言與 #17 三場景／提示詞平行實作。尚未完成公司 API／五個 App／完整語音與配送驗收，#8～#17 未結案。
 
-2026-10-25 最新需求：口述、翻譯、隨便問三場景，提示詞獨立可編輯／保存／還原；使用者只要還原預設提示詞。開始鍵依序 Right Alt、Right Alt + Right Shift、Right Alt + Space；改為點按開始，錄音中以獨立可設定停止鍵結束（預設 Right Alt），Esc 取消，取代舊按住／放開。公司 API 格式已確認為 OpenAI 相容 Chat Completions。翻譯／隨便問草稿見 [設計紀錄](docs/research/11-scenario-prompt-design.md)。隨便問輸出目的、App／網站資訊範圍、回譯時機已向使用者提問，尚未回答前不猜測；其餘獨立開發繼續。
+2026-10-25 最新需求：口述、翻譯、隨便問三場景，提示詞獨立可編輯／保存／還原；使用者只要還原預設提示詞。開始鍵依序 Right Alt、Right Alt + Right Shift、Right Alt + Space；改為點按開始，錄音中以獨立可設定停止鍵結束（預設 Right Alt），Esc 取消，取代舊按住／放開。公司 API 格式已確認為 OpenAI 相容 Chat Completions。隨便問已確認依意圖回答或代寫；情境限 App 名稱＋網站網域，不讀頁面／輸入內容；回譯可選，預設開關與啟用後交付方式尚待回答。詳見 [設計紀錄](docs/research/11-scenario-prompt-design.md)，不猜測未定案行為；其餘獨立開發繼續。
 
 2026-10-25 Prompt 補充：使用者提供角色／處理原則／格式／限制及 few-shot 草稿；已加入 #8／#11 的保真文字整理設計。只處理原稿文字，保留數字／否定／英文／code／既有不確定標記，依上下文刪贅詞，不新增講者或臆測音訊；原稿及術語表當作資料，不執行其指令。中英排版保護字面值，提示詞依當次辨識模式選字形，與介面 locale 獨立。真正模型品質仍待驗收，無需為 prompt 設計先提供 key。
 
