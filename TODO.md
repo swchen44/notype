@@ -1,6 +1,6 @@
-# Windows 開發待辦
+# notype 開發待辦
 
-更新日期：2026-10-24。這份文件是接手順序與狀態快照；live [GitHub Issues](https://github.com/swchen44/notype/issues) 是工作追蹤入口。先讀 [HANDOFF.md](HANDOFF.md)。
+更新日期：2026-10-25。這份文件是接手順序與狀態快照；live [GitHub Issues](https://github.com/swchen44/notype/issues) 是工作追蹤入口。先讀 [HANDOFF.md](HANDOFF.md)。
 
 ## 已完成
 
@@ -8,6 +8,7 @@
 - [x] Q1～Q15 產品決策收斂；[#1](https://github.com/swchen44/notype/issues/1) 已結案。
 - [x] AGENTS、glossary、兩份 ADR、unit／integration 測試目錄規範與 GitHub tracker。
 - [x] 使用者選定自己的 Windows 11 開發；將交接說明與可貼用 prompt 保存於 repo。
+- [x] 依 to-spec 發布 [#8 MVP 與跨平台核心規格](https://github.com/swchen44/notype/issues/8)，使用者已確認主要測試 seam，標記 ready-for-agent；新增 [ADR 0003](docs/adr/0003-shared-core-platform-adapters.md)，先交付 Windows amd64，架構預留 macOS／Linux。
 
 已完成 Windows 環境查核、開發工具安裝及 Rust／C++ 編譯驗證。產品名稱及 private repo 已改為 notype。文字核心與固定英文合成 WAV→CPU STT→HTTP fixture→SQLite→Edge 文字框已接通（11 unit、5 integration、1 runtime smoke 通過）。麥克風熱鍵、繁中品質、原生跨 App 送字、公司 API 與完整 portable 產品仍未完成。見 [開發驗證紀錄](docs/verification/windows11-preflight.md)。
 
@@ -15,6 +16,7 @@
 
 | 順序 | Issue／狀態 | 下一個可核對的產物 |
 | --- | --- | --- |
+| 0 | [#8 MVP／跨平台架構規格](https://github.com/swchen44/notype/issues/8)，ready-for-agent | 先收斂共用核心與平台 adapter 的 interface／contract tests，隔離 OS 路徑及 native 型別，再接 Windows 正式流程；macOS／Linux 實作不在本期 |
 | 1 | [#2 Windows portable 基線](https://github.com/swchen44/notype/issues/2)，open | Windows 11 實際架構／工具／runtime preflight、固定來源 manifest、無 installer 的啟動 receipt |
 | 2 | [#3 STT](https://github.com/swchen44/notype/issues/3)，open | 固定非機密音訊及模型，CPU 可用；品質與冷／暖延遲分開量測 |
 | 2 | [#4 文字 LLM](https://github.com/swchen44/notype/issues/4)，open | adapter contract、成功／timeout／取消／錯誤待選測試；公司 API 未就緒時先用本機測試 server |

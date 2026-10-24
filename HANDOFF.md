@@ -1,10 +1,12 @@
 # Windows 11 開發接手
 
-更新日期：2026-10-24。Repository：[swchen44/notype](https://github.com/swchen44/notype)，private。
+更新日期：2026-10-25。Repository：[swchen44/notype](https://github.com/swchen44/notype)，private。
 
-使用者已決定在自己的 **Windows 11** 開發，只做 **amd64／x64**。下一個 session 應接續實作與目標機驗證；Q1～Q15 已確認，不必重新訪談。
+使用者已決定在自己的 **Windows 11** 開發，MVP 只交付 **Windows amd64／x64**；2026-10-25 新增需求：架構現在就預留 **macOS／Linux**，以共用核心與平台 adapter 降低移植成本，見 [ADR 0003](docs/adr/0003-shared-core-platform-adapters.md)。目前尚未實作或驗收 macOS／Linux。Q1～Q15 延續，不必重新訪談。
 
 ## 目前 checkpoint
+
+2026-10-25：已依 to-spec 發布 [完整規格 #8](https://github.com/swchen44/notype/issues/8)，標記 ready-for-agent；使用者確認主要測試 seam。正式 App 方向為 Handy 的 Rust + Tauri 2 + React／TypeScript + SQLite；現有 Node 實作為 prototype／驗收先例。先建立共用核心與平台 adapter 的 contract，將 Windows 專用資料位置及原生互動隔離，再繼續正式 App 整合。macOS／Linux 目前只規劃架構，不宣稱已可執行。
 
 2026-10-24 Windows 接手成果：產品與 private repo 改名為 **notype**（本機資料夾仍為 notype_study）。GitHub CLI、CMake、Bun、Rust、MSVC／Windows SDK 已安裝，Rust／C++ 編譯及執行驗證通過；Vulkan 安裝被取消、尚未完成。文字核心與固定英文合成 WAV→CPU STT→HTTP fixture→SQLite→Edge 文字框已接通，11 unit／5 integration／1 runtime smoke 通過。麥克風熱鍵、繁中品質、原生跨 App 送字、公司 API 與完整 portable 產品仍待完成。詳見 [preflight](docs/verification/windows11-preflight.md)。使用者已授權安裝開發所需工具，產品交付仍維持 npm portable。以下研究 checkpoint 為接手前背景。
 

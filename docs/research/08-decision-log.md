@@ -30,6 +30,7 @@
 | C7 | 根目錄指引使用 `AGENTS.md`；GitHub Issues、五個預設 triage labels、single-context domain docs | 使用者確認 setup 草稿與檔名 |
 | C8 | 測試分為 `tests/unittest/` 與 `tests/integration/` | 使用者補充；框架隨 Windows 實作選定 |
 | C9 | 在使用者自己的 Windows 11 開發，GitHub 保存 handoff／issues／TODO；Windows 已有 Codex 與 grillme | 使用者最後明確選定；是否位於公司內網仍待查核 |
+| C10 | MVP 先交付 Windows amd64；架構現在預留 macOS／Linux，以共用核心及平台 adapter 降低移植返工；正式 App 優先沿用 Handy 的 Rust／Tauri 2／React TypeScript 路線 | 2026-10-25 使用者新增跨平台架構需求；見 [ADR 0003](../adr/0003-shared-core-platform-adapters.md)，其他平台尚未實作／驗收 |
 
 ## 2. 訪談收斂
 

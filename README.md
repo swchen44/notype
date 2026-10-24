@@ -1,6 +1,6 @@
 # notype
 
-公司 Windows amd64 免安裝語音輸入 App 的研究、決策與實作追蹤。
+notype 免安裝語音輸入 App 的研究、決策與實作追蹤；先交付 Windows amd64，架構預留 macOS／Linux。
 
 目標流程：**熱鍵錄音 → 本機 STT → 公司文字 LLM 整理 → 貼回原本輸入框**。
 
@@ -10,7 +10,7 @@
 
 ## 已確認的限制
 
-- 只做 Windows amd64／x64，先供本人日常使用，再擴給同事。
+- MVP 只交付 Windows amd64／x64，先供本人日常使用，再擴給同事；共用核心與平台 adapter 預留 macOS／Linux，見 [跨平台架構 ADR](docs/adr/0003-shared-core-platform-adapters.md)。
 - **交付不可使用 installer、setup.exe、MSI 或需要安裝的 runtime bootstrapper。** 採 portable 檔案包，由公司 npm Proxy 取得預編譯 App、DLL 與模型；只做 npm 配送，不另做 Python wheel。
 - 公司目前只有文字 LLM API，語音辨識需在本機完成。
 - 以修改現有開源 App 為優先，先評估 Handy；Rust 不代表沒有 native DLL 或 WebView runtime。
@@ -23,6 +23,7 @@
 
 | 文件 | 用途 |
 | --- | --- |
+| [MVP 與跨平台核心規格 #8](https://github.com/swchen44/notype/issues/8) | to-spec 正式規格、50 條 user stories、共用核心與平台 adapter、驗收與範圍 |
 | [Windows 11 HANDOFF](HANDOFF.md) | 下一個 Codex session 的首讀文件、現況與可直接貼用的 prompt |
 | [TODO](TODO.md) | 開放 issues、建議接續順序與完成條件 |
 | [Windows MVP 定稿](docs/research/10-confirmed-windows-mvp.md) | 已確認產品行為、上游必改點與 Windows 實作／驗收順序 |
