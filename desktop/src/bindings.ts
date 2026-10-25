@@ -1379,7 +1379,7 @@ export type HistoryCurrencyAmountDto = { currency: string; amount: string };
 /** Actual fees by currency, with no conversion or estimates. */
 export type HistoryFeeDto = { status: HistoryMetricStatus; totals: HistoryCurrencyAmountDto[]; known_subtotals: HistoryCurrencyAmountDto[]; reported_calls: number };
 /** Requested and explicitly reported model/effort remain associated. */
-export type HistoryModelEffortDto = { requested_model: string | null; reported_model: string | null; requested_effort: string | null; reported_effort: string | null };
+export type HistoryModelEffortDto = { parameters: HistoryRequestParametersDto | null; requested_model: string | null; reported_model: string | null; requested_effort: string | null; reported_effort: string | null };
 /** All-call history summary, including retries and back-translation. */
 export type HistoryApiSummaryDto = { call_count: number | null; observed_call_count: number; input: HistoryUsageDto; output: HistoryUsageDto; fees: HistoryFeeDto; requested_models: string[]; reported_models: string[]; model_efforts: HistoryModelEffortDto[] };
 /** Native acknowledgement of the explicit all-history save. */
@@ -1440,3 +1440,5 @@ export type ModelListResult = {
   retry_after_seconds: number | null; credential_source: CredentialSource;
   cache_hit: boolean;
 };
+
+export type HistoryRequestParametersDto = { requested_thinking: boolean; preference_effort: string | null; effective_thinking: boolean | null; effective_effort: string | null; capability_provenance: string; resolution_reason: string; configured_temperature: string | null; wire_temperature: string | null; temperature_resolution: string; configured_top_p: string | null; wire_top_p: string | null; top_p_resolution: string; documented_top_p: string | null; max_output_tokens: number | null; }
