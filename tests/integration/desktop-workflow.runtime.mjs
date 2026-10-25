@@ -222,6 +222,9 @@ test(
         transcript: raw,
         glossary: ["session_id"],
         recognition_mode: "traditional_english",
+        scenario: "dictation",
+        translation_target: null,
+        source_context: { application: null },
       });
       await app.page.getByText("歷史紀錄", { exact: true }).click();
       const row = app.page.locator(`[data-session-id="${entry.id}"]`);

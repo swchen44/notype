@@ -5,6 +5,7 @@ import { commands, type TextConfiguration } from "@/bindings";
 import { Input } from "../../ui/Input";
 import { Button } from "../../ui/Button";
 import { CustomWords } from "../CustomWords";
+import { ScenarioSettings } from "./ScenarioSettings";
 
 export const PostProcessingSettings = () => {
   const { t } = useTranslation();
@@ -155,6 +156,16 @@ export const PostProcessingSettings = () => {
         </p>
       )}
       <p className="text-sm text-text/70">{t("notype.text.preset")}</p>
+      <ScenarioSettings
+        configuration={configuration}
+        onChange={(updated) =>
+          setConfiguration({
+            ...configuration,
+            prompts: updated.prompts,
+            translation: updated.translation,
+          })
+        }
+      />
       <CustomWords descriptionMode="tooltip" />
     </section>
   );

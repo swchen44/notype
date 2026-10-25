@@ -32,6 +32,10 @@ path = "../../tests/integration/core_persistence.rs"
 name = "core-http"
 path = "../../tests/integration/core_http.rs"
 
+[[test]]
+name = "core-review"
+path = "../../tests/integration/core_review.rs"
+
 [profile.dev]
 debug = 0
 incremental = false

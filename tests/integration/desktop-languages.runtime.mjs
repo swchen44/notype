@@ -112,6 +112,9 @@ test(
         await app.page.locator("html").getAttribute("lang"),
         "zh-CN",
       );
+      await app.page
+        .getByRole("combobox", { name: "辨识模式", exact: true })
+        .waitFor();
       assert.equal(
         await app.page
           .getByRole("combobox", { name: "辨识模式", exact: true })
@@ -128,6 +131,9 @@ test(
         await app.page.locator("html").getAttribute("lang"),
         "zh-TW",
       );
+      await app.page
+        .getByRole("combobox", { name: "辨識模式", exact: true })
+        .waitFor();
       assert.equal(
         await app.page
           .getByRole("combobox", { name: "辨識模式", exact: true })

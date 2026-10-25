@@ -1,7 +1,8 @@
 //! Desktop session orchestration; platform capture and Tauri events stay outside.
 use notype_core::{
     CancellationToken, CoreError, DeliveryAdapter, DeliveryFuture, DeliveryOutcome,
-    DeliveryRequest, RecognitionMode, SessionEntry, SessionOptions, SessionService, SessionStatus,
+    DeliveryRequest, RecognitionMode, Scenario, SessionEntry, SessionOptions, SessionService,
+    SessionStatus,
 };
 use std::sync::{
     atomic::{AtomicU64, Ordering},
@@ -10,7 +11,10 @@ use std::sync::{
 
 #[path = "faithful_provider.rs"]
 mod faithful_provider;
-pub use faithful_provider::{TextAuthentication, TextConfiguration, TextTransport};
+pub use faithful_provider::{
+    ScenarioPrompts, TextAuthentication, TextConfiguration, TextTransport, TranslationSettings,
+    TranslationTerm,
+};
 #[path = "recognition.rs"]
 pub mod recognition;
 
@@ -33,6 +37,8 @@ struct Recording {
     options: SessionOptions,
     cancellation: CancellationToken,
     entry: Option<String>,
+    processing_snapshot: Option<(TextConfiguration, Vec<String>)>,
+    context_captured: bool,
     profile: recognition::RecognitionProfile,
 }
 
@@ -88,12 +94,43 @@ impl DesktopWorkflow {
             options: SessionOptions {
                 recognition_mode: profile.mode,
                 original_target,
+                ..SessionOptions::default()
             },
             cancellation: CancellationToken::new(),
             entry: None,
+            processing_snapshot: None,
+            context_captured: false,
             profile,
         });
         Ok(generation)
+    }
+    pub fn capture_processing_snapshot(
+        &self,
+        generation: u64,
+        scenario: Scenario,
+        configuration: TextConfiguration,
+        glossary: Vec<String>,
+    ) -> Result<(), CoreError> {
+        let mut recording = self.recording.lock().map_err(|_| CoreError::Storage)?;
+        let recording = recording
+            .as_mut()
+            .filter(|recording| {
+                recording.generation == generation
+                    && !recording.cancellation.is_cancelled()
+                    && recording.entry.is_none()
+            })
+            .ok_or(CoreError::InvalidTransition)?;
+        if recording.processing_snapshot.is_some() {
+            return Err(CoreError::Busy);
+        }
+        recording.options.scenario = scenario;
+        recording.options.translation_target = if scenario == Scenario::Translation {
+            Some(configuration.translation.target_language.clone())
+        } else {
+            None
+        };
+        recording.processing_snapshot = Some((configuration, glossary));
+        Ok(())
     }
     /// The exact profile captured at recording start, never the current preferences.
     pub fn recognition_profile(
@@ -140,7 +177,7 @@ impl DesktopWorkflow {
         configuration: TextConfiguration,
         glossary: Vec<String>,
     ) -> Result<SessionEntry, CoreError> {
-        let (entry, cancellation) = {
+        let (entry, cancellation, processing_snapshot) = {
             let mut recording = self.recording.lock().map_err(|_| CoreError::Storage)?;
             let recording = recording
                 .as_mut()
@@ -159,8 +196,13 @@ impl DesktopWorkflow {
                     .create_recognition_failure(transcript, recording.options.clone())?,
             };
             recording.entry = Some(entry.id.clone());
-            (entry, recording.cancellation.clone())
+            (
+                entry,
+                recording.cancellation.clone(),
+                recording.processing_snapshot.clone(),
+            )
         };
+        let (configuration, glossary) = processing_snapshot.unwrap_or((configuration, glossary));
         let _lease = RecordingLease {
             workflow: self,
             generation,
@@ -172,11 +214,14 @@ impl DesktopWorkflow {
         let result = tokio::select! {
             biased;
             _ = cancellation.cancelled() => self.sessions.cancel(&entry.id),
-            result = self.sessions.process(&entry.id,glossary,faithful_provider::processor(configuration)) => result,
+            result = self.sessions.process_with_review(&entry.id,glossary,faithful_provider::processor(configuration.clone()),configuration.translation.back_translation) => result,
         };
         let result = result?;
         (self.notify)();
-        if result.status == SessionStatus::Pending {
+        if result.status == SessionStatus::Pending
+            && !result.review_required
+            && result.selection == notype_core::TextSelection::Polished
+        {
             tokio::select! {
                 biased;
                 _=cancellation.cancelled()=>self.sessions.cancel(&result.id),
@@ -244,10 +289,18 @@ impl DesktopWorkflow {
         (self.notify)();
         let entry = self
             .sessions
-            .process(id, glossary, faithful_provider::processor(configuration))
+            .process_with_review(
+                id,
+                glossary,
+                faithful_provider::processor(configuration.clone()),
+                configuration.translation.back_translation,
+            )
             .await?;
         (self.notify)();
-        if entry.status == SessionStatus::Pending {
+        if entry.status == SessionStatus::Pending
+            && !entry.review_required
+            && entry.selection == notype_core::TextSelection::Polished
+        {
             self.deliver(id).await
         } else {
             Ok(entry)
@@ -260,5 +313,32 @@ impl DesktopWorkflow {
             .await?;
         (self.notify)();
         Ok(entry)
+    }
+    pub fn confirm_review(&self, id: &str, revision: i64) -> Result<SessionEntry, CoreError> {
+        let entry = self.sessions.confirm_review(id, revision)?;
+        (self.notify)();
+        Ok(entry)
+    }
+    pub fn capture_source_context(
+        &self,
+        generation: u64,
+        context: notype_core::SourceContext,
+    ) -> Result<(), CoreError> {
+        if !context.is_valid() {
+            return Err(CoreError::InvalidInput);
+        }
+        let mut recording = self.recording.lock().map_err(|_| CoreError::Storage)?;
+        let recording = recording
+            .as_mut()
+            .filter(|r| {
+                r.generation == generation && !r.cancellation.is_cancelled() && r.entry.is_none()
+            })
+            .ok_or(CoreError::InvalidTransition)?;
+        if recording.context_captured || recording.processing_snapshot.is_some() {
+            return Err(CoreError::Busy);
+        }
+        recording.options.source_context = context;
+        recording.context_captured = true;
+        Ok(())
     }
 }
