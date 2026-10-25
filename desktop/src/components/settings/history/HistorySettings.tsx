@@ -185,9 +185,9 @@ export const HistorySettings = () => {
               )}
               {entry.error && entry.status !== "delivery-unknown" && (
                 <p className="text-sm" role="note">
-                  {t(`notype.errors.${entry.error}`, {
-                    defaultValue: t("notype.history.failed"),
-                  })}
+                  {i18n.exists(`notype.errors.${entry.error}`)
+                    ? t(`notype.errors.${entry.error}`)
+                    : t("notype.history.failed")}
                 </p>
               )}
               <div>

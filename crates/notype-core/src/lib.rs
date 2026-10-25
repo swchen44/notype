@@ -14,6 +14,7 @@ use uuid::Uuid;
 mod http;
 pub use http::HttpTextProcessor;
 pub mod csv;
+pub mod gateway_error;
 mod observation_store;
 pub mod observations;
 
@@ -96,6 +97,8 @@ pub struct TextRequest {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TextFailure {
+    /// Safe provider category; never contains an upstream body or transport URL.
+    Provider(gateway_error::GatewayError),
     ConfigurationRequired,
     InvalidPrompt,
     Failed,
@@ -910,6 +913,9 @@ impl SessionService {
                         Err(TextFailure::Cancelled) => {
                             ("cancelled", Some(output.text), Some("cancelled"))
                         }
+                        Err(TextFailure::Provider(error)) => {
+                            ("pending", Some(output.text), Some(error.history_code(true)))
+                        }
                         Err(TextFailure::Timeout) => (
                             "pending",
                             Some(output.text),
@@ -926,6 +932,7 @@ impl SessionService {
                 }
             }
             Ok(_) => ("failed", None, Some("llm-invalid-response")),
+            Err(TextFailure::Provider(error)) => ("failed", None, Some(error.history_code(false))),
             Err(TextFailure::Timeout) => ("failed", None, Some("llm-timeout")),
             Err(TextFailure::Cancelled) => ("cancelled", None, Some("cancelled")),
             Err(TextFailure::InvalidResponse) => ("failed", None, Some("llm-invalid-response")),

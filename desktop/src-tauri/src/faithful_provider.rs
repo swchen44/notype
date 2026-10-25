@@ -1,4 +1,5 @@
 //! Explicit OpenAI-compatible chat transport, not a company API assertion.
+use notype_core::gateway_error::GatewayError;
 use notype_core::observations::{
     ApiCallDescriptor, ApiCallGuard, ApiCallObserver, ApiEndpointClass, ApiOutcome,
     ApiProviderProfile, ApiPurpose, ApiReceipt,
@@ -357,9 +358,11 @@ impl ChatProcessor {
         let deadline = Duration::from_millis(configuration.timeout_ms);
         let mut client = reqwest::Client::builder()
             .timeout(deadline)
+            .connect_timeout(deadline.min(Duration::from_secs(5)))
+            .retry(reqwest::retry::never())
             .redirect(reqwest::redirect::Policy::none());
         if probe_network {
-            client = client.no_proxy().connect_timeout(Duration::from_secs(5));
+            client = client.no_proxy();
         }
         let client = client.build().map_err(|_| invalid)?;
         Ok(Self {
@@ -382,7 +385,7 @@ fn failure(error: reqwest::Error) -> TextFailure {
     if error.is_timeout() {
         TextFailure::Timeout
     } else {
-        TextFailure::Failed
+        TextFailure::Provider(GatewayError::Transport)
     }
 }
 impl TextProcessor for ChatProcessor {
@@ -579,15 +582,23 @@ impl ChatProcessor {
                 }
                 let mut response = request.send().await.map_err(failure)?;
                 let success = response.status().is_success();
+                let status = response.status().as_u16();
+                let status_error = GatewayError::from_status(status);
                 let mut bytes = Vec::new();
-                while let Some(chunk) = response.chunk().await.map_err(failure)? {
+                while let Some(chunk) = response.chunk().await.map_err(|error| {
+                    status_error.map_or_else(|| failure(error), TextFailure::Provider)
+                })? {
                     if bytes.len().saturating_add(chunk.len()) > 1_048_576 {
-                        return Err(TextFailure::InvalidResponse);
+                        return Err(TextFailure::Provider(
+                            status_error.unwrap_or(GatewayError::Oversize),
+                        ));
                     }
                     bytes.extend_from_slice(&chunk);
                 }
                 let value: Value = serde_json::from_slice(&bytes).map_err(|_| {
-                    if success {
+                    if let Some(error) = status_error {
+                        TextFailure::Provider(error)
+                    } else if success {
                         TextFailure::InvalidResponse
                     } else {
                         TextFailure::Failed
@@ -596,12 +607,17 @@ impl ChatProcessor {
                 if let Some(guard) = &mut guard {
                     guard.response(ApiReceipt::from_chat_json(&value));
                 }
-                if !success {
-                    return Err(TextFailure::Failed);
+                if let Some(error) = GatewayError::classify(status, Some(&value)) {
+                    return Err(TextFailure::Provider(error));
                 }
                 let choice = &value["choices"][0];
                 if choice["finish_reason"] != "stop"
                     || choice["message"]["role"] != "assistant"
+                    || ["tool_calls", "function_call"].iter().any(|field| {
+                        choice["message"]
+                            .get(field)
+                            .is_some_and(|value| !value.is_null())
+                    })
                     || choice["message"]["refusal"]
                         .as_str()
                         .is_some_and(|s| !s.is_empty())
@@ -620,6 +636,12 @@ impl ChatProcessor {
                     Ok(_) => ApiOutcome::Success,
                     Err(TextFailure::Cancelled) => ApiOutcome::Cancelled,
                     Err(TextFailure::Timeout) => ApiOutcome::Timeout,
+                    Err(TextFailure::Provider(GatewayError::ProviderTimeout)) => {
+                        ApiOutcome::Timeout
+                    }
+                    Err(TextFailure::Provider(GatewayError::Protocol | GatewayError::Oversize)) => {
+                        ApiOutcome::InvalidResponse
+                    }
                     Err(TextFailure::InvalidResponse) => ApiOutcome::InvalidResponse,
                     Err(_) => ApiOutcome::Failed,
                 });
@@ -635,7 +657,7 @@ fn decode_output(content: &str, envelope: bool) -> Result<TextOutput, TextFailur
             source_language: None,
         });
     }
-    let value: Value = serde_json::from_str(&content).map_err(|_| TextFailure::InvalidResponse)?;
+    let value: Value = serde_json::from_str(content).map_err(|_| TextFailure::InvalidResponse)?;
     let text = value["text"]
         .as_str()
         .filter(|s| !s.trim().is_empty())
