@@ -9,6 +9,8 @@
 - 真實引擎語言能力須同時包含 `zh`、`en`。自訂檔改名也不能讓 English-only weights 通過。未知 capability 在實際模型載入後、decode 前檢查。已知不相容模型在開麥克風前拒絕。
 - 正式 stream／batch 使用 transcribe、language auto、translate false；Whisper 的 initial prompt 只含 session 擷取的 manual terms。本次品質測量 manual terms 為空。停用上游模糊替換／語助詞刪除，保留 ASR 原稿。
 - 本機 OpenCC `S2tw`／`Tw2s` 在原稿 INSERT、文字服務、交付之前執行；保護 code fences、inline code、quoted literals、URL、Windows path、email、識別字與 exact glossary。只轉字形，避免地區詞彙翻譯。
+
+後續公開 regression 找到 greedy conversion 的「保留髮展」問題，已改採 pinned lexical backend；來源／授權、RED→GREEN、衍生 corpus 與最新 native proof 的區別見 [context conversion receipt](conversion-context.md)。下面的模型測量保留各次當時的 binary／raw／gold，沒有覆寫成新 backend 的測量。
 - 轉換不可用時原子保存 FAILED／`recognition-script-failed` 與可用 raw，零 LLM／自動交付；原稿可搜尋／複製／明確選用，文字整理重試會拒絕這個錯誤，需要重新辨識。
 - Core 保持不依賴 UI／Specta／Windows。desktop DTO 負責 settings 與 bindings；後續 macOS／Linux 沿用 profile／session 邊界。
 

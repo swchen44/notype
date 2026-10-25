@@ -1,6 +1,6 @@
 //! Local recognition profiles. No platform handles, UI locale, or network calls.
-use ferrous_opencc::{config::BuiltinConfig, OpenCC};
 use notype_core::RecognitionMode;
+use opencc_jieba_rs::OpenCC;
 use regex::Regex;
 use std::sync::OnceLock;
 
@@ -50,14 +50,9 @@ fn normalize_transcript(
     mode: RecognitionMode,
     protected_terms: &[String],
 ) -> Result<String, RecognitionFailure> {
-    static TRADITIONAL: OnceLock<Result<OpenCC, RecognitionFailure>> = OnceLock::new();
-    static SIMPLIFIED: OnceLock<Result<OpenCC, RecognitionFailure>> = OnceLock::new();
-    let (cell, config) = match mode {
-        RecognitionMode::TraditionalEnglish => (&TRADITIONAL, BuiltinConfig::S2tw),
-        RecognitionMode::SimplifiedEnglish => (&SIMPLIFIED, BuiltinConfig::Tw2s),
-    };
-    let converter = cell
-        .get_or_init(|| OpenCC::from_config(config).map_err(|_| RecognitionFailure))
+    static CONVERTER: OnceLock<Result<OpenCC, RecognitionFailure>> = OnceLock::new();
+    let converter = CONVERTER
+        .get_or_init(|| std::panic::catch_unwind(OpenCC::new).map_err(|_| RecognitionFailure))
         .as_ref()
         .map_err(|_| RecognitionFailure)?;
     static LITERALS: OnceLock<Result<Regex, RecognitionFailure>> = OnceLock::new();
@@ -84,14 +79,18 @@ fn normalize_transcript(
         }
     }
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let convert = |text: &str| match mode {
+            RecognitionMode::TraditionalEnglish => converter.s2tw(text, false),
+            RecognitionMode::SimplifiedEnglish => converter.tw2s(text, false),
+        };
         let mut output = String::new();
         let mut cursor = 0;
         for (start, end) in merged {
-            output.push_str(&converter.convert(&raw[cursor..start]));
+            output.push_str(&convert(&raw[cursor..start]));
             output.push_str(&raw[start..end]);
             cursor = end;
         }
-        output.push_str(&converter.convert(&raw[cursor..]));
+        output.push_str(&convert(&raw[cursor..]));
         output
     }))
     .map_err(|_| RecognitionFailure)

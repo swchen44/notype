@@ -1,0 +1,2 @@
+# Preserve upstream license/notice bytes and their intentional Markdown spacing.
+desktop/src-tauri/resources/notices/** -text -whitespace
