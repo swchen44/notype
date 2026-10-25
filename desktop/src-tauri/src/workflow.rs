@@ -44,6 +44,11 @@ pub struct GenerationToken {
     generation: u64,
 }
 impl GenerationToken {
+    /// Process-local capture identity for platform events; never a history row ID.
+    pub fn capture_id(&self) -> u64 {
+        self.generation
+    }
+
     /// Run a short resource/UI operation only while this is the latest generation.
     /// The closure must not begin/cancel another generation or call `run` recursively.
     pub fn run<T>(&self, operation: impl FnOnce() -> T) -> Option<T> {

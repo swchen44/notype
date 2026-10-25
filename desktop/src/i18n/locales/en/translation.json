@@ -519,6 +519,7 @@
         "description": "Display the notype icon in the system tray."
       },
       "overlay": {
+        "elapsed": "Elapsed capture display time",
         "style": {
           "title": "Overlay",
           "description": "Choose the recording overlay: None hides it, Minimal shows a compact pill, Live shows transcription in real time as you speak (streaming-capable models only — look for the Streaming badge in the model picker). On Linux 'None' is recommended.",

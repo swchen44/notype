@@ -1,5 +1,6 @@
 use crate::managers::audio::AudioRecordingManager;
 use crate::managers::transcription::TranscriptionManager;
+use crate::overlay_lifecycle::HideReason;
 use crate::shortcut;
 use crate::TranscriptionCoordinator;
 use log::info;
@@ -110,9 +111,9 @@ pub fn cancel_current_operation(app: &AppHandle) {
         }
     });
     if let Some(owner) = cancelled_owner {
+        hide_recording_overlay(app, owner.capture_id(), HideReason::Cancelled);
         crate::actions::generation_ui(app, owner, |app| {
             set_tray_state(app, crate::tray::TrayIconState::Idle);
-            hide_recording_overlay(app);
         });
     }
     if generation.is_err() {

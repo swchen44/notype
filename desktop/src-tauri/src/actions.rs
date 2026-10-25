@@ -6,6 +6,7 @@ use crate::managers::model::ModelManager;
 use crate::managers::model_storage::ModelPathAccess;
 use crate::managers::transcription::StreamWorkKind;
 use crate::managers::transcription::TranscriptionManager;
+use crate::overlay_lifecycle::HideReason;
 use crate::settings::{get_settings, OverlayStyle};
 use crate::shortcut;
 use crate::tray::{set_tray_state, TrayIconState};
@@ -49,8 +50,8 @@ pub(crate) fn generation_ui(
 }
 impl Drop for FinishGuard {
     fn drop(&mut self) {
+        utils::hide_recording_overlay(&self.app, self.owner.capture_id(), HideReason::Finished);
         generation_ui(&self.app, self.owner.clone(), |app| {
-            utils::hide_recording_overlay(app);
             set_tray_state(app, TrayIconState::Idle);
         });
     }
@@ -168,15 +169,14 @@ impl ShortcutAction for TranscribeAction {
         // doesn't stream (or whose capability is not known yet) gets the compact
         // pill instead of an oversized transparent live window.
         let overlay_started = Instant::now();
-        generation_ui(app, owner.clone(), move |app| {
-            match settings.overlay_style {
-                OverlayStyle::Live if model_supports_streaming => {
-                    utils::show_streaming_overlay(app)
-                }
-                OverlayStyle::Live | OverlayStyle::Minimal => show_recording_overlay(app),
-                OverlayStyle::None => {} // show_overlay_state no-ops on None anyway
-            }
-        });
+        let overlay_capture =
+            if settings.overlay_style == OverlayStyle::Live && model_supports_streaming {
+                utils::show_streaming_overlay(app, generation)
+            } else {
+                // Even a disabled overlay reserves ownership, so stale callbacks
+                // cannot reappear after cancellation or a successor capture.
+                show_recording_overlay(app, generation)
+            };
         // Everything above runs before capture can begin, so each span here is
         // added keypress->capture latency.
         debug!(
@@ -257,7 +257,9 @@ impl ShortcutAction for TranscribeAction {
                             Outcome::Ok,
                             Some(start_time.elapsed().as_millis() as u64),
                         );
-                        utils::emit_recording_ready(&app_clone);
+                        if let Some(ticket) = overlay_capture {
+                            utils::emit_recording_ready(&app_clone, ticket);
+                        }
                     });
 
                     // The start chime is a readiness cue, so it must follow the
@@ -290,8 +292,8 @@ impl ShortcutAction for TranscribeAction {
             // Starting failed (for example due to blocked microphone permissions).
             // Revert UI state so we don't stay stuck in the recording overlay.
             owner.run(|| tm.cancel_stream());
+            utils::hide_recording_overlay(app, generation, HideReason::Failed);
             generation_ui(app, owner.clone(), |app| {
-                utils::hide_recording_overlay(app);
                 set_tray_state(app, TrayIconState::Idle);
             });
             if let Some(err) = recording_error {
@@ -342,14 +344,13 @@ impl ShortcutAction for TranscribeAction {
         }) else {
             return;
         };
+        if streaming {
+            tm.emit_stream_working(generation, StreamWorkKind::Transcribing);
+        } else {
+            show_transcribing_overlay(app, generation);
+        }
         generation_ui(app, owner.clone(), move |app| {
             set_tray_state(app, TrayIconState::Transcribing);
-            if streaming {
-                app.state::<Arc<TranscriptionManager>>()
-                    .emit_stream_working(StreamWorkKind::Transcribing);
-            } else {
-                show_transcribing_overlay(app);
-            }
         });
         let binding_id = binding_id.to_string();
         let stopped_at = Instant::now();
@@ -423,14 +424,11 @@ impl ShortcutAction for TranscribeAction {
             }
             match transcription {
                 Ok(Ok(text)) if !text.trim().is_empty() => {
-                    generation_ui(&ah, owner.clone(), move |app| {
-                        if streaming {
-                            app.state::<Arc<TranscriptionManager>>()
-                                .emit_stream_working(StreamWorkKind::Polishing);
-                        } else {
-                            show_processing_overlay(app);
-                        }
-                    });
+                    if streaming {
+                        tm.emit_stream_working(generation, StreamWorkKind::Polishing);
+                    } else {
+                        show_processing_overlay(&ah, generation);
+                    }
                     match crate::commands::history::finish_recognized(&ah, generation, &text).await
                     {
                         Ok(entry) => {

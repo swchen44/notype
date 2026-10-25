@@ -66,6 +66,7 @@ pub struct ModelStateEvent {
 /// volatile suffix the model may still rewrite.
 #[derive(Clone, Debug, Serialize, Deserialize, Type, tauri_specta::Event)]
 pub struct StreamTextEvent {
+    pub capture_id: String,
     pub committed: String,
     pub tentative: String,
 }
@@ -93,6 +94,8 @@ pub enum StreamWorkKind {
 /// Emitted to switch the streaming overlay to a working spinner.
 #[derive(Clone, Debug, Serialize, Deserialize, Type, tauri_specta::Event)]
 pub struct StreamPhaseEvent {
+    pub capture_id: String,
+    pub revision: String,
     pub phase: StreamPhase,
     /// Present only when `phase` is `Working`.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -882,7 +885,8 @@ impl TranscriptionManager {
         self.stream_active.store(false, Ordering::Release);
 
         let manager = self.clone();
-        thread::spawn(move || manager.run_stream_worker(rx, worker_id, profile, owner));
+        let capture_id = owner.capture_id();
+        thread::spawn(move || manager.run_stream_worker(rx, worker_id, profile, owner, capture_id));
     }
 
     fn run_stream_worker(
@@ -891,6 +895,7 @@ impl TranscriptionManager {
         worker_id: u64,
         profile: RecognitionProfile,
         owner: crate::workflow::GenerationToken,
+        capture_id: u64,
     ) {
         let _worker = StreamWorkerGuard {
             worker_id,
@@ -1071,7 +1076,9 @@ impl TranscriptionManager {
                                         &text.tentative,
                                         &languages,
                                     );
-                                    owner.run(|| self.emit_stream_text(&committed, &tentative));
+                                    owner.run(|| {
+                                        self.emit_stream_text(capture_id, &committed, &tentative)
+                                    });
                                 }
                                 perf.maybe_log();
                             }
@@ -1209,20 +1216,12 @@ impl TranscriptionManager {
     }
 
     /// Emit a working-phase event to the streaming overlay (spinner + label).
-    pub fn emit_stream_working(&self, kind: StreamWorkKind) {
-        let _ = StreamPhaseEvent {
-            phase: StreamPhase::Working,
-            kind: Some(kind),
-        }
-        .emit(&self.app_handle);
+    pub fn emit_stream_working(&self, capture: u64, kind: StreamWorkKind) {
+        crate::overlay::emit_stream_working(&self.app_handle, capture, kind);
     }
 
-    fn emit_stream_text(&self, committed: &str, tentative: &str) {
-        let _ = StreamTextEvent {
-            committed: committed.to_string(),
-            tentative: tentative.to_string(),
-        }
-        .emit(&self.app_handle);
+    fn emit_stream_text(&self, capture: u64, committed: &str, tentative: &str) {
+        crate::overlay::emit_stream_text(&self.app_handle, capture, committed, tentative);
     }
 
     /// One-shot/headless recognition with its caller's profile and unload preference.
