@@ -16,21 +16,36 @@ static LIFECYCLE: Mutex<OverlayLifecycle> = Mutex::new(OverlayLifecycle::new());
 #[derive(Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ShowOverlayEvent {
+    /// Decimal process-local capture identity, never a history/text identifier.
     pub capture_id: String,
+    /// Decimal presentation revision reserved before native dispatch.
     pub revision: String,
+    /// Stable presentation label from `Presentation::label`.
     pub state: &'static str,
 }
+/// First-sample readiness for the exact current capturing presentation ticket.
+///
+/// Emitted under the lifecycle registry lock after exact-ticket validation; a
+/// delayed notification cannot start the timer for a successor or working stage.
 #[derive(Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RecordingReadyEvent {
+    /// Decimal capture identity shared with the corresponding show event.
     pub capture_id: String,
+    /// Exact capturing presentation revision, not a second capture identity.
     pub capture_revision: String,
 }
+/// Terminal hide notification fenced by capture identity and presentation revision.
+///
+/// Reasons are stable enum labels; this DTO carries no recording text or errors.
 #[derive(Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HideOverlayEvent {
+    /// Decimal identity of the capture being hidden.
     pub capture_id: String,
+    /// Terminal presentation revision used to reject stale hide notifications.
     pub revision: String,
+    /// Stable `HideReason` label, never a freeform error message.
     pub reason: &'static str,
 }
 
@@ -740,12 +755,15 @@ pub fn record_capture_observation(
 pub fn show_recording_overlay(app: &AppHandle, capture: u64) -> Option<OverlayTicket> {
     show_overlay_state(app, capture, Presentation::Recording)
 }
+/// Reserves streaming capture presentation before queueing native display work.
 pub fn show_streaming_overlay(app: &AppHandle, capture: u64) -> Option<OverlayTicket> {
     show_overlay_state(app, capture, Presentation::Streaming)
 }
+/// Reserves transcription presentation; stale or backwards transitions are ignored.
 pub fn show_transcribing_overlay(app: &AppHandle, capture: u64) {
     show_overlay_state(app, capture, Presentation::Transcribing);
 }
+/// Reserves text-processing presentation without rearming a terminal capture.
 pub fn show_processing_overlay(app: &AppHandle, capture: u64) {
     show_overlay_state(app, capture, Presentation::Processing);
 }

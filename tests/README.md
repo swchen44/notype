@@ -81,6 +81,8 @@ cargo test --locked --manifest-path tests/integration/desktop-contracts/Cargo.to
 
 `npm.cmd run test:ui:integration` 另以真實 React／i18next 操作 DiagnosticsSupport 與 ModelCard，僅替換公開 IPC/opener。涵蓋 checkbox 的初始 disabled、鍵盤操作、OFF unsaved／重試、取消／過期／保存失敗、Clear 後晚到回覆與舊狀態、opener 拒絕。UI suite 使用 `--test-concurrency=1`，避免共用 Vite optimizer 的測試檔互相重建依賴；overlay fixture 仍保留自己的 cache/port。沒有啟動原生 App 或操作使用者 profile。Native 綁定／編譯／實際收音仍另行驗證。
 
+`node --test tests/integration/about-settings.ui.mjs` 可獨立操作正式 AboutSettings／LogLevelSelector，涵蓋 Quit 的 exit(0)／拒絕／翻譯回饋／重試，以及 log-level 初始載入、保存與 refresh 期間 disabled、正確 IPC payload、實際 settings refresh 後的 acknowledged 值、拒絕與重試。只替換公開 Tauri transport，退出成功不會真正關閉任何 App；原生退出與 logger 接受設定仍需另行驗收。完整 UI script 亦會發現此檔。
+
 ## Main window lifecycle contract
 
 `tests/unittest/desktop_window_lifecycle.rs` exercises the public `close_to_tray`
