@@ -1,0 +1,582 @@
+{
+  "purpose": "Bounded real Qwen3-ASR0.6B multilingual diagnostic, no population/p95/human/company acceptance",
+  "executableSha256": "86ec70cdac8f54547f886a715acec9b27ab0d2bfb360da3ec580cfaec7e69dba",
+  "sourceCommit": "0bd8ed54f95364eb7fb28d84275113747d69df13",
+  "normalizer": "Retained old ferrous; new lexical normalization derived separately from raw outputs",
+  "model": {
+    "id": "handy-computer/Qwen3-ASR-0.6B-gguf/Qwen3-ASR-0.6B-Q6_K.gguf",
+    "file": "Qwen3-ASR-0.6B-Q6_K.gguf",
+    "bytes": 690417824,
+    "sha256": "3b051f108f03c0c91bbe1a3b2c1ee15e3ed51e4caec2a48751b01f2a21441cc3"
+  },
+  "options": {
+    "task": "transcribe",
+    "decodingLanguage": "auto",
+    "translate": false,
+    "manualTerms": [],
+    "cpuThreads": 4,
+    "deviceIndex": 0,
+    "repeatsPerFreshLoad": 2
+  },
+  "metrics": {
+    "CER": "NFKC lowercase codepoints, punctuation/whitespace removed; no ITN/English repair",
+    "numericLiterals": "Digit boundaries; Chinese number spelling is separately inspectable, not rewritten",
+    "memory": "Largest observed native process PeakWorkingSetSize, polled50ms; no helper/child process memory",
+    "cold": "Fresh process/model load; OS file cache not flushed",
+    "warm": "Second inference in same process",
+    "p95": "Not estimated from small synthetic sample",
+    "transcribe_ms": "Retained CLI combined ASR plus old local normalization; new lexical converter initialization is not measured in this binary. Model loading is separately measured."
+  },
+  "runs": [
+    {
+      "mode": "traditional_english",
+      "fixture": "numbers-negation-switch",
+      "gold": "今天請保留42筆測試資料，不要刪除。The API is not ready. 等驗證完成後，再送出2筆請求。Keep the test data.",
+      "wavSha256": "39dec0a99dff6bec753bf4a699673dbed7dac8d1a32482ec08051a25dec90433",
+      "exitCode": 0,
+      "observed": {
+        "audio_secs": 13.992625,
+        "best_ms": 3379,
+        "bound_backend": "CPU",
+        "cpu_threads": 4,
+        "load_ms": 965,
+        "model": "handy-computer/Qwen3-ASR-0.6B-gguf/Qwen3-ASR-0.6B-Q6_K.gguf",
+        "raw_text": "今天，请保留四十二笔测试资料，不要删除。The API is not ready。等验证完成后再送出两笔请求。Keep the test data。",
+        "recognition_mode": "traditional_english",
+        "requested_device": "index 0",
+        "rtf": 4.14105504587156,
+        "text": "今天，請保留四十二筆測試資料，不要刪除。The API is not ready。等驗證完成後再送出兩筆請求。Keep the test data。",
+        "transcribe_ms": [
+          3379,
+          3397
+        ]
+      },
+      "log": "traditional_english-numbers-negation-switch-attempt1.log",
+      "wallMs": 8061,
+      "processCpuSeconds": 27.75,
+      "observedPeakWorkingSetBytes": 1428529152,
+      "memoryCounterReads": 159,
+      "memoryCounterErrors": 0,
+      "boundedWindowExpired": false,
+      "characterErrors": 4,
+      "referenceCharacters": 60,
+      "cer": 0.06666666666666667,
+      "missingRequiredLiterals": [
+        "42",
+        "2"
+      ],
+      "perRepeatRawTexts": [
+        "今天，请保留四十二笔测试资料，不要删除。The API is not ready。等验证完成后再送出两笔请求。Keep the test data。",
+        "今天，请保留四十二笔测试资料，不要删除。The API is not ready。等验证完成后再送出两笔请求。Keep the test data。"
+      ],
+      "rawOutputsIdentical": true,
+      "scoredRepeat": 2
+    },
+    {
+      "mode": "traditional_english",
+      "fixture": "technical-names",
+      "gold": "Check the API and session underscore id. 這是測試用的設定，請保留英文名稱，不要改成中文。Use Visual Studio Code, then check GitHub.",
+      "wavSha256": "6061239d0564e331915cc48ff923b0dacd0ad83c5c8351d42372bb4a2c9ef5a9",
+      "exitCode": 0,
+      "observed": {
+        "audio_secs": 13.3440625,
+        "best_ms": 3229,
+        "bound_backend": "CPU",
+        "cpu_threads": 4,
+        "load_ms": 898,
+        "model": "handy-computer/Qwen3-ASR-0.6B-gguf/Qwen3-ASR-0.6B-Q6_K.gguf",
+        "raw_text": "Check the API and session underscore ID。这是测试用的设定，请保留英文名称，不要改成中文。Use Visual Studio Code， then check GitHub。",
+        "recognition_mode": "traditional_english",
+        "requested_device": "index 0",
+        "rtf": 4.132568132548776,
+        "text": "Check the API and session underscore ID。這是測試用的設定，請保留英文名稱，不要改成中文。Use Visual Studio Code， then check GitHub。",
+        "transcribe_ms": [
+          3229,
+          3309
+        ]
+      },
+      "log": "traditional_english-technical-names-attempt2.log",
+      "wallMs": 7742,
+      "processCpuSeconds": 26.65625,
+      "observedPeakWorkingSetBytes": 1427050496,
+      "memoryCounterReads": 152,
+      "memoryCounterErrors": 0,
+      "boundedWindowExpired": false,
+      "characterErrors": 0,
+      "referenceCharacters": 88,
+      "cer": 0.0,
+      "missingRequiredLiterals": [],
+      "perRepeatRawTexts": [
+        "Check the API and session underscore ID。这是测试用的设定，请保留英文名称，不要改成中文。Use Visual Studio Code， then check GitHub。",
+        "Check the API and session underscore ID。这是测试用的设定，请保留英文名称，不要改成中文。Use Visual Studio Code， then check GitHub。"
+      ],
+      "rawOutputsIdentical": true,
+      "scoredRepeat": 2
+    },
+    {
+      "mode": "traditional_english",
+      "fixture": "script-context-version",
+      "gold": "頭髮的髮和發展的發意思不同，今天不要發布正式版本。This is a test build, version 2.0. 請檢查後再送出，不要自動執行命令。",
+      "wavSha256": "7b139bc6439bb75297bc59c108202f991d8a71159e8163c103bc8e6385de077f",
+      "exitCode": 0,
+      "observed": {
+        "audio_secs": 14.726125,
+        "best_ms": 3696,
+        "bound_backend": "CPU",
+        "cpu_threads": 4,
+        "load_ms": 848,
+        "model": "handy-computer/Qwen3-ASR-0.6B-gguf/Qwen3-ASR-0.6B-Q6_K.gguf",
+        "raw_text": "头发的法和发展的法意思不同。今天不要发布正式版本。This is a test build, version 2.0，请检查后再送出。不要自动执行命令。",
+        "recognition_mode": "traditional_english",
+        "requested_device": "index 0",
+        "rtf": 3.984341179653679,
+        "text": "頭髮的法和發展的法意思不同。今天不要發佈正式版本。This is a test build, version 2.0，請檢查後再送出。不要自動執行命令。",
+        "transcribe_ms": [
+          3696,
+          3795
+        ]
+      },
+      "log": "traditional_english-script-context-version-attempt3.log",
+      "wallMs": 8644,
+      "processCpuSeconds": 30.296875,
+      "observedPeakWorkingSetBytes": 1446596608,
+      "memoryCounterReads": 170,
+      "memoryCounterErrors": 0,
+      "boundedWindowExpired": false,
+      "characterErrors": 3,
+      "referenceCharacters": 63,
+      "cer": 0.047619047619047616,
+      "missingRequiredLiterals": [],
+      "perRepeatRawTexts": [
+        "头发的法和发展的法意思不同。今天不要发布正式版本。This is a test build, version 2.0，请检查后再送出。不要自动执行命令。",
+        "头发的法和发展的法意思不同。今天不要发布正式版本。This is a test build, version 2.0，请检查后再送出。不要自动执行命令。"
+      ],
+      "rawOutputsIdentical": true,
+      "scoredRepeat": 2
+    },
+    {
+      "mode": "simplified_english",
+      "fixture": "numbers-negation-switch",
+      "gold": "今天请保留42笔测试资料，不要删除。The API is not ready. 等验证完成后，再送出2笔请求。Keep the test data.",
+      "wavSha256": "39dec0a99dff6bec753bf4a699673dbed7dac8d1a32482ec08051a25dec90433",
+      "exitCode": 0,
+      "observed": {
+        "audio_secs": 13.992625,
+        "best_ms": 3455,
+        "bound_backend": "CPU",
+        "cpu_threads": 4,
+        "load_ms": 843,
+        "model": "handy-computer/Qwen3-ASR-0.6B-gguf/Qwen3-ASR-0.6B-Q6_K.gguf",
+        "raw_text": "今天，请保留四十二笔测试资料，不要删除。The API is not ready。等验证完成后再送出两笔请求。Keep the test data。",
+        "recognition_mode": "simplified_english",
+        "requested_device": "index 0",
+        "rtf": 4.0499638205499275,
+        "text": "今天，请保留四十二笔测试资料，不要删除。The API is not ready。等验证完成后再送出两笔请求。Keep the test data。",
+        "transcribe_ms": [
+          3455,
+          3491
+        ]
+      },
+      "log": "simplified_english-numbers-negation-switch-attempt4.log",
+      "wallMs": 8183,
+      "processCpuSeconds": 28.328125,
+      "observedPeakWorkingSetBytes": 1423183872,
+      "memoryCounterReads": 161,
+      "memoryCounterErrors": 0,
+      "boundedWindowExpired": false,
+      "characterErrors": 4,
+      "referenceCharacters": 60,
+      "cer": 0.06666666666666667,
+      "missingRequiredLiterals": [
+        "42",
+        "2"
+      ],
+      "perRepeatRawTexts": [
+        "今天，请保留四十二笔测试资料，不要删除。The API is not ready。等验证完成后再送出两笔请求。Keep the test data。",
+        "今天，请保留四十二笔测试资料，不要删除。The API is not ready。等验证完成后再送出两笔请求。Keep the test data。"
+      ],
+      "rawOutputsIdentical": true,
+      "scoredRepeat": 2
+    },
+    {
+      "mode": "simplified_english",
+      "fixture": "technical-names",
+      "gold": "Check the API and session underscore id. 这是测试用的设定，请保留英文名称，不要改成中文。Use Visual Studio Code, then check GitHub.",
+      "wavSha256": "6061239d0564e331915cc48ff923b0dacd0ad83c5c8351d42372bb4a2c9ef5a9",
+      "exitCode": 0,
+      "observed": {
+        "audio_secs": 13.3440625,
+        "best_ms": 3255,
+        "bound_backend": "CPU",
+        "cpu_threads": 4,
+        "load_ms": 842,
+        "model": "handy-computer/Qwen3-ASR-0.6B-gguf/Qwen3-ASR-0.6B-Q6_K.gguf",
+        "raw_text": "Check the API and session underscore ID。这是测试用的设定，请保留英文名称，不要改成中文。Use Visual Studio Code， then check GitHub。",
+        "recognition_mode": "simplified_english",
+        "requested_device": "index 0",
+        "rtf": 4.0995583717357915,
+        "text": "Check the API and session underscore ID。这是测试用的设定，请保留英文名称，不要改成中文。Use Visual Studio Code， then check GitHub。",
+        "transcribe_ms": [
+          3255,
+          3297
+        ]
+      },
+      "log": "simplified_english-technical-names-attempt5.log",
+      "wallMs": 7677,
+      "processCpuSeconds": 26.5625,
+      "observedPeakWorkingSetBytes": 1421737984,
+      "memoryCounterReads": 151,
+      "memoryCounterErrors": 0,
+      "boundedWindowExpired": false,
+      "characterErrors": 0,
+      "referenceCharacters": 88,
+      "cer": 0.0,
+      "missingRequiredLiterals": [],
+      "perRepeatRawTexts": [
+        "Check the API and session underscore ID。这是测试用的设定，请保留英文名称，不要改成中文。Use Visual Studio Code， then check GitHub。",
+        "Check the API and session underscore ID。这是测试用的设定，请保留英文名称，不要改成中文。Use Visual Studio Code， then check GitHub。"
+      ],
+      "rawOutputsIdentical": true,
+      "scoredRepeat": 2
+    },
+    {
+      "mode": "simplified_english",
+      "fixture": "script-context-version",
+      "gold": "头发的发和发展的发意思不同，今天不要发布正式版本。This is a test build, version 2.0. 请检查后再送出，不要自动执行命令。",
+      "wavSha256": "7b139bc6439bb75297bc59c108202f991d8a71159e8163c103bc8e6385de077f",
+      "exitCode": 0,
+      "observed": {
+        "audio_secs": 14.726125,
+        "best_ms": 3493,
+        "bound_backend": "CPU",
+        "cpu_threads": 4,
+        "load_ms": 850,
+        "model": "handy-computer/Qwen3-ASR-0.6B-gguf/Qwen3-ASR-0.6B-Q6_K.gguf",
+        "raw_text": "头发的法和发展的法意思不同。今天不要发布正式版本。This is a test build, version 2.0，请检查后再送出。不要自动执行命令。",
+        "recognition_mode": "simplified_english",
+        "requested_device": "index 0",
+        "rtf": 4.215896077870026,
+        "text": "头发的法和发展的法意思不同。今天不要发布正式版本。This is a test build, version 2.0，请检查后再送出。不要自动执行命令。",
+        "transcribe_ms": [
+          3493,
+          3647
+        ]
+      },
+      "log": "simplified_english-script-context-version-attempt6.log",
+      "wallMs": 8269,
+      "processCpuSeconds": 29.078125,
+      "observedPeakWorkingSetBytes": 1441714176,
+      "memoryCounterReads": 163,
+      "memoryCounterErrors": 0,
+      "boundedWindowExpired": false,
+      "characterErrors": 2,
+      "referenceCharacters": 63,
+      "cer": 0.031746031746031744,
+      "missingRequiredLiterals": [],
+      "perRepeatRawTexts": [
+        "头发的法和发展的法意思不同。今天不要发布正式版本。This is a test build, version 2.0，请检查后再送出。不要自动执行命令。",
+        "头发的法和发展的法意思不同。今天不要发布正式版本。This is a test build, version 2.0，请检查后再送出。不要自动执行命令。"
+      ],
+      "rawOutputsIdentical": true,
+      "scoredRepeat": 2
+    }
+  ],
+  "attempts": [
+    {
+      "mode": "traditional_english",
+      "fixture": "numbers-negation-switch",
+      "gold": "今天請保留42筆測試資料，不要刪除。The API is not ready. 等驗證完成後，再送出2筆請求。Keep the test data.",
+      "wavSha256": "39dec0a99dff6bec753bf4a699673dbed7dac8d1a32482ec08051a25dec90433",
+      "exitCode": 0,
+      "observed": {
+        "audio_secs": 13.992625,
+        "best_ms": 3379,
+        "bound_backend": "CPU",
+        "cpu_threads": 4,
+        "load_ms": 965,
+        "model": "handy-computer/Qwen3-ASR-0.6B-gguf/Qwen3-ASR-0.6B-Q6_K.gguf",
+        "raw_text": "今天，请保留四十二笔测试资料，不要删除。The API is not ready。等验证完成后再送出两笔请求。Keep the test data。",
+        "recognition_mode": "traditional_english",
+        "requested_device": "index 0",
+        "rtf": 4.14105504587156,
+        "text": "今天，請保留四十二筆測試資料，不要刪除。The API is not ready。等驗證完成後再送出兩筆請求。Keep the test data。",
+        "transcribe_ms": [
+          3379,
+          3397
+        ]
+      },
+      "log": "traditional_english-numbers-negation-switch-attempt1.log",
+      "wallMs": 8061,
+      "processCpuSeconds": 27.75,
+      "observedPeakWorkingSetBytes": 1428529152,
+      "memoryCounterReads": 159,
+      "memoryCounterErrors": 0,
+      "boundedWindowExpired": false,
+      "characterErrors": 4,
+      "referenceCharacters": 60,
+      "cer": 0.06666666666666667,
+      "missingRequiredLiterals": [
+        "42",
+        "2"
+      ]
+    },
+    {
+      "mode": "traditional_english",
+      "fixture": "technical-names",
+      "gold": "Check the API and session underscore id. 這是測試用的設定，請保留英文名稱，不要改成中文。Use Visual Studio Code, then check GitHub.",
+      "wavSha256": "6061239d0564e331915cc48ff923b0dacd0ad83c5c8351d42372bb4a2c9ef5a9",
+      "exitCode": 0,
+      "observed": {
+        "audio_secs": 13.3440625,
+        "best_ms": 3229,
+        "bound_backend": "CPU",
+        "cpu_threads": 4,
+        "load_ms": 898,
+        "model": "handy-computer/Qwen3-ASR-0.6B-gguf/Qwen3-ASR-0.6B-Q6_K.gguf",
+        "raw_text": "Check the API and session underscore ID。这是测试用的设定，请保留英文名称，不要改成中文。Use Visual Studio Code， then check GitHub。",
+        "recognition_mode": "traditional_english",
+        "requested_device": "index 0",
+        "rtf": 4.132568132548776,
+        "text": "Check the API and session underscore ID。這是測試用的設定，請保留英文名稱，不要改成中文。Use Visual Studio Code， then check GitHub。",
+        "transcribe_ms": [
+          3229,
+          3309
+        ]
+      },
+      "log": "traditional_english-technical-names-attempt2.log",
+      "wallMs": 7742,
+      "processCpuSeconds": 26.65625,
+      "observedPeakWorkingSetBytes": 1427050496,
+      "memoryCounterReads": 152,
+      "memoryCounterErrors": 0,
+      "boundedWindowExpired": false,
+      "characterErrors": 0,
+      "referenceCharacters": 88,
+      "cer": 0.0,
+      "missingRequiredLiterals": []
+    },
+    {
+      "mode": "traditional_english",
+      "fixture": "script-context-version",
+      "gold": "頭髮的髮和發展的發意思不同，今天不要發布正式版本。This is a test build, version 2.0. 請檢查後再送出，不要自動執行命令。",
+      "wavSha256": "7b139bc6439bb75297bc59c108202f991d8a71159e8163c103bc8e6385de077f",
+      "exitCode": 0,
+      "observed": {
+        "audio_secs": 14.726125,
+        "best_ms": 3696,
+        "bound_backend": "CPU",
+        "cpu_threads": 4,
+        "load_ms": 848,
+        "model": "handy-computer/Qwen3-ASR-0.6B-gguf/Qwen3-ASR-0.6B-Q6_K.gguf",
+        "raw_text": "头发的法和发展的法意思不同。今天不要发布正式版本。This is a test build, version 2.0，请检查后再送出。不要自动执行命令。",
+        "recognition_mode": "traditional_english",
+        "requested_device": "index 0",
+        "rtf": 3.984341179653679,
+        "text": "頭髮的法和發展的法意思不同。今天不要發佈正式版本。This is a test build, version 2.0，請檢查後再送出。不要自動執行命令。",
+        "transcribe_ms": [
+          3696,
+          3795
+        ]
+      },
+      "log": "traditional_english-script-context-version-attempt3.log",
+      "wallMs": 8644,
+      "processCpuSeconds": 30.296875,
+      "observedPeakWorkingSetBytes": 1446596608,
+      "memoryCounterReads": 170,
+      "memoryCounterErrors": 0,
+      "boundedWindowExpired": false,
+      "characterErrors": 3,
+      "referenceCharacters": 63,
+      "cer": 0.047619047619047616,
+      "missingRequiredLiterals": []
+    },
+    {
+      "mode": "simplified_english",
+      "fixture": "numbers-negation-switch",
+      "gold": "今天请保留42笔测试资料，不要删除。The API is not ready. 等验证完成后，再送出2笔请求。Keep the test data.",
+      "wavSha256": "39dec0a99dff6bec753bf4a699673dbed7dac8d1a32482ec08051a25dec90433",
+      "exitCode": 0,
+      "observed": {
+        "audio_secs": 13.992625,
+        "best_ms": 3455,
+        "bound_backend": "CPU",
+        "cpu_threads": 4,
+        "load_ms": 843,
+        "model": "handy-computer/Qwen3-ASR-0.6B-gguf/Qwen3-ASR-0.6B-Q6_K.gguf",
+        "raw_text": "今天，请保留四十二笔测试资料，不要删除。The API is not ready。等验证完成后再送出两笔请求。Keep the test data。",
+        "recognition_mode": "simplified_english",
+        "requested_device": "index 0",
+        "rtf": 4.0499638205499275,
+        "text": "今天，请保留四十二笔测试资料，不要删除。The API is not ready。等验证完成后再送出两笔请求。Keep the test data。",
+        "transcribe_ms": [
+          3455,
+          3491
+        ]
+      },
+      "log": "simplified_english-numbers-negation-switch-attempt4.log",
+      "wallMs": 8183,
+      "processCpuSeconds": 28.328125,
+      "observedPeakWorkingSetBytes": 1423183872,
+      "memoryCounterReads": 161,
+      "memoryCounterErrors": 0,
+      "boundedWindowExpired": false,
+      "characterErrors": 4,
+      "referenceCharacters": 60,
+      "cer": 0.06666666666666667,
+      "missingRequiredLiterals": [
+        "42",
+        "2"
+      ]
+    },
+    {
+      "mode": "simplified_english",
+      "fixture": "technical-names",
+      "gold": "Check the API and session underscore id. 这是测试用的设定，请保留英文名称，不要改成中文。Use Visual Studio Code, then check GitHub.",
+      "wavSha256": "6061239d0564e331915cc48ff923b0dacd0ad83c5c8351d42372bb4a2c9ef5a9",
+      "exitCode": 0,
+      "observed": {
+        "audio_secs": 13.3440625,
+        "best_ms": 3255,
+        "bound_backend": "CPU",
+        "cpu_threads": 4,
+        "load_ms": 842,
+        "model": "handy-computer/Qwen3-ASR-0.6B-gguf/Qwen3-ASR-0.6B-Q6_K.gguf",
+        "raw_text": "Check the API and session underscore ID。这是测试用的设定，请保留英文名称，不要改成中文。Use Visual Studio Code， then check GitHub。",
+        "recognition_mode": "simplified_english",
+        "requested_device": "index 0",
+        "rtf": 4.0995583717357915,
+        "text": "Check the API and session underscore ID。这是测试用的设定，请保留英文名称，不要改成中文。Use Visual Studio Code， then check GitHub。",
+        "transcribe_ms": [
+          3255,
+          3297
+        ]
+      },
+      "log": "simplified_english-technical-names-attempt5.log",
+      "wallMs": 7677,
+      "processCpuSeconds": 26.5625,
+      "observedPeakWorkingSetBytes": 1421737984,
+      "memoryCounterReads": 151,
+      "memoryCounterErrors": 0,
+      "boundedWindowExpired": false,
+      "characterErrors": 0,
+      "referenceCharacters": 88,
+      "cer": 0.0,
+      "missingRequiredLiterals": []
+    },
+    {
+      "mode": "simplified_english",
+      "fixture": "script-context-version",
+      "gold": "头发的发和发展的发意思不同，今天不要发布正式版本。This is a test build, version 2.0. 请检查后再送出，不要自动执行命令。",
+      "wavSha256": "7b139bc6439bb75297bc59c108202f991d8a71159e8163c103bc8e6385de077f",
+      "exitCode": 0,
+      "observed": {
+        "audio_secs": 14.726125,
+        "best_ms": 3493,
+        "bound_backend": "CPU",
+        "cpu_threads": 4,
+        "load_ms": 850,
+        "model": "handy-computer/Qwen3-ASR-0.6B-gguf/Qwen3-ASR-0.6B-Q6_K.gguf",
+        "raw_text": "头发的法和发展的法意思不同。今天不要发布正式版本。This is a test build, version 2.0，请检查后再送出。不要自动执行命令。",
+        "recognition_mode": "simplified_english",
+        "requested_device": "index 0",
+        "rtf": 4.215896077870026,
+        "text": "头发的法和发展的法意思不同。今天不要发布正式版本。This is a test build, version 2.0，请检查后再送出。不要自动执行命令。",
+        "transcribe_ms": [
+          3493,
+          3647
+        ]
+      },
+      "log": "simplified_english-script-context-version-attempt6.log",
+      "wallMs": 8269,
+      "processCpuSeconds": 29.078125,
+      "observedPeakWorkingSetBytes": 1441714176,
+      "memoryCounterReads": 163,
+      "memoryCounterErrors": 0,
+      "boundedWindowExpired": false,
+      "characterErrors": 2,
+      "referenceCharacters": 63,
+      "cer": 0.031746031746031744,
+      "missingRequiredLiterals": []
+    }
+  ],
+  "batches": [
+    {
+      "startedAt": 1792891537.0631955,
+      "hardSeconds": 49,
+      "completedBefore": 0,
+      "quietWindow": "Explicit parent coordination; no heavy own Cargo/native work during this batch",
+      "finishedAt": 1792891577.3930361,
+      "wallSeconds": 40.42,
+      "completedAfter": 5
+    },
+    {
+      "startedAt": 1792891716.5925333,
+      "hardSeconds": 14.0,
+      "completedBefore": 5,
+      "quietWindow": "Explicit parent coordination; no heavy own Cargo/native work during this batch",
+      "finishedAt": 1792891724.8654885,
+      "wallSeconds": 8.358,
+      "completedAfter": 6
+    }
+  ],
+  "complete": true,
+  "sampleCounts": {
+    "fixedWavInputs": 3,
+    "profiles": 2,
+    "cases": 6,
+    "actualDecodes": 12,
+    "independentHumanSamples": 0
+  },
+  "hardware": {
+    "Name": "11th Gen Intel(R) Core(TM) i5-1135G7 @ 2.40GHz",
+    "NumberOfCores": 4,
+    "NumberOfLogicalProcessors": 8
+  },
+  "referenceErrata": {
+    "reason": "SAPI source says 測試資料; Simplified script-only reference must retain 资料 rather than regional-vocabulary substitute 数据. Manually corrected independent reference; no model/output changed. Numeric required-literal checks use digit boundaries so2 cannot match42. Original outside receipts remain historical."
+  },
+  "modelQualityAcceptance": "Not established for human/company speech or end-to-end p95. Chinese/English/technical English retained on these three synthetic inputs; numeric Chinese spelling differs from Arabic gold, and two 法 homophones are actual ASR errors.",
+  "numericObservation": "Numbers are decoded as 四十二/两, preserving42/2 meaning, with no model ITN control. Gold and CER/literal scores remain unchanged; no numeric repair is applied.",
+  "contextObservation": "Both modes raw say头发的法和发展的法. These are ASR homophone substitutions, not local script errors; local dictionary must not silently rewrite them. TW发布/發佈 also differs orthographically from gold發布.",
+  "initialSuccessfulProbe": {
+    "purpose": "First actual retained-formal-engine load/capability/mixed quality probe; no acceptance claim",
+    "exeSha256": "86ec70cdac8f54547f886a715acec9b27ab0d2bfb360da3ec580cfaec7e69dba",
+    "modelSha256": "3b051f108f03c0c91bbe1a3b2c1ee15e3ed51e4caec2a48751b01f2a21441cc3",
+    "modelBytes": 690417824,
+    "exitCode": 0,
+    "wallSeconds": 4.529300928115845,
+    "observed": {
+      "audio_secs": 13.992625,
+      "best_ms": 3200,
+      "bound_backend": "CPU",
+      "cpu_threads": 4,
+      "load_ms": 967,
+      "model": "handy-computer/Qwen3-ASR-0.6B-gguf/Qwen3-ASR-0.6B-Q6_K.gguf",
+      "raw_text": "今天，请保留四十二笔测试资料，不要删除。The API is not ready。等验证完成后再送出两笔请求。Keep the test data。",
+      "recognition_mode": "traditional_english",
+      "requested_device": "index 0",
+      "rtf": 4.372695312499999,
+      "text": "今天，請保留四十二筆測試資料，不要刪除。The API is not ready。等驗證完成後再送出兩筆請求。Keep the test data。",
+      "transcribe_ms": [
+        3200
+      ]
+    },
+    "source": "Retained functional8ef71e7 ASR and old ferrous normalizer; new lexical normalization reported separately",
+    "qualityAcceptance": "not-established"
+  },
+  "toolingErrata": "Initial short-ID selection failed before load and was preserved separately. The successful probe wrote engine exit0 receipt before Python cp950 stdout printing failed; no inference rerun for display. Full matrix used UTF8 stdout and exact generated-bindings guard.",
+  "quietWindow": "Two explicit parent/13-acknowledged windows, no own Cargo/native/Vite work: first40.42s (hard49), second8.358s (hard14); all6 complete, none killed or skipped in final matrix.",
+  "benchmarkScriptSha256": "2effbc4f2fa8031f0c726423f7d3ae99e62cd7152fd697de9c035ed946f759ab",
+  "actualTimingRangeMs": [
+    3229,
+    3795
+  ],
+  "observedPeakWorkingSetRangeBytes": [
+    1421737984,
+    1446596608
+  ],
+  "observedPeakWorkingSetRangeMiB": [
+    1355.875,
+    1379.58203125
+  ]
+}
