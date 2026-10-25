@@ -334,6 +334,66 @@ test("prompt saving preserves the connection collection and an unsaved model edi
   );
 });
 
+for (const [mode, message] of [
+  [
+    "empty",
+    "The API returned an empty model list. Manual model entry is still available.",
+  ],
+  [
+    "unsupported",
+    "This API does not provide a supported model list. Enter a model ID manually.",
+  ],
+  [
+    "error",
+    "Unable to query model IDs. Check the connection or enter an ID manually.",
+  ],
+]) {
+  test(
+    "model-list " + mode + " retains manual entry and hides raw errors",
+    async (t) => {
+      const page = await providerConnectionsFixture(t, "en", [savedConnection]);
+      await page
+        .getByRole("button", { name: "Edit Company writing", exact: true })
+        .click();
+      await page.evaluate((mode) => (window.modelMode = mode), mode);
+      await page
+        .getByRole("button", { name: "View model ID list", exact: true })
+        .click();
+      await page.getByText(message, { exact: true }).waitFor();
+      await page
+        .getByLabel("Model ID (manual entry)", { exact: true })
+        .fill("manual-after-failure");
+      assert.doesNotMatch(
+        await page.locator("body").innerText(),
+        /upstream-secret|Bearer/,
+      );
+    },
+  );
+}
+
+test("a stored save remains successful if readiness refresh fails", async (t) => {
+  const page = await providerConnectionsFixture(t, "en", [savedConnection]);
+  await page
+    .getByRole("button", { name: "Edit Company writing", exact: true })
+    .click();
+  await page
+    .getByLabel("Model ID (manual entry)", { exact: true })
+    .fill("saved-during-readiness-failure");
+  await page.evaluate(() => (window.mode = "readiness-error"));
+  await page
+    .getByRole("button", { name: "Save connection", exact: true })
+    .click();
+  await page.getByText("Connection settings saved.", { exact: true }).waitFor();
+  assert.equal(
+    await page.evaluate(() => window.configuration.connections[0].model),
+    "saved-during-readiness-failure",
+  );
+  assert.doesNotMatch(
+    await page.locator("body").innerText(),
+    /readiness-secret|Bearer/,
+  );
+});
+
 for (const [language, edit, label, view] of [
   [
     "en",
