@@ -188,6 +188,21 @@
       "back-translation-timeout": "Back-translation unavailable. The primary translation is retained for copying or retry."
     },
     "connections": {
+      "reload": "Reload connections",
+      "modelErrors": {
+        "provider-auth": "Model-list authentication failed. Check the connection key.",
+        "provider-permission": "The connection cannot access this model list.",
+        "provider-balance": "The service account has insufficient balance or quota.",
+        "provider-rate-limit": "Model listing is rate limited. Wait before querying again.",
+        "provider-timeout": "Model listing timed out. Manual model input is still available.",
+        "provider-unavailable": "The model service is unavailable. Try again later.",
+        "provider-transport": "The model-list connection was interrupted. Check the network.",
+        "provider-protocol": "The model-list response is incompatible. Enter an ID manually.",
+        "provider-validation": "Check the configured model-list address and parameters.",
+        "provider-oversize": "The model list exceeds the supported size. Enter an ID manually.",
+        "configuration-conflict": "Settings changed. Reload connections before querying again.",
+        "configuration-credentials-unavailable": "Configure the App key or eligible home .env key before querying."
+      },
       "modelReference": "Model ID reference",
       "viewModels": "View model ID list",
       "modelList": "Model ID list",

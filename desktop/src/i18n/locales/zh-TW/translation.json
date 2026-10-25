@@ -188,6 +188,21 @@
       "back-translation-timeout": "回譯尚未完成；主翻譯仍保留，可複製或重試。"
     },
     "connections": {
+      "reload": "重新載入連線",
+      "modelErrors": {
+        "provider-auth": "模型清單認證失敗，請檢查此連線的金鑰。",
+        "provider-permission": "此連線沒有存取模型清單的權限。",
+        "provider-balance": "服務帳戶餘額或額度不足。",
+        "provider-rate-limit": "模型清單查詢受到限流，請稍候再試。",
+        "provider-timeout": "模型清單查詢逾時，仍可手動輸入 ID。",
+        "provider-unavailable": "模型服務暫時無法使用，請稍後再試。",
+        "provider-transport": "模型清單連線中斷，請檢查網路。",
+        "provider-protocol": "模型清單回應不相容，請手動輸入 ID。",
+        "provider-validation": "請檢查模型清單位址與參數。",
+        "provider-oversize": "模型清單超出支援大小，請手動輸入 ID。",
+        "configuration-conflict": "設定已變更，請重新載入連線後再查詢。",
+        "configuration-credentials-unavailable": "請先設定 App 金鑰或符合條件的家目錄 .env 金鑰。"
+      },
       "modelReference": "模型 ID 參考",
       "viewModels": "查看模型 ID 清單",
       "modelList": "模型 ID 清單",

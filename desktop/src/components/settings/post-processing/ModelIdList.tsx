@@ -29,6 +29,7 @@ export function ModelIdList({
   const epoch = useRef(0);
   const active = useRef(false);
   const request = useRef<string | null>(null);
+  const replacement = keyAction.action === "replace" ? keyAction.value : null;
   const cancelPending = useCallback(() => {
     epoch.current++;
     const id = request.current;
@@ -46,14 +47,27 @@ export function ModelIdList({
       active.current = false;
       cancelPending();
     };
-  }, [connection, keyAction, revision, disabled, cancelPending]);
+  }, [
+    connection.id,
+    connection.kind,
+    connection.dialect,
+    connection.address_mode,
+    connection.api_address,
+    connection.models_endpoint,
+    connection.authentication,
+    keyAction.action,
+    replacement,
+    revision,
+    disabled,
+    cancelPending,
+  ]);
 
   const failureMessage = (code: string | null) => {
     const key = "notype.connections.modelErrors." + (code ?? "");
     return i18n.exists(key) ? t(key) : t("notype.connections.modelsFailed");
   };
   const query = async () => {
-    if (loading || disabled || !active.current) return;
+    if (loading || request.current || disabled || !active.current) return;
     const id = "models-" + crypto.randomUUID();
     const generation = ++epoch.current;
     request.current = id;
@@ -126,14 +140,15 @@ export function ModelIdList({
     }
   };
   const copy = async (id: string) => {
+    const generation = epoch.current;
     try {
       await writeText(id);
-      if (active.current) {
+      if (active.current && epoch.current === generation) {
         setFailed(false);
         setMessage(t("notype.connections.modelCopied"));
       }
     } catch {
-      if (active.current) {
+      if (active.current && epoch.current === generation) {
         setFailed(true);
         setMessage(t("notype.connections.copyFailed"));
       }

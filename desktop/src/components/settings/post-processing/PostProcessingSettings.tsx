@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   commands,
@@ -28,22 +28,27 @@ export const PostProcessingSettings = () => {
   const [ready, setReady] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editorVersion, setEditorVersion] = useState(0);
+  const [reloadVersion, setReloadVersion] = useState(0);
   const requestEpoch = useRef(0);
 
-  const apply = (updated: ConnectionSettingsView) => {
+  const apply = useCallback((updated: ConnectionSettingsView) => {
     setConfiguration((current) =>
       !current || updated.revision >= current.revision ? updated : current,
     );
-  };
+  }, []);
   useEffect(() => {
     const epoch = ++requestEpoch.current;
+    setBusy(true);
+    setReady(false);
+    setMessage("");
+    setFailed(false);
     void Promise.all([
       commands.getTextConfiguration(),
       commands.getWorkflowReadiness(),
     ])
       .then(([result, readiness]) => {
         if (requestEpoch.current !== epoch) return;
-        if (result.status === "ok") setConfiguration(result.data);
+        if (result.status === "ok") apply(result.data);
         else {
           setFailed(true);
           setMessage(t("notype.connections.failed"));
@@ -54,11 +59,14 @@ export const PostProcessingSettings = () => {
         if (requestEpoch.current !== epoch) return;
         setFailed(true);
         setMessage(t("notype.connections.failed"));
+      })
+      .finally(() => {
+        if (requestEpoch.current === epoch) setBusy(false);
       });
     return () => {
       requestEpoch.current++;
     };
-  }, [t]);
+  }, [t, reloadVersion, apply]);
 
   const mutate = async (operation: () => Promise<SettingsResult>) => {
     if (busy) return null;
@@ -84,8 +92,12 @@ export const PostProcessingSettings = () => {
       setName("");
       setFailed(false);
       setMessage(t("notype.connections.saved"));
-      const readiness = await commands.getWorkflowReadiness();
-      if (requestEpoch.current === epoch) setReady(readiness.text_configured);
+      try {
+        const readiness = await commands.getWorkflowReadiness();
+        if (requestEpoch.current === epoch) setReady(readiness.text_configured);
+      } catch {
+        if (requestEpoch.current === epoch) setReady(false);
+      }
       return result.data;
     } catch {
       if (requestEpoch.current !== epoch) return null;
@@ -103,6 +115,12 @@ export const PostProcessingSettings = () => {
         <p role={failed ? "alert" : "status"}>
           {message || t("notype.history.loading")}
         </p>
+        <Button
+          disabled={busy}
+          onClick={() => setReloadVersion((value) => value + 1)}
+        >
+          {t("notype.connections.reload")}
+        </Button>
       </section>
     );
   const nameValid =
@@ -111,7 +129,7 @@ export const PostProcessingSettings = () => {
     (connection) => connection.id === selectedId,
   );
   return (
-    <section className="max-w-3xl w-full mx-auto space-y-4">
+    <section className="max-w-3xl w-full mx-auto space-y-4 break-words">
       <h2 className="font-semibold">{t("notype.connections.title")}</h2>
       <p className="text-sm text-text/70">
         {t("notype.connections.description")}
@@ -120,6 +138,16 @@ export const PostProcessingSettings = () => {
         {t(ready ? "notype.text.ready" : "notype.text.notReady")}
       </p>
       <fieldset disabled={busy} className="space-y-4 min-w-0">
+        <Button
+          variant="secondary"
+          onClick={() => {
+            setSelectedId(null);
+            setCreating(false);
+            setReloadVersion((value) => value + 1);
+          }}
+        >
+          {t("notype.connections.reload")}
+        </Button>
         <Button
           disabled={configuration.connections.length >= 20}
           onClick={() => {
@@ -284,7 +312,11 @@ export const PostProcessingSettings = () => {
         />
       )}
       {message && <p role={failed ? "alert" : "status"}>{message}</p>}
-      <ScenarioSettings configuration={configuration} onChange={apply} />
+      <ScenarioSettings
+        configuration={configuration}
+        onChange={apply}
+        disabled={busy}
+      />
       <CustomWords descriptionMode="tooltip" />
     </section>
   );

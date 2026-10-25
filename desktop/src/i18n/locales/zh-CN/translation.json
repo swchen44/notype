@@ -141,6 +141,21 @@
       "back-translation-timeout": "回译尚未完成；主翻译仍保留，可复制或重试。"
     },
     "connections": {
+      "reload": "重新加载连接",
+      "modelErrors": {
+        "provider-auth": "模型列表认证失败，请检查此连接的密钥。",
+        "provider-permission": "此连接没有访问模型列表的权限。",
+        "provider-balance": "服务账户余额或额度不足。",
+        "provider-rate-limit": "模型列表查询受到限流，请稍后重试。",
+        "provider-timeout": "模型列表查询超时，仍可手动输入 ID。",
+        "provider-unavailable": "模型服务暂时无法使用，请稍后重试。",
+        "provider-transport": "模型列表连接中断，请检查网络。",
+        "provider-protocol": "模型列表响应不兼容，请手动输入 ID。",
+        "provider-validation": "请检查模型列表地址与参数。",
+        "provider-oversize": "模型列表超出支持大小，请手动输入 ID。",
+        "configuration-conflict": "设置已更改，请重新加载连接后再查询。",
+        "configuration-credentials-unavailable": "请先设置 App 密钥或符合条件的主目录 .env 密钥。"
+      },
       "modelReference": "模型 ID 参考",
       "viewModels": "查看模型 ID 列表",
       "modelList": "模型 ID 列表",
