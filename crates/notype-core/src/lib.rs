@@ -252,8 +252,20 @@ impl From<std::io::Error> for CoreError {
 pub struct SessionService {
     connection: Arc<Mutex<Connection>>,
     active: Arc<Mutex<HashMap<String, ActiveAttempt>>>,
-    _owner: Option<Arc<File>>,
+    _owner: Option<Arc<DatabaseOwner>>,
     database_path: Option<Arc<std::path::PathBuf>>,
+}
+
+// Constructed only after successful exclusive acquisition. Sharing the guard
+// keeps live service clones exclusive; its final Drop also releases inherited
+// open-file descriptions before their child process reaches exec/close.
+struct DatabaseOwner(File);
+impl Drop for DatabaseOwner {
+    fn drop(&mut self) {
+        // Drop cannot report failure or panic. Close remains the fallback; if
+        // unlock fails, inherited descriptors may still delay the OS release.
+        let _ = self.0.unlock();
+    }
 }
 
 struct ActiveAttempt {
@@ -325,8 +337,9 @@ impl SessionService {
             TryLockError::WouldBlock => CoreError::AlreadyOwned,
             TryLockError::Error(_) => CoreError::Storage,
         })?;
+        let owner = Arc::new(DatabaseOwner(owner));
         let connection = Connection::open(&resolved)?;
-        let mut service = Self::from_connection(connection, Some(Arc::new(owner)))?;
+        let mut service = Self::from_connection(connection, Some(owner))?;
         service.database_path = Some(Arc::new(resolved));
         Ok(service)
     }
@@ -337,7 +350,7 @@ impl SessionService {
 
     fn from_connection(
         mut connection: Connection,
-        owner: Option<Arc<File>>,
+        owner: Option<Arc<DatabaseOwner>>,
     ) -> Result<Self, CoreError> {
         let version: i64 = connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
         let has_sessions: bool = connection.query_row(

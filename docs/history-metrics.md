@@ -5,6 +5,14 @@ ON/OFF/Clear and survive restart. Fresh schema 4 is the first-release format; ot
 schemas return `history-reset-required` without a wipe. Follow the separately reviewed clean
 installation guide; this feature never reads or removes the old user profile.
 
+The file-backed store keeps exclusive ownership until the last service clone
+drops. Its shared private owner explicitly unlocks before closing the file, so a
+forked child waiting before exec cannot extend that parent's ownership solely by
+retaining an inherited descriptor. Failed lock admission never creates an owner
+guard. Drop does not panic; if OS unlock fails, close remains a best-effort fallback
+and inherited descriptors can still delay release. No lockfile deletion or retry
+loop replaces exclusive admission.
+
 ## Sources and units
 
 - `recording.audio_ms` is `native-rate accepted mono frames * 1000 / input rate`, floored to

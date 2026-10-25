@@ -147,7 +147,6 @@ rejected-closure cases in the existing `overlay-lifecycle` target. The report/AC
 integration also verifies Settings uses that outer revision gate before dedup.
 These are synthetic attribution tests; native hardware delay is not reproduced.
 
-
 ## History metrics, API observations and CSV (#22)
 
 Approved [P22-v1](https://github.com/swchen44/notype/issues/22#issuecomment-6399288240),
@@ -180,6 +179,13 @@ cargo test --locked --manifest-path tests/integration/desktop-contracts/Cargo.to
 
 These are deterministic owned fixtures, not native App/microphone or paid API acceptance.
 Native compilation, rendered UI and live DeepSeek have separate receipts/gates.
+
+On Unix, `core-persistence` also executes
+`last_service_owner_releases_store_while_inherited_pre_exec_child_is_held`: a
+bounded owned-child handshake holds inherited descriptors before exec while the
+public SessionService verifies live-clone exclusion and final-owner release.
+Windows cannot run this cfg-Unix fixture; its named Linux RED and final workflow
+gate are recorded in the [owner-release receipt](../docs/verification/history-owner-release.md).
 
 ## Independent DeepSeek probe preparation (#23)
 
