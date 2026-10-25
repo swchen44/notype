@@ -50,9 +50,9 @@
      the card's max footprint (--ov-work-w for compact, --ov-open-w for Live),
      since the card is anchored flush to the screen edge in CSS. Keep overlay.rs
      in sync when these change. */
-  --ov-rest-w: 172px; /* resting compact pill (minimal, recording) -- roomy enough
+  --ov-rest-w: 208px; /* resting compact pill (minimal, recording) -- roomy enough
                          for the English working label before the grow starts */
-  --ov-pill-w: 184px; /* base width / Live pill before it opens or collapses */
+  --ov-pill-w: 208px; /* base width / Live pill before it opens or collapses */
   --ov-work-w: 216px; /* working pill (transcribing / polishing) -- wide enough to
                          center longer labels; shared by Live (collapsed) + minimal */
   --ov-open-w: 392px; /* Live panel, expanded */
@@ -346,10 +346,6 @@
   color: var(--s-faint);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  opacity: 0;
-  transition: opacity 240ms ease 80ms;
-}
-.scard.open .stimer {
   opacity: 1;
 }
 
@@ -465,4 +461,14 @@
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Reserve space for the digits in both compact and empty Live capture views.
+   Working labels retain their original symmetric three-column layout. */
+.sbase.capture-row {
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  column-gap: 6px;
+}
+.capture-row .swave {
+  justify-self: center;
 }

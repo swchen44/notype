@@ -1247,7 +1247,7 @@ export type StreamPhase =
 /**
  * Emitted to switch the streaming overlay to a working spinner.
  */
-export type StreamPhaseEvent = { phase: StreamPhase;
+export type StreamPhaseEvent = { capture_id: string; revision: string; phase: StreamPhase;
 /**
  * Present only when `phase` is `Working`.
  */
@@ -1257,7 +1257,7 @@ kind?: StreamWorkKind | null }
  * `committed` is the append-only, flicker-free prefix; `tentative` is the
  * volatile suffix the model may still rewrite.
  */
-export type StreamTextEvent = { committed: string; tentative: string }
+export type StreamTextEvent = { capture_id: string; committed: string; tentative: string }
 /**
  * Semantic kind of "working" phase, used to localize the spinner label.
  */

@@ -24,6 +24,7 @@ mod llm_client;
 mod managers;
 mod memory;
 mod overlay;
+mod overlay_lifecycle;
 #[cfg(test)]
 mod paste_tx;
 pub mod portable;

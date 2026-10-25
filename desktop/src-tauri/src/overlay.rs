@@ -1,9 +1,37 @@
 use crate::input;
+use crate::overlay_lifecycle::{
+    CaptureId, HideReason, OverlayLifecycle, OverlayTicket, Presentation,
+};
 use crate::settings;
 use crate::settings::{OverlayPosition, OverlayStyle};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize};
+
+static LIFECYCLE: Mutex<OverlayLifecycle> = Mutex::new(OverlayLifecycle::new());
+
+/// Public overlay IPC contract; identity is captured before dispatch.
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ShowOverlayEvent {
+    pub capture_id: String,
+    pub revision: String,
+    pub state: &'static str,
+}
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecordingReadyEvent {
+    pub capture_id: String,
+    pub capture_revision: String,
+}
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HideOverlayEvent {
+    pub capture_id: String,
+    pub revision: String,
+    pub reason: &'static str,
+}
 
 #[cfg(not(target_os = "macos"))]
 use log::debug;
@@ -44,7 +72,7 @@ tauri_panel! {
 // scale (see windows_text_scale_factor), which WebView2 applies as a zoom.
 //
 // Compact overlay (Minimal / transcribing / processing): the 40h pill animates
-// width from 172 (--ov-rest-w) to 216 (--ov-work-w) and expands from center, so
+// width from 208 (--ov-rest-w) to 216 (--ov-work-w) and expands from center, so
 // the window must fit the widest state plus a little slack.
 const OVERLAY_WIDTH: f64 = 256.0;
 const OVERLAY_HEIGHT: f64 = 50.0;
@@ -247,6 +275,7 @@ fn calculate_overlay_position(
     app_handle: &AppHandle,
     width: f64,
     height: f64,
+    overlay_position: OverlayPosition,
 ) -> Option<(f64, f64)> {
     let monitor = get_monitor_with_cursor(app_handle)?;
     let scale = monitor.scale_factor();
@@ -254,10 +283,8 @@ fn calculate_overlay_position(
     let monitor_y = monitor.position().y as f64 / scale;
     let monitor_width = monitor.size().width as f64 / scale;
 
-    let settings = settings::get_settings(app_handle);
-
     let x = monitor_x + (monitor_width - width) / 2.0;
-    let y = match settings.overlay_position {
+    let y = match overlay_position {
         OverlayPosition::Top => monitor_y + OVERLAY_TOP_OFFSET,
         OverlayPosition::Bottom => {
             // work_area.position shares monitor.position's global coordinate
@@ -341,12 +368,13 @@ fn place_windows_overlay(
     overlay_window: &tauri::webview::WebviewWindow,
     logical_width: f64,
     logical_height: f64,
+    overlay_position: OverlayPosition,
+    text_scale: f64,
 ) -> Result<(), String> {
     use windows::Win32::UI::WindowsAndMessaging::{SetWindowPos, SWP_NOACTIVATE, SWP_NOZORDER};
 
     let monitor = get_monitor_with_cursor(app_handle)
         .ok_or_else(|| "failed to determine the monitor containing the cursor".to_string())?;
-    let text_scale = windows_text_scale_factor();
     let (x, y, width, height) = windows_overlay_bounds(
         *monitor.position(),
         *monitor.size(),
@@ -354,7 +382,7 @@ fn place_windows_overlay(
         text_scale,
         logical_width,
         logical_height,
-        settings::get_settings(app_handle).overlay_position,
+        overlay_position,
     );
     let hwnd = overlay_window
         .hwnd()
@@ -392,7 +420,12 @@ pub fn create_recording_overlay(app_handle: &AppHandle) {
     // for Layer Shell as we use anchors. On other platforms, we require a monitor.
     #[cfg(not(target_os = "linux"))]
     {
-        let position = calculate_overlay_position(app_handle, OVERLAY_WIDTH, OVERLAY_HEIGHT);
+        let position = calculate_overlay_position(
+            app_handle,
+            OVERLAY_WIDTH,
+            OVERLAY_HEIGHT,
+            settings::get_settings(app_handle).overlay_position,
+        );
         if position.is_none() {
             debug!("Failed to determine overlay position, not creating overlay window");
             return;
@@ -450,7 +483,12 @@ pub fn create_recording_overlay(app_handle: &AppHandle) {
 /// Creates the recording overlay panel and keeps it hidden by default (macOS)
 #[cfg(target_os = "macos")]
 pub fn create_recording_overlay(app_handle: &AppHandle) {
-    if let Some((x, y)) = calculate_overlay_position(app_handle, OVERLAY_WIDTH, OVERLAY_HEIGHT) {
+    if let Some((x, y)) = calculate_overlay_position(
+        app_handle,
+        OVERLAY_WIDTH,
+        OVERLAY_HEIGHT,
+        settings::get_settings(app_handle).overlay_position,
+    ) {
         // PanelBuilder creates a Tauri window then converts it to NSPanel.
         // The window remains registered, so get_webview_window() still works.
         match PanelBuilder::<_, RecordingOverlayPanel>::new(app_handle, "recording_overlay")
@@ -485,39 +523,58 @@ pub fn create_recording_overlay(app_handle: &AppHandle) {
     }
 }
 
-fn show_overlay_state(app_handle: &AppHandle, state: &str) {
-    // Whether the overlay shows at all is governed by overlay_style; position
-    // only chooses Top vs Bottom placement. Checked here (off the main thread)
-    // so the common overlay-disabled case never pays for a main-thread hop.
-    let settings = settings::get_settings(app_handle);
-    if settings.overlay_style == OverlayStyle::None {
-        return;
-    }
-
-    // The rest queries monitors and the cursor and mutates window geometry. On
-    // Linux the monitor/cursor lookups hit GDK/Xlib on the process's shared X11
-    // connection, which is only safe from the GTK main thread — running them on
-    // a background thread corrupts the connection and hard-crashes the app
-    // (issue #227). Hop to the main thread on every platform to keep the
-    // geometry path uniform (a no-op cost on Windows, and it also keeps macOS's
-    // NSScreen access main-thread-correct). run_on_main_thread runs the closure
-    // inline when already on the main thread, so this never deadlocks.
-    let handle = app_handle.clone();
-    let state = state.to_string();
-    let _ = app_handle.run_on_main_thread(move || show_overlay_state_on_main(&handle, &state));
+fn reserve(capture: u64, presentation: Presentation) -> Option<OverlayTicket> {
+    LIFECYCLE
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .reserve(CaptureId(capture), presentation)
 }
 
-fn show_overlay_state_on_main(app_handle: &AppHandle, state: &str) {
-    // Size the overlay for this state (compact vs. streaming), then position it.
-    let (width, height) = overlay_dimensions(state);
-    if let Some(overlay_window) = app_handle.get_webview_window("recording_overlay") {
-        // Invalidate any delayed hide still in flight from a previous session
-        // (see `hide_recording_overlay`).
-        OVERLAY_SHOW_GENERATION.fetch_add(1, Ordering::SeqCst);
+fn show_overlay_state(
+    app_handle: &AppHandle,
+    capture: u64,
+    presentation: Presentation,
+) -> Option<OverlayTicket> {
+    // Reserve identity before settings I/O or main-thread dispatch. Cancellation
+    // can supersede this request even if its queued callback has not run yet.
+    let ticket = reserve(capture, presentation)?;
+    let settings = settings::get_settings(app_handle);
+    if settings.overlay_style == OverlayStyle::None {
+        return Some(ticket);
+    }
+    let handle = app_handle.clone();
+    let _ = app_handle.run_on_main_thread(move || {
+        #[cfg(target_os = "windows")]
+        let text_scale = windows_text_scale_factor();
+        #[cfg(not(target_os = "windows"))]
+        let text_scale = 1.0;
+        LIFECYCLE
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .commit(ticket, || {
+                show_overlay_state_on_main(&handle, ticket, settings.overlay_position, text_scale);
+            });
+    });
+    Some(ticket)
+}
 
+fn show_overlay_state_on_main(
+    app_handle: &AppHandle,
+    ticket: OverlayTicket,
+    overlay_position: OverlayPosition,
+    _text_scale: f64,
+) {
+    let state = ticket.presentation.label();
+    // Size the overlay for this state (compact vs. streaming), then position it.
+    let (width, height) = overlay_dimensions(if ticket.presentation.streaming() {
+        "streaming"
+    } else {
+        state
+    });
+    if let Some(overlay_window) = app_handle.get_webview_window("recording_overlay") {
         #[cfg(target_os = "linux")]
         let shown_with_layer_shell = if LAYER_SHELL_ACTIVE.load(Ordering::SeqCst) {
-            let position = settings::get_settings(app_handle).overlay_position;
+            let position = overlay_position;
             match overlay_window.gtk_window() {
                 Ok(gtk_window) => {
                     configure_layer_shell_surface(&gtk_window, position, width, height)
@@ -538,26 +595,32 @@ fn show_overlay_state_on_main(app_handle: &AppHandle, state: &str) {
             let _ =
                 overlay_window.set_size(tauri::Size::Logical(tauri::LogicalSize { width, height }));
             #[cfg(target_os = "windows")]
-            WINDOWS_OVERLAY_IS_STREAMING.store(state == "streaming", Ordering::Relaxed);
+            WINDOWS_OVERLAY_IS_STREAMING.store(ticket.presentation.streaming(), Ordering::Relaxed);
             let size_elapsed = size_started.elapsed();
 
             let pos_started = std::time::Instant::now();
             #[cfg(not(target_os = "windows"))]
-            let set_pos_elapsed =
-                if let Some((x, y)) = calculate_overlay_position(app_handle, width, height) {
-                    let set_pos_started = std::time::Instant::now();
-                    let _ = overlay_window
-                        .set_position(tauri::Position::Logical(tauri::LogicalPosition { x, y }));
-                    set_pos_started.elapsed()
-                } else {
-                    std::time::Duration::ZERO
-                };
+            let set_pos_elapsed = if let Some((x, y)) =
+                calculate_overlay_position(app_handle, width, height, overlay_position)
+            {
+                let set_pos_started = std::time::Instant::now();
+                let _ = overlay_window
+                    .set_position(tauri::Position::Logical(tauri::LogicalPosition { x, y }));
+                set_pos_started.elapsed()
+            } else {
+                std::time::Duration::ZERO
+            };
             #[cfg(target_os = "windows")]
             let set_pos_elapsed = {
                 let set_pos_started = std::time::Instant::now();
-                if let Err(error) =
-                    place_windows_overlay(app_handle, &overlay_window, width, height)
-                {
+                if let Err(error) = place_windows_overlay(
+                    app_handle,
+                    &overlay_window,
+                    width,
+                    height,
+                    overlay_position,
+                    _text_scale,
+                ) {
                     log::error!("Failed to place recording overlay: {error}");
                 }
                 set_pos_started.elapsed()
@@ -575,7 +638,14 @@ fn show_overlay_state_on_main(app_handle: &AppHandle, state: &str) {
             // Re-assert bounds after show(): the pre-show move crosses the DPI
             // boundary, and tao's WM_DPICHANGED reflow clobbers the first placement.
             #[cfg(target_os = "windows")]
-            if let Err(error) = place_windows_overlay(app_handle, &overlay_window, width, height) {
+            if let Err(error) = place_windows_overlay(
+                app_handle,
+                &overlay_window,
+                width,
+                height,
+                overlay_position,
+                _text_scale,
+            ) {
                 log::error!("Failed to re-assert recording overlay position: {error}");
             }
 
@@ -589,45 +659,103 @@ fn show_overlay_state_on_main(app_handle: &AppHandle, state: &str) {
             );
         }
 
-        let _ = overlay_window.emit("show-overlay", state);
+        let _ = app_handle.emit_to(
+            "recording_overlay",
+            "show-overlay",
+            ShowOverlayEvent {
+                capture_id: ticket.capture.0.to_string(),
+                revision: ticket.revision.to_string(),
+                state,
+            },
+        );
     }
 }
 
 /// Notify the visible recording overlay that the input stream has delivered its
 /// first sample chunk. Audio feedback uses the same backend readiness signal,
 /// but this targeted event is skipped when overlays are disabled.
-pub fn emit_recording_ready(app_handle: &AppHandle) {
+pub fn emit_recording_ready(app_handle: &AppHandle, ticket: OverlayTicket) {
     if !OVERLAY_ENABLED.load(Ordering::Relaxed) {
         return;
     }
-
-    // Showing the overlay is also queued onto the main thread. Queue readiness
-    // there as well so a very fast always-on stream cannot overtake show-overlay
-    // and then get reset back to the arming state by the frontend.
     let handle = app_handle.clone();
     let _ = app_handle.run_on_main_thread(move || {
-        let _ = handle.emit_to("recording_overlay", "recording-ready", ());
+        LIFECYCLE
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .ready(ticket, || {
+                let _ = handle.emit_to(
+                    "recording_overlay",
+                    "recording-ready",
+                    RecordingReadyEvent {
+                        capture_id: ticket.capture.0.to_string(),
+                        capture_revision: ticket.revision.to_string(),
+                    },
+                );
+            });
     });
 }
 
-/// Shows the recording overlay window with fade-in animation
-pub fn show_recording_overlay(app_handle: &AppHandle) {
-    show_overlay_state(app_handle, "recording");
+/// Begin/redisplay one capture. Duplicate presentation requests share a revision.
+pub fn show_recording_overlay(app: &AppHandle, capture: u64) -> Option<OverlayTicket> {
+    show_overlay_state(app, capture, Presentation::Recording)
+}
+pub fn show_streaming_overlay(app: &AppHandle, capture: u64) -> Option<OverlayTicket> {
+    show_overlay_state(app, capture, Presentation::Streaming)
+}
+pub fn show_transcribing_overlay(app: &AppHandle, capture: u64) {
+    show_overlay_state(app, capture, Presentation::Transcribing);
+}
+pub fn show_processing_overlay(app: &AppHandle, capture: u64) {
+    show_overlay_state(app, capture, Presentation::Processing);
 }
 
-/// Shows the larger streaming overlay that displays live transcription text
-pub fn show_streaming_overlay(app_handle: &AppHandle) {
-    show_overlay_state(app_handle, "streaming");
+/// Close capture synchronously, then deliver the streaming working transition.
+pub fn emit_stream_working(
+    app: &AppHandle,
+    capture: u64,
+    kind: crate::managers::transcription::StreamWorkKind,
+) {
+    use crate::managers::transcription::{StreamPhase, StreamPhaseEvent, StreamWorkKind};
+    use tauri_specta::Event;
+    let presentation = match kind {
+        StreamWorkKind::Transcribing => Presentation::StreamTranscribing,
+        StreamWorkKind::Polishing => Presentation::StreamProcessing,
+    };
+    let Some(ticket) = reserve(capture, presentation) else {
+        return;
+    };
+    let handle = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        LIFECYCLE
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .commit(ticket, || {
+                let _ = StreamPhaseEvent {
+                    capture_id: capture.to_string(),
+                    revision: ticket.revision.to_string(),
+                    phase: StreamPhase::Working,
+                    kind: Some(kind),
+                }
+                .emit(&handle);
+            });
+    });
 }
 
-/// Shows the transcribing overlay window
-pub fn show_transcribing_overlay(app_handle: &AppHandle) {
-    show_overlay_state(app_handle, "transcribing");
-}
-
-/// Shows the processing overlay window
-pub fn show_processing_overlay(app_handle: &AppHandle) {
-    show_overlay_state(app_handle, "processing");
+/// Text is capture-scoped even if its worker finishes after a successor starts.
+pub fn emit_stream_text(app: &AppHandle, capture: u64, committed: &str, tentative: &str) {
+    use tauri_specta::Event;
+    LIFECYCLE
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .text(CaptureId(capture), || {
+            let _ = crate::managers::transcription::StreamTextEvent {
+                capture_id: capture.to_string(),
+                committed: committed.to_string(),
+                tentative: tentative.to_string(),
+            }
+            .emit(app);
+        });
 }
 
 /// Updates the overlay window position based on current settings
@@ -658,7 +786,14 @@ fn update_overlay_position_on_main(app_handle: &AppHandle) {
                 "recording"
             };
             let (width, height) = overlay_dimensions(state);
-            if let Err(error) = place_windows_overlay(app_handle, &overlay_window, width, height) {
+            if let Err(error) = place_windows_overlay(
+                app_handle,
+                &overlay_window,
+                width,
+                height,
+                settings::get_settings(app_handle).overlay_position,
+                windows_text_scale_factor(),
+            ) {
                 log::error!("Failed to update recording overlay position: {error}");
             }
         }
@@ -669,7 +804,12 @@ fn update_overlay_position_on_main(app_handle: &AppHandle) {
             // overlay is in compact or streaming layout.
             let (width, height) = current_overlay_logical_size(&overlay_window)
                 .unwrap_or((OVERLAY_WIDTH, OVERLAY_HEIGHT));
-            if let Some((x, y)) = calculate_overlay_position(app_handle, width, height) {
+            if let Some((x, y)) = calculate_overlay_position(
+                app_handle,
+                width,
+                height,
+                settings::get_settings(app_handle).overlay_position,
+            ) {
                 let _ = overlay_window
                     .set_position(tauri::Position::Logical(tauri::LogicalPosition { x, y }));
             }
@@ -677,36 +817,44 @@ fn update_overlay_position_on_main(app_handle: &AppHandle) {
     }
 }
 
-/// Generation counter bumped every time the overlay is shown. The delayed
-/// `hide()` below only unmaps the window if no show happened after it was
-/// scheduled, so a hide left over from a finished transcription can never
-/// take down the overlay of a session that started in the meantime — e.g. a
-/// press the coordinator remembered while the pipeline was busy and started
-/// the instant it drained, well inside the 300 ms hide delay.
-static OVERLAY_SHOW_GENERATION: AtomicU64 = AtomicU64::new(0);
-
-/// Hides the recording overlay window with fade-out animation
-pub fn hide_recording_overlay(app_handle: &AppHandle) {
-    // Always hide the overlay regardless of settings - if setting was changed while recording,
-    // we still want to hide it properly
-    if let Some(overlay_window) = app_handle.get_webview_window("recording_overlay") {
-        // Snapshot before doing anything observable, so any show that lands
-        // after this point invalidates the delayed hide below.
-        let scheduled_at = OVERLAY_SHOW_GENERATION.load(Ordering::SeqCst);
-        // Emit event to trigger fade-out animation
-        let _ = overlay_window.emit("hide-overlay", ());
-        // Hide the window after a short delay to allow animation to complete,
-        // unless a newer session has shown the overlay again by then.
-        let window_clone = overlay_window.clone();
-        std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_millis(300));
-            if OVERLAY_SHOW_GENERATION.load(Ordering::SeqCst) != scheduled_at {
-                log::debug!("Skipping stale overlay hide: a newer session is showing the overlay");
-                return;
-            }
-            let _ = window_clone.hide();
+/// Hide has its own reserved revision. The main-thread check and native commit
+/// are serialized with successor reservations; delayed work never reads a new ID.
+pub fn hide_recording_overlay(app: &AppHandle, capture: u64, reason: HideReason) {
+    let Some(ticket) = reserve(capture, Presentation::Hidden) else {
+        return;
+    };
+    let handle = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        LIFECYCLE
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .commit(ticket, || {
+                let _ = handle.emit_to(
+                    "recording_overlay",
+                    "hide-overlay",
+                    HideOverlayEvent {
+                        capture_id: capture.to_string(),
+                        revision: ticket.revision.to_string(),
+                        reason: reason.label(),
+                    },
+                );
+            });
+    });
+    let handle = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        let target = handle.clone();
+        let _ = handle.run_on_main_thread(move || {
+            LIFECYCLE
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .commit(ticket, || {
+                    if let Some(window) = target.get_webview_window("recording_overlay") {
+                        let _ = window.hide();
+                    }
+                });
         });
-    }
+    });
 }
 
 // Cached "overlay is enabled" flag, kept in sync with overlay_style. Avoids

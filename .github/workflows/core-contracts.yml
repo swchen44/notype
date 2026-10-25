@@ -26,6 +26,7 @@ on:
       - desktop/src-tauri/src/physical_gestures.rs
       - desktop/src-tauri/src/native_input.rs
       - desktop/src-tauri/src/window_lifecycle.rs
+      - desktop/src-tauri/src/overlay_lifecycle.rs
       - src/**
       - package.json
       - package-lock.json
@@ -57,7 +58,7 @@ jobs:
       - name: Lint the core
         run: cargo +1.99.1 clippy --locked --manifest-path crates/notype-core/Cargo.toml --all-targets -- -D warnings
       - name: Exercise desktop orchestration and HTTP contracts without Tauri
-        run: cargo +1.99.1 test --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test desktop-workflow --test desktop-provider --test physical-gestures --test native-delivery --test desktop-diagnostics --test diagnostics-export --test window-lifecycle
+        run: cargo +1.99.1 test --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test desktop-workflow --test desktop-provider --test physical-gestures --test native-delivery --test desktop-diagnostics --test diagnostics-export --test window-lifecycle --test overlay-lifecycle
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22.15.0
