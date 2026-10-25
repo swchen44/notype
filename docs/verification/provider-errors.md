@@ -75,7 +75,13 @@ no paid request was made.
 This phase does not implement multiple connections, Custom/Local request options,
 provider-specific thinking, App-key/home-.env precedence, credential destination
 binding, View/Copy model IDs, manual model choice or safe debug controls. Those
-are separately planned under #25 and require exact Astra approval before code.
+are separately planned under #25. The follow-on
+[config-v2 plan](https://github.com/swchen44/notype/issues/25#issuecomment-6404377843)
+has [Astra APPROVED / zero unresolved findings](https://github.com/swchen44/notype/issues/25#issuecomment-6404401509)
+and may proceed from the merged phase-one gate; this receipt does not claim its
+implementation complete. The important debug/troubleshooting slice reuses P20's
+safe allowlist, default-on/off/clear, preview/export and manual GitHub attachment
+boundaries, independently of business history, and needs its own exact approval.
 The user has resolved the essential product choices; experimental IDs do not
 become UI defaults. DeepSeek Flash4.1's current-round authorization is US$2 total,
 while Gemini/OpenRouter are free-only; unresolved real free-billing eligibility
