@@ -69,6 +69,312 @@ struct Metered {
     output: u64,
     amount: &'static str,
 }
+
+#[derive(Clone, Copy)]
+enum ReverseResult {
+    Timeout,
+    Invalid,
+    MissingSource,
+    Cancelled,
+    Pending,
+    Success,
+}
+struct ReviewFixture {
+    reverse: ReverseResult,
+    started: Arc<tokio::sync::Notify>,
+}
+fn review_processor(reverse: ReverseResult) -> Arc<ReviewFixture> {
+    Arc::new(ReviewFixture {
+        reverse,
+        started: Arc::new(tokio::sync::Notify::new()),
+    })
+}
+fn review_session(service: &SessionService) -> notype_core::SessionEntry {
+    service
+        .create(
+            "original API",
+            SessionOptions {
+                scenario: notype_core::Scenario::Translation,
+                translation_target: Some("en-US".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap()
+}
+impl TextProcessor for ReviewFixture {
+    fn polish(&self, _: TextRequest, _: CancellationToken) -> TextFuture {
+        Box::pin(async { Ok("forward API 42".into()) })
+    }
+    fn generate_observed(
+        &self,
+        _: TextRequest,
+        _: CancellationToken,
+        observer: Arc<dyn ApiCallObserver>,
+    ) -> GenerationFuture {
+        let missing = matches!(self.reverse, ReverseResult::MissingSource);
+        Box::pin(async move {
+            let mut call = ApiCallGuard::begin(observer, ApiCallDescriptor::default())?;
+            call.mark_sent()?;
+            call.response(ApiReceipt {
+                usage: TokenUsage {
+                    input: Some(5),
+                    output: Some(3),
+                    ..Default::default()
+                },
+                ..Default::default()
+            });
+            call.finish(ApiOutcome::Success);
+            Ok(TextOutput {
+                text: "forward API 42".into(),
+                source_language: (!missing).then(|| "zh-TW".into()),
+            })
+        })
+    }
+    fn back_translate_observed(
+        &self,
+        _: notype_core::BackTranslationRequest,
+        cancel: CancellationToken,
+        observer: Arc<dyn ApiCallObserver>,
+    ) -> TextFuture {
+        let reverse = self.reverse;
+        let started = self.started.clone();
+        Box::pin(async move {
+            let mut call = ApiCallGuard::begin(
+                observer,
+                ApiCallDescriptor {
+                    purpose: ApiPurpose::BackTranslation,
+                    ..Default::default()
+                },
+            )?;
+            call.mark_sent()?;
+            started.notify_one();
+            if matches!(reverse, ReverseResult::Pending) {
+                cancel.cancelled().await;
+            }
+            match reverse {
+                ReverseResult::Timeout => {
+                    call.finish(ApiOutcome::Timeout);
+                    Err(notype_core::TextFailure::Timeout)
+                }
+                ReverseResult::Invalid => {
+                    call.finish(ApiOutcome::InvalidResponse);
+                    Err(notype_core::TextFailure::InvalidResponse)
+                }
+                ReverseResult::Success => {
+                    call.response(ApiReceipt {
+                        usage: TokenUsage {
+                            input: Some(2),
+                            output: Some(1),
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    });
+                    call.finish(ApiOutcome::Success);
+                    Ok("回譯 API 42".into())
+                }
+                _ => {
+                    call.finish(ApiOutcome::Cancelled);
+                    Err(notype_core::TextFailure::Cancelled)
+                }
+            }
+        })
+    }
+}
+
+#[tokio::test]
+async fn incomplete_review_keeps_forward_and_terminal_evidence_without_initial_ready_endpoint() {
+    for (reverse, error, calls) in [
+        (ReverseResult::Timeout, "back-translation-timeout", 2),
+        (ReverseResult::Invalid, "back-translation-failed", 2),
+        (ReverseResult::MissingSource, "back-translation-failed", 1),
+        (ReverseResult::Cancelled, "cancelled", 2),
+    ] {
+        let directory = tempfile::tempdir().unwrap();
+        let service = SessionService::open(directory.path().join("sessions.db")).unwrap();
+        let original = review_session(&service);
+        let entry = service
+            .process_with_stop(
+                &original.id,
+                vec![],
+                review_processor(reverse),
+                true,
+                Some(std::time::Instant::now() - std::time::Duration::from_millis(80)),
+            )
+            .await
+            .unwrap();
+        assert_eq!(entry.result.as_deref(), Some("forward API 42"));
+        assert_eq!(entry.observations.result_count, Some(3));
+        assert_eq!(entry.back_translation, None);
+        assert_eq!(entry.error.as_deref(), Some(error));
+        assert!(entry.review_required);
+        assert!(!entry.review_confirmed);
+        assert!(service.confirm_review(&entry.id, entry.revision).is_err());
+        assert!(entry.observations.latest_processing_ms.is_some());
+        assert!(entry.observations.latest_api_ms.is_some());
+        assert_eq!(entry.api_summary.call_count, Some(calls));
+        assert_eq!(entry.api_summary.input.known_subtotal, Some(5));
+        assert_eq!(entry.observations.initial_stop_to_result_ms, None);
+        let destination = directory.path().join("incomplete.csv");
+        service
+            .export_csv(&destination, &PlentySpace, &CancellationToken::new())
+            .unwrap();
+        let rows = read_csv(&destination);
+        assert_eq!(rows[0]["initial_stop_to_result_ms"], "");
+        assert_eq!(rows[0]["result_text"], "forward API 42");
+        assert_eq!(rows[0]["result_count"], "3");
+        assert_ne!(rows[0]["latest_processing_ms"], "");
+        assert_ne!(rows[0]["api_stage_ms"], "");
+        // Even a successful retry with a new stop argument cannot invent the first
+        // initial-ready endpoint that the incomplete initial pair never reached.
+        let retry = service
+            .process_with_stop(
+                &entry.id,
+                vec![],
+                review_processor(ReverseResult::Success),
+                true,
+                Some(std::time::Instant::now()),
+            )
+            .await
+            .unwrap();
+        assert!(retry.back_translation.is_some());
+        assert_eq!(
+            retry.observations.latest_processing_kind.as_deref(),
+            Some("retry")
+        );
+        assert_eq!(retry.observations.initial_stop_to_result_ms, None);
+        assert_eq!(retry.api_summary.call_count, Some(calls + 2));
+    }
+}
+
+#[tokio::test]
+async fn cancelling_pending_reverse_keeps_forward_count_and_fenced_unknown_initial_readiness() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("sessions.db");
+    let service = SessionService::open(&path).unwrap();
+    let original = review_session(&service);
+    let processor = review_processor(ReverseResult::Pending);
+    let started = processor.started.clone();
+    let worker = service.clone();
+    let id = original.id.clone();
+    let task = tokio::spawn(async move {
+        worker
+            .process_with_stop(
+                &id,
+                vec![],
+                processor,
+                true,
+                Some(std::time::Instant::now()),
+            )
+            .await
+    });
+    tokio::time::timeout(std::time::Duration::from_secs(2), started.notified())
+        .await
+        .unwrap();
+    let during = service.get(&original.id).unwrap();
+    assert_eq!(during.result.as_deref(), Some("forward API 42"));
+    assert_eq!(during.observations.result_count, Some(3));
+    service.cancel(&original.id).unwrap();
+    let cancelled = task.await.unwrap().unwrap();
+    assert_eq!(cancelled.status, notype_core::SessionStatus::Cancelled);
+    assert_eq!(cancelled.result.as_deref(), Some("forward API 42"));
+    assert_eq!(cancelled.observations.result_count, Some(3));
+    assert!(cancelled.observations.latest_processing_ms.is_some());
+    assert_eq!(cancelled.observations.initial_stop_to_result_ms, None);
+    assert_eq!(cancelled.api_summary.call_count, Some(2));
+    assert_eq!(cancelled.api_summary.input.known_subtotal, Some(5));
+    drop(service);
+    let service = SessionService::open(&path).unwrap();
+    let saved = service.get(&original.id).unwrap();
+    assert_eq!(saved.observations.initial_stop_to_result_ms, None);
+    let destination = directory.path().join("cancelled.csv");
+    service
+        .export_csv(&destination, &PlentySpace, &CancellationToken::new())
+        .unwrap();
+    let rows = read_csv(&destination);
+    assert_eq!(rows[0]["initial_stop_to_result_ms"], "");
+    assert_eq!(rows[0]["result_count"], "3");
+    assert_ne!(rows[0]["latest_processing_ms"], "");
+}
+
+#[tokio::test]
+async fn successful_pair_and_original_only_initial_endpoints_survive_subsequent_retries() {
+    struct Disabled;
+    impl TextProcessor for Disabled {
+        fn polish(&self, _: TextRequest, _: CancellationToken) -> TextFuture {
+            Box::pin(async { Err(notype_core::TextFailure::ConfigurationRequired) })
+        }
+    }
+    for original_only in [false, true] {
+        let directory = tempfile::tempdir().unwrap();
+        let service = SessionService::open(directory.path().join("sessions.db")).unwrap();
+        let original = service
+            .create_observed(
+                "original API",
+                SessionOptions {
+                    scenario: notype_core::Scenario::Translation,
+                    translation_target: Some("en-US".into()),
+                    ..Default::default()
+                },
+                SessionObservations {
+                    asr_after_stop_ms: Some(17),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let processor: Arc<dyn TextProcessor> = if original_only {
+            Arc::new(Disabled)
+        } else {
+            review_processor(ReverseResult::Success)
+        };
+        let initial = service
+            .process_with_stop(
+                &original.id,
+                vec![],
+                processor,
+                true,
+                Some(std::time::Instant::now() - std::time::Duration::from_millis(80)),
+            )
+            .await
+            .unwrap();
+        let first = initial.observations.initial_stop_to_result_ms.unwrap();
+        if original_only {
+            assert_eq!(first, 17);
+            assert_eq!(
+                initial.observations.latest_outcome.as_deref(),
+                Some("original_only")
+            );
+        } else {
+            assert!(first >= 80);
+            assert!(initial.error.is_none());
+            assert!(initial.back_translation.is_some());
+            assert_eq!(initial.api_summary.call_count, Some(2));
+        }
+        let retry = service
+            .process_with_stop(
+                &original.id,
+                vec![],
+                review_processor(ReverseResult::Timeout),
+                true,
+                Some(std::time::Instant::now()),
+            )
+            .await
+            .unwrap();
+        assert_eq!(retry.observations.initial_stop_to_result_ms, Some(first));
+        assert_eq!(
+            retry.observations.latest_processing_kind.as_deref(),
+            Some("retry")
+        );
+        assert_eq!(retry.observations.result_count, Some(3));
+        let destination = directory.path().join("retained.csv");
+        service
+            .export_csv(&destination, &PlentySpace, &CancellationToken::new())
+            .unwrap();
+        assert_eq!(
+            read_csv(&destination)[0]["initial_stop_to_result_ms"],
+            first.to_string()
+        );
+    }
+}
 impl TextProcessor for Metered {
     fn polish(&self, _: TextRequest, _: CancellationToken) -> TextFuture {
         Box::pin(async { Ok("整理 API。".into()) })
