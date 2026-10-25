@@ -1,53 +1,77 @@
-# #14 local assembly progress
+# #14 private local artifact verification
 
-2026-10-25, following foundation commit `5dcf3f1` and integration QA scope fix `6d5fc9921d4f0fa2e9e088ffd33f204701b8f562`. **Local assembly is in progress; this receipt does not claim a complete portable artifact or #14 completion.** Company API/Proxy/public publication remain deferred under the user's local-first request.
+2026-10-25, Windows 11 x64. **The copy-first local pilot has actual artifacts, an offline installation and bounded native runtime proof. This does not close #14 or claim full portable/public deployment acceptance.**
 
-## Verified source contracts
+## Source and builds
 
-The launcher now composes full package/hash/role verification, normal-token/CPU checks, local model activation, then shell-free native spawn. Source release descriptors remain private/unassembled so this code cannot accidentally launch placeholders. The model is the verified local-pilot Qwen3-ASR 0.6B Q6_K; actual model provenance/quality remain in the separate Qwen receipts, without another full matrix run here.
+Actual App/helper source is `239d6f05cdf7883032889b8d25042a7a427d72d9`, including independently accepted review fixes `dd40397`. CI source `a2d23286643b7eb36da97685ce759ef43994c4b8` differs only by two expression line wraps in the platform library; whitespace-normalized source equality was checked. [CI40162614988](https://github.com/swchen44/notype/actions/runs/40162614988) passed core27, desktop34, platform4, Node23 unit +16 integration, formatting and clippy. These counts are separate from runtime cases below.
 
-Default data follows actual Windows RoamingAppData/`io.github.swchen44.notype` and leaves NOTYPE_DATA_DIR absent unless the user supplied it. This retains the previous HF_HOME/global-cache behavior and valid model selections; injecting the same default root through that override would change native cache lookup. UDF is `<data>/webview`, matching existing main/overlay builders. No history/settings store is read or overwritten by model activation.
+The true Release App passed: Cargo6m42s, total runner about7m16s including frontend TypeScript/Vite. It reused `D:/git/notype-build`, global Cargo, the independently preserved C transcribe-cpp prefix, `--offline --locked`, jobs1, rlib-only, LTO off, codegen16, debug0, incremental off. No new C++ build/download. Only the existing `secure_input.rs` unused `Emitter` warning remains.
 
-Copied weights are hashed, synced and exclusively published without replacing a preexisting model; matching models are reused. Cancellation/retry, simultaneous instances, changed source, insufficient copy margin and an actual killed Node copy/restart are covered. Only exact current-content-hash/PID/UUID reserved partial names from a proven-dead process are eligible for cleanup; unknown/live processes, links and unrelated files are retained. Atomic publication requires hard-link support and otherwise fails clearly. This is tested with synthetic bytes, not a claim that a real 690 MB copy/upgrade has already passed.
+| Actual binary | Bytes | SHA256 |
+| --- | ---: | --- |
+| App | 57,063,936 | `7a70d5abe3558c2b12d2c8a16c0ed583bf0a231d3cbe8ba14fa89300b74257ab` |
+| Baseline helper | 146,944 | `6cd855cb408ccee695d800ce70de8c94ddd76e4d38e510a50c68976aac5bd38d` |
 
-The independent `notype-platform` adapter and standalone baseline probe use Rust/std, serde/sha2 and Windows system APIs, with no Tauri/ORT/ggml/WebView imports. Actual token query in the elevated agent returns unsupported; CPU reports AVX2/BMI2 and Known Folder reports the correct roaming directory. PE imports include **VCRUNTIME140.dll** in addition to Windows API-set/UCRT/system libraries. Therefore the helper sits alongside the app-local audited CRT, and hostProbeLibraries must declare/verify that dependency before the helper can run. A developer-installed CRT is not portable closure evidence.
+The separate helper passed23.02s. Only it used `target-cpu=x86-64` and `-avx,-avx2,-bmi2`; App/ORT/native flags were unchanged. Its actual imports include app-local `VCRUNTIME140.dll` and Windows inbox API/UCRT libraries, without speech/WebView imports. The previous pre-review App/hash was archived separately and is not delivered. Build logs/disk samples are under `D:/git/notype-build/release-receipts/review-fixed/`.
 
-Release entry-point source independently validates the regular-byte application/runtime inventory, its token and data placement before Tauri/history/tray setup; directly invoked invalid packages fail with a clear native diagnostic. This glue is pending the true Release compilation/owned cold-launch proof. GUI startup prewarms the existing script converter in a background thread; the earlier headless CLI path retains cold timing behavior. No new latency/p95 result is claimed.
+## Actual private tarballs
 
-The local package explicitly reports startup registration unavailable: a direct login invocation would bypass facade model activation and lose a shell-only data override. The visible toggle is disabled with a localized explanation; the command refuses before changing settings, and startup skips plugin enable/disable. Existing preferences/OS entries are retained, with no HKCU writes or login acceptance test in this task. A stable verified login-launcher integration remains future work.
+Under `D:/git/notype-local-artifacts/`, all three have `private:true`, no lifecycle scripts, and actual streamed tar entry/size/SHA256 comparisons against their allowlists. No cache symlinks, settings, history databases, recordings or keys are included.
 
-Pinned transcribe.cpp derives default dynamic-backend lookup from its own DLL location. However `ggml-backend-reg.cpp:600` additionally honors GGML_BACKEND_PATH even with an explicit scan directory; both launcher and native release guard remove that override. Actual loaded module paths from the final payload still need observation.
+| Artifact | Compressed bytes | Unpacked bytes | Regular files | SHA256 |
+| --- | ---: | ---: | ---: | --- |
+| `notype-0.1.0-local.1.tgz` | 9,887 | 29,285 | 8 | `abb25ede159633df0aab078b30479c6f79c3d10bc7339991c8db2eb671247462` |
+| `notype-win32-x64-0.1.0-local.1.tgz` | 356,789,619 | 803,455,282 | 1,696 | `818c11c7094e9a3195b4dad06e27aa774d9f163d7cff44aad2ee59b532ac1241` |
+| `notype-model-0.1.0-qwen3-q6k.1.tgz` | 668,899,885 | 690,434,160 | 8 | `6e4595abca952f2c11d3c91189ecd9c4efa392766ec813c7ce84078136b7be0d` |
 
-## Actual checks before release build
+Application manifest SHA256 is `c7bcd4f53e1d7bb29ab360d6f5572bad9f285d9bafb1a23987c2ef4676597b52`; model manifest is `36a988d8a0bb3fec912a8655e69a7977a40c8a9e648c26d1e8d37900c25a0556`.
 
-| Check | Result |
-| --- | --- |
-| `npm.cmd run test:unit` | **23 passed**, including 12 portable contracts |
-| `npm.cmd run test:integration` | **16 passed**, including 7 activation, 3 CLI and 1 real small-package tarball contract |
-| `cargo test --offline --locked --manifest-path crates/notype-platform/Cargo.toml --test portable-native` | **3 passed** |
-| platform adapter `cargo clippy ... --all-targets -- -D warnings` | Passed |
-| host-filtered desktop `cargo metadata --offline --locked --filter-platform x86_64-pc-windows-msvc` | Passed; lock adds only the path adapter (10 lines) |
+The complete257-file Fixed WebView2 `156.0.4314.42` tree, twelve CPP DLLs, mandatory regular-byte DirectML, four app-local VC CRT DLLs, resources and notices are retained. The source DirectML cache link is dereferenced. PE audits covered22 regular App/helper/CRT/CPP/Fixed entries; helper dependencies are verified before execution. Initial manifest validation correctly rejected three vendor LICENSE entries classified as runtime; correcting their notice roles changed no vendor bytes.
 
-TDD REDs included changed default HF behavior, absent activation module, cancellation, actual killed-copy partial cleanup, insufficient storage, out-of-tree backend override and omitted helper CRT; corresponding public contracts became GREEN. No tests were skipped. The unrestricted metadata query first refused uncached Linux ALSA metadata offline; the Windows-filtered query resolved locally. No dependency download or native build occurred in that query.
+Qwen3-ASR0.6B Q6_K is690,417,824 bytes, SHA256 `3b051f108f03c0c91bbe1a3b2c1ee15e3ed51e4caec2a48751b01f2a21441cc3`, with Apache2 LICENSE/NOTICE and immutable [provenance](qwen3-provenance.json). Its actual catalog ID is `handy-computer/Qwen3-ASR-0.6B-gguf/Qwen3-ASR-0.6B-Q6_K.gguf`; no selected-model setting is injected. See separate [quality limits](qwen3-quality.md).
 
-Small contract builds use the existing isolated cargo-core home and D:/git/notype-core-build, debug=0/incremental=0/jobs1; public source registry only, no credential/config copies. Node fixture TEMP/TMP/npm cache were redirected into that owned target after C free space dropped; no large staging/model copies were started.
+Primary binary/model terms and available dependency notices are included. A conservative951-component Rust/frontend/build/helper inventory retains SPDX/source/notices;35 component root-notice gaps remain transparent, mostly build/dev/workspace entries. This is not public redistribution/license closure.
 
-## Native input preservation and authorized cache retirement
+## Offline install and storage guard
 
-Regular-byte transcribe-cpp install subset preserved at:
+Installed Node22.15/npm installed all three actual local tgzs together, `--offline --ignore-scripts --no-audit --no-fund`, into fresh stable `C:/Users/swche/AppData/Local/notype/local-app`. The installed facade's `--check`, with explicit owned test data, passed complete role/inventory/hash verification. It correctly distinguishes integrity checking from host/launch proof.
 
-`C:/Users/swche/AppData/Local/notype-study/build-cache/native-prebuilt/transcribe-cpp-0.2.4-win64-cpu-release-E4b0TR`
+The first attempt stopped its own npm tree at the D1GiB guard before prefix extraction/App launch. Installed pacote's `FileFetcher.manifest()` temporarily unpacks local archives while writing compressed cache streams. Only the exact idle failed cache (1,574,554,801 bytes, zero reparse entries) and empty owned prefix were retired; sources/models/history were preserved. A fresh empty C cache retry passed: measured minimum C2,661,081,088 bytes and D2,749,550,592 bytes. After installed inventory verification, that exact idle C cache (7 files,1,025,704,197 bytes) was retired **before**690MB activation. Floors stayed C2GiB/D1GiB; no OS/pagefile/user-model cleanup or floor reduction.
 
-Exactly **44 files / 12,055,325 bytes** across bin/lib/include, every source/copy/re-source hash verified. Link manifest, source CMakeCache and real CPU flags are retained. GGML_NATIVE=OFF, conservative x64/all CPU variants/dynamic modules enabled; these do not certify ORT's minimum instruction baseline. C tcs remains an untouched junction into the retired old debug location; the new prefix is independent. ORT/DirectML C cache was retained untouched.
+No npm login/publication, bootstrapper, installer or native compilation occurred during install. System networking was not disconnected and packets were not monitored. `npm --offline`, actual local CPU inference and unconfigured text service are not a whole-system zero-network test.
 
-A tiny actual build-script probe proved `cargo --offline` leaves build-script CARGO_NET_OFFLINE **unset** when not explicitly supplied. Explicit CARGO_NET_OFFLINE/ORT_OFFLINE/ORT_SKIP_DOWNLOAD must not trigger the cached ORT route's skip-link behavior. No network/bootstrapper is used to repair a missing cache.
+## Installed runtime and history
 
-After #13 released all jobs, the parent authorized retiring only the exact derived D:/git/notype-build/debug tree. Preflight inspected **301 process module inventories, 0 inaccessible, 0 target hits**; no Cargo/rustc/link/cmake remained. The independent prefix and the final 71-file regular 9fbe QA app snapshot were rehashed first. The resolved debug root was a normal directory. **10,445 derived files** and **3 reparse entries** were removed; links were unlinked without following targets. Actual D free grew **663,457,792 → 5,845,901,312 bytes**, an increase of **5,182,443,520 bytes**. No core target, worktree, registry cache, ORT, model, user data or C junction was deleted.
+A pinned external launcher used the same-user/session medium Explorer parent, suspended child assignment to a kill-on-close Job, isolated owned data, six blank shortcuts and `always_on_microphone=false`. No release debug/CDP hooks were added. It did not acquire clipboard contents, record microphone audio, control user apps or use real API configuration.
 
-Detailed outside receipts: agent-notes/native-debug-retirement.json, the prefix preservation.json/CMakeCache.source.txt, and agent-notes/offline-env-probe source/output. The preserved QA app is the source-isolated 9fbe snapshot, not the pending Release binary.
+Two actual production batch CLI runs used the same13.344s synthetic technical-name WAV and installed model on CPU4:
 
-## Next build/acceptance frontier
+| Mode | ASR ms | Normalization ms | Combined ms | Load ms | Whole wrapper case ms |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Traditional Chinese+English | 3,271 | 378 | 3,649 | 1,140 | 41,912 |
+| Simplified Chinese+English | 3,122 | 325 | 3,448 | 884 | 10,356 |
 
-One actual desktop Release uses rlib-only, lto="off", codegen-units=16, debug=0, incremental=false, jobs1, the preserved TRANSCRIBE_DIR, existing native Cargo cache/default cached ORT route, --offline/--locked, and D-local compiler/link TEMP. Monitor D>=1 GiB and C>=2 GiB; stop only the owned build if it cannot fit. No second native cache or OS/pagefile/user-model cleanup is authorized.
+Both outputs retained API, Visual Studio Code, GitHub and English, with the expected Chinese script. Whole-wrapper time includes verification/activation/startup, separate from ASR. First launch may take about a minute; prelinked user-trial timing may differ. These two cases do not estimate p95 or certify human speech quality.
 
-Still pending: actual release compile, baseline helper build provenance/CRT closure, bounded final package assembly, complete per-file/notices manifests and true npm tarball/install inventory; verified real-model activation/native offline discovery/inference; normal-user fixed-runtime/UDF/module-path/no-download observation; invalid direct/facade startup and two-version interrupted/file-lock update/history restart receipts. App launch requires an owned slot coordinated by the parent. No real company API, public registry publication, microphone or broad human-app interaction has occurred in this slice.
+Two corrected60s hidden GUI runs, before/after update, passed. App/broker tokens were medium; expected sandboxed renderers were lower. Actual CPP/DirectML/CRT modules resolved to installed app files or Windows inbox paths. `EmbeddedBrowserWebView.dll` and all owned browser images resolved to the exact installed Fixed156 tree/version. No observed module came from developer ORT/transcribe caches. This is observed local closure, not fresh-VM/all-hardware certification.
+
+An earlier fixture requested `--no-tray`, which intentionally forces main visible despite `--start-hidden`; the visibility guard aborted and cleaned it to zero. The corrected fixture enabled tray/removes `--no-tray`; no product change/rebuild. Its failed receipt is retained. The audit also correctly permits the bundled runtime subfolder for the embedded WebView DLL.
+
+The owned SQLite row was created/read through public `SessionService`, then reopened after native GUI termination/restart. Exact ID, timestamp, Unicode text, `API_42`, numbers and negation survived. This proves existing-history preservation, not physical microphone-to-history/copy end-to-end acceptance.
+
+## Update and user entry
+
+An actual audited private facade `.2` tgz updated the same installation `.1`→`.2` offline. App/model pins stayed identical; history ID/time/text and activated model inode/mtime/size stayed unchanged. Another60s hidden GUI reopen passed. This is **facade-only**, not native binary/schema, locked-file or interrupted-update acceptance.
+
+All five owned runtime Jobs, including the failed no-tray fixture, ended with zero processes. No automated App remained when user entry was prepared. Actual user-facing files:
+
+- `D:/git/notype-local-artifacts/Start-notype.cmd`, Traditional Chinese, SHA256 `b644d7108146a3aa04d7acf0db002cc0d8e62120bbae7239eb12cc88c8e42fba`. It invokes exact quoted installed Node/facade paths, with no UAC/de-elevation/PowerShell-policy step.
+- Adjacent `README.md`, `安裝說明.md`, `SHA256SUMS.txt` and `release-pins.json`.
+- Permanent explicit trial data `C:/Users/swche/AppData/Local/notype/local-trial`. At preparation it had only the verified regular same-volume model hardlink, no settings, so normal default shortcuts/microphone-off apply. The blank-binding automated profile is separate. **Never retire this user directory as cache/QA data.** No existing `%APPDATA%/io.github.swchen44.notype` settings/history were read or overwritten.
+
+The user App was not automatically launched. The guide covers installed-Qwen onboarding, RightAlt start/stop, history「原稿」→「複製原稿」, missing text-service recovery and X-to-tray/explicit tray quit. Manual user trial is separate evidence.
+
+Detailed receipts are under `%LOCALAPPDATA%/notype-study/build-cache/local-package-pilot-db9qAw/proof/`: tar/install/failed-attempt audits, installed inventory, `local-runtime-audit.json`, facade update, Job cleanup and history fixture. Reversible machine-specific staging/probe scripts remain outside Git, not a portable CI release builder.
+
+Remaining gates include clean-machine/CPU closure, native/locked/interrupted updates, physical microphone/copy, human quality/p95, company network/API/Proxy and public publication. Source CI and synthetic fixtures do not substitute for them.
