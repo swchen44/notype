@@ -16,6 +16,7 @@ tokio = { version = "1", features = ["macros", "net", "io-util", "sync", "time",
 tempfile = "3"
 regex = "1"
 ferrous-opencc = "0.2.3"
+opencc-jieba-rs = { version = "=0.8.1", default-features = false }
 
 [[test]]
 name = "desktop-workflow"

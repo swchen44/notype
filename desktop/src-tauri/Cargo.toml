@@ -83,6 +83,7 @@ transcribe-rs = { version = "0.3.8", features = ["onnx"] }
 transcribe-cpp = { version = "0.2.4", default-features = false }
 handy-keys = "0.3.4"
 ferrous-opencc = "0.2.3"
+opencc-jieba-rs = { version = "=0.8.1", default-features = false }
 clap = { version = "4", features = ["derive"] }
 specta = "=2.0.0-rc.22"
 specta-typescript = "0.0.9"

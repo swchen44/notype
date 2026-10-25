@@ -29,7 +29,7 @@
         }
       ],
       "goldTraditional": "今天請保留42筆測試資料，不要刪除。The API is not ready. 等驗證完成後，再送出2筆請求。Keep the test data.",
-      "goldSimplified": "今天请保留42笔测试数据，不要删除。The API is not ready. 等验证完成后，再送出2笔请求。Keep the test data.",
+      "goldSimplified": "今天请保留42笔测试资料，不要删除。The API is not ready. 等验证完成后，再送出2笔请求。Keep the test data.",
       "mustPreserve": [
         "42",
         "2",
@@ -92,5 +92,8 @@
       ],
       "notes": "Includes one-to-many script context for 發/髮. Gold references are independently authored, not generated using the conversion implementation."
     }
-  ]
+  ],
+  "referenceErrata": {
+    "reason": "SAPI source says 測試資料; Simplified script-only reference must retain 资料 rather than regional-vocabulary substitute 数据. Manually corrected independent reference; no model/output changed. Numeric required-literal checks use digit boundaries so2 cannot match42. Original outside receipts remain historical."
+  }
 }

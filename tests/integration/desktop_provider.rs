@@ -75,6 +75,57 @@ fn configured(endpoint: String) -> TextConfiguration {
 }
 
 #[tokio::test]
+async fn captured_real_asr_corpus_keeps_ascii_and_mode_before_original_is_saved() {
+    let mut derived = Vec::new();
+    for (source, corpus) in [
+        (
+            "recognition-quality",
+            include_str!("../../docs/verification/recognition-quality.json"),
+        ),
+        (
+            "breeze-quality",
+            include_str!("../../docs/verification/breeze-quality.json"),
+        ),
+    ] {
+        let corpus: Value = serde_json::from_str(corpus).unwrap();
+        for row in corpus["runs"].as_array().unwrap() {
+            let mode = match row["mode"].as_str().unwrap() {
+                "traditional_english" => RecognitionMode::TraditionalEnglish,
+                "simplified_english" => RecognitionMode::SimplifiedEnglish,
+                other => panic!("Unexpected captured profile: {other}"),
+            };
+            let raw = row["observed"]["raw_text"].as_str().unwrap();
+            let workflow =
+                DesktopWorkflow::new(SessionService::in_memory().unwrap(), Arc::new(|| {}));
+            let generation = workflow.begin(mode, None).unwrap();
+            let entry = workflow
+                .finish(generation, raw, TextConfiguration::default(), vec![])
+                .await
+                .unwrap();
+            let ascii = |text: &str| text.chars().filter(char::is_ascii).collect::<String>();
+            assert_eq!(
+                ascii(&entry.transcript),
+                ascii(raw),
+                "{} {}",
+                source,
+                row["fixture"]
+            );
+            assert_eq!(entry.recognition_mode, Some(mode));
+            assert_eq!(entry.error.as_deref(), Some("configuration-required"));
+            assert_eq!(
+                workflow.sessions().get(&entry.id).unwrap().transcript,
+                entry.transcript
+            );
+            derived.push(json!({"source":source,"fixture":row["fixture"],"mode":row["mode"],"model":row.get("model").unwrap_or(&corpus["model"]["id"]),"gold":row["gold"],"raw":raw,"previousNormalized":row["observed"]["text"],"normalized":entry.transcript,"asciiPreserved":true}));
+        }
+    }
+    assert_eq!(derived.len(), 24);
+    if let Ok(path) = std::env::var("NOTYPE_NORMALIZATION_RECEIPT") {
+        std::fs::write(path, serde_json::to_vec_pretty(&json!({"purpose":"Derived local normalization of frozen real ASR outputs; no model or LLM inference rerun","backend":"opencc-jieba-rs=0.8.1","cases":derived})).unwrap()).unwrap();
+    }
+}
+
+#[tokio::test]
 async fn translation_review_uses_two_requests_without_original_in_reverse_and_requires_exact_confirmation(
 ) {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
