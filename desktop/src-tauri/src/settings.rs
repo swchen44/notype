@@ -895,7 +895,7 @@ pub const SETTINGS_STORE_PATH: &str = "settings_store.json";
 
 pub fn get_default_settings() -> AppSettings {
     #[cfg(target_os = "windows")]
-    let default_shortcut = "alt_right";
+    let default_shortcut = crate::physical_gestures::DEFAULT_DICTATION;
     #[cfg(target_os = "macos")]
     let default_shortcut = "option+space";
     #[cfg(target_os = "linux")]
@@ -946,9 +946,17 @@ pub fn get_default_settings() -> AppSettings {
     );
 
     for (id, name, chord) in [
-        ("translation", "Translation", "alt_right+shift_right"),
-        ("ask", "Ask", "alt_right+space"),
-        ("stop", "Stop recording", "alt_right"),
+        (
+            "translation",
+            "Translation",
+            crate::physical_gestures::DEFAULT_TRANSLATION,
+        ),
+        ("ask", "Ask", crate::physical_gestures::DEFAULT_ASK),
+        (
+            "stop",
+            "Stop recording",
+            crate::physical_gestures::DEFAULT_STOP,
+        ),
     ] {
         bindings.insert(
             id.into(),
@@ -1160,8 +1168,8 @@ fn apply_settings_migrations(
     if settings_value.pointer("/bindings/stop").is_none() {
         if let Some(binding) = settings.bindings.get_mut("transcribe") {
             if binding.current_binding == "ctrl+space" && binding.default_binding == "ctrl+space" {
-                binding.current_binding = "alt_right".into();
-                binding.default_binding = "alt_right".into();
+                binding.current_binding = crate::physical_gestures::DEFAULT_DICTATION.into();
+                binding.default_binding = crate::physical_gestures::DEFAULT_DICTATION.into();
                 updated = true;
             }
         }

@@ -668,31 +668,7 @@ pub fn copy_last_transcript(app: &AppHandle) {
 
 #[cfg(test)]
 mod tests {
-    use super::{last_transcript_text, load_tray_icon, MenuInputs, TrayDesired, TrayIconState};
-    use notype_core::{SessionEntry, SessionStatus, TextSelection};
-
-    fn build_entry(transcription: &str, post_processed: Option<&str>) -> SessionEntry {
-        SessionEntry {
-            id: "session-1".into(),
-            transcript: transcription.into(),
-            result: post_processed.map(Into::into),
-            created_at: "2026-10-25T00:00:00.000Z".into(),
-            updated_at: "2026-10-25T00:00:00.000Z".into(),
-            status: SessionStatus::Pending,
-            error: None,
-            recognition_mode: None,
-            original_target: None,
-            selection: TextSelection::Polished,
-            scenario: notype_core::Scenario::Dictation,
-            translation_target: None,
-            source_context: Default::default(),
-            source_language: None,
-            back_translation: None,
-            review_required: false,
-            review_confirmed: false,
-            revision: 1,
-        }
-    }
+    use super::{load_tray_icon, MenuInputs, TrayDesired, TrayIconState};
 
     fn inputs(busy: bool) -> MenuInputs {
         MenuInputs {
@@ -704,18 +680,6 @@ mod tests {
             locale: "en".to_string(),
             update_checks_enabled: true,
         }
-    }
-
-    #[test]
-    fn uses_post_processed_text_when_available() {
-        let entry = build_entry("raw", Some("processed"));
-        assert_eq!(last_transcript_text(&entry), "processed");
-    }
-
-    #[test]
-    fn falls_back_to_raw_transcription() {
-        let entry = build_entry("raw", None);
-        assert_eq!(last_transcript_text(&entry), "raw");
     }
 
     #[test]

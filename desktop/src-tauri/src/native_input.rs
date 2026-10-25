@@ -154,7 +154,7 @@ mod platform {
         },
     }
     impl TargetScope {
-        fn matches(&self, pid: u32) -> bool {
+        fn matches(&self, _pid: u32) -> bool {
             match self {
                 Self::Production => true,
                 #[cfg(debug_assertions)]
@@ -163,8 +163,8 @@ mod platform {
                     created,
                     image,
                 } => {
-                    pid == *expected
-                        && process_details(pid).is_some_and(|(actual_created, actual_image)| {
+                    _pid == *expected
+                        && process_details(_pid).is_some_and(|(actual_created, actual_image)| {
                             actual_created == *created && actual_image.eq_ignore_ascii_case(image)
                         })
                 }

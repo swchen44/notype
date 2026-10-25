@@ -78,9 +78,13 @@ export const HistorySettings = () => {
     entry: SessionDto,
     version: "original" | "result" | "back_translation",
   ) => {
-    const result = await commands.copyHistoryText(entry.id, version);
-    if (result.status === "ok") setCopied({ id: entry.id, version });
-    else toast.error(t("notype.history.copyFailed"));
+    try {
+      const result = await commands.copyHistoryText(entry.id, version);
+      if (result.status === "ok") setCopied({ id: entry.id, version });
+      else toast.error(t("notype.history.copyFailed"));
+    } catch {
+      toast.error(t("notype.history.copyFailed"));
+    }
   };
 
   return (

@@ -9,6 +9,7 @@ use std::{sync::Arc, time::Duration};
 
 #[derive(Clone, Copy, Default, Serialize, Deserialize, specta::Type, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
+/// Explicit transport choice; Disabled performs no text-service request.
 pub enum TextTransport {
     #[default]
     Disabled,
@@ -16,6 +17,7 @@ pub enum TextTransport {
 }
 #[derive(Clone, Copy, Default, Serialize, Deserialize, specta::Type, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
+/// Explicit auth policy; Unspecified never silently becomes anonymous access.
 pub enum TextAuthentication {
     #[default]
     Unspecified,
@@ -26,6 +28,8 @@ pub enum TextAuthentication {
 // Deliberately no Debug: configuration contains a locally stored credential.
 #[derive(Clone, Serialize, Deserialize, specta::Type)]
 #[serde(default)]
+/// Locally persisted provider preferences, cloned into each recording's processing snapshot.
+/// Contains credentials and deliberately does not implement Debug.
 pub struct TextConfiguration {
     pub transport: TextTransport,
     pub endpoint: String,
@@ -53,6 +57,7 @@ impl Default for TextConfiguration {
 
 #[derive(Clone, Serialize, Deserialize, specta::Type)]
 #[serde(default)]
+/// Independent trusted user prompts. Transcript, glossary and app metadata remain untrusted data.
 pub struct ScenarioPrompts {
     pub dictation: String,
     pub translation: String,
@@ -67,6 +72,7 @@ impl Default for ScenarioPrompts {
     }
 }
 #[derive(Clone, Serialize, Deserialize, specta::Type)]
+/// An explicit source/target mapping applicable only to its selected target language.
 pub struct TranslationTerm {
     pub source: String,
     pub target: String,
@@ -74,6 +80,7 @@ pub struct TranslationTerm {
 }
 #[derive(Clone, Serialize, Deserialize, specta::Type)]
 #[serde(default)]
+/// Manual translation preferences plus optional revision-bound back-translation review.
 pub struct TranslationSettings {
     pub target_language: String,
     pub domain: String,
@@ -93,6 +100,7 @@ impl Default for TranslationSettings {
     }
 }
 impl TextConfiguration {
+    /// Return only the selected scenario's saved prompt.
     pub fn prompt(&self, scenario: Scenario) -> &str {
         match scenario {
             Scenario::Dictation => &self.prompts.dictation,
@@ -100,6 +108,7 @@ impl TextConfiguration {
             Scenario::Ask => &self.prompts.ask,
         }
     }
+    /// Validate and replace one prompt, preserving other prompts, credentials and mappings.
     pub fn set_prompt(&mut self, scenario: Scenario, prompt: String) -> Result<(), String> {
         if !valid_prompt(&prompt) {
             return Err("prompt-invalid".into());
@@ -111,6 +120,7 @@ impl TextConfiguration {
         }
         Ok(())
     }
+    /// Restore one product default without modifying other scenario or provider settings.
     pub fn reset_prompt(&mut self, scenario: Scenario) {
         let defaults = ScenarioPrompts::default();
         match scenario {
@@ -207,6 +217,7 @@ pub(super) fn processor(configuration: TextConfiguration) -> Arc<dyn TextProcess
 }
 
 impl TextConfiguration {
+    /// Validate explicit transport/endpoint/model/auth configuration without making a request.
     pub fn is_ready(&self) -> bool {
         ChatProcessor::new(self.clone()).is_ok()
     }

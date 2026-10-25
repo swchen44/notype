@@ -980,39 +980,66 @@ impl AudioRecordingManager {
         self.cancel_generation.load(Ordering::Acquire) != generation
     }
 
-    pub fn stop_recording(&self, binding_id: &str, cancel_generation: u64) -> Option<Vec<f32>> {
-        self.invalidate_recording_readiness();
-        let mut state = self.state.lock().unwrap();
-
-        match *state {
-            RecordingState::Recording {
-                binding_id: ref active,
-            } if active == binding_id => {
-                self.set_state(&mut state, RecordingState::Stopping);
-                drop(state);
-
-                // Optionally keep recording for a bit longer to capture trailing audio.
-                // This is only the explicit user setting; streaming VAD must not add
-                // hidden post-release capture time.
-                let settings = get_settings(&self.app_handle);
-                let buffer_ms = settings.extra_recording_buffer_ms;
-                if buffer_ms > 0 {
-                    debug!(
-                        "Extra recording buffer: sleeping {}ms before stopping",
-                        buffer_ms
-                    );
-                    let started = Instant::now();
-                    let buffer = Duration::from_millis(buffer_ms);
-                    while started.elapsed() < buffer {
-                        if self.was_cancelled_since(cancel_generation) {
-                            debug!("Recording stop cancelled during extra buffer");
-                            break;
-                        }
-                        let remaining = buffer.saturating_sub(started.elapsed());
-                        std::thread::sleep(remaining.min(Duration::from_millis(25)));
-                    }
+    /// Claim and commit only this capture's stop; the optional trailing wait owns no lifecycle lock.
+    /// Esc may discard a Stopping buffer and a successor can start before this call returns.
+    pub fn stop_recording(
+        &self,
+        binding_id: &str,
+        cancel_generation: u64,
+        owner: &crate::workflow::GenerationToken,
+    ) -> Option<Vec<f32>> {
+        let claimed = owner.run(|| {
+            let mut state = self.state.lock().unwrap();
+            if self.was_cancelled_since(cancel_generation) {
+                return false;
+            }
+            match *state {
+                RecordingState::Recording {
+                    binding_id: ref active,
+                } if active == binding_id => {
+                    self.invalidate_recording_readiness();
+                    self.set_state(&mut state, RecordingState::Stopping);
+                    true
                 }
+                _ => false,
+            }
+        })?;
+        if !claimed {
+            return None;
+        }
 
+        // Optionally keep recording for a bit longer to capture trailing audio.
+        // This is only the explicit user setting; streaming VAD must not add
+        // hidden post-release capture time.
+        let settings = get_settings(&self.app_handle);
+        let buffer_ms = settings.extra_recording_buffer_ms;
+        if buffer_ms > 0 {
+            debug!(
+                "Extra recording buffer: sleeping {}ms before stopping",
+                buffer_ms
+            );
+            let started = Instant::now();
+            let buffer = Duration::from_millis(buffer_ms);
+            while started.elapsed() < buffer {
+                if self.was_cancelled_since(cancel_generation) {
+                    debug!("Recording stop cancelled during extra buffer");
+                    break;
+                }
+                let remaining = buffer.saturating_sub(started.elapsed());
+                std::thread::sleep(remaining.min(Duration::from_millis(25)));
+            }
+        }
+
+        // Esc can cancel this stopping capture and begin B during the optional
+        // buffer wait. Reclaim ownership before touching any recorder or flag.
+        owner
+            .run(|| {
+                let mut state = self.state.lock().unwrap();
+                if self.was_cancelled_since(cancel_generation)
+                    || !matches!(*state, RecordingState::Stopping)
+                {
+                    return None;
+                }
                 let samples = if let Some(rec) = self.recorder.lock().unwrap().as_ref() {
                     match rec.stop() {
                         Ok(buf) => buf,
@@ -1027,7 +1054,7 @@ impl AudioRecordingManager {
                 };
 
                 *self.is_recording.lock().unwrap() = false;
-                self.set_state(&mut self.state.lock().unwrap(), RecordingState::Idle);
+                self.set_state(&mut state, RecordingState::Idle);
 
                 // In on-demand mode, close the mic (lazily if the setting is enabled)
                 if matches!(*self.mode.lock().unwrap(), MicrophoneMode::OnDemand) {
@@ -1053,9 +1080,8 @@ impl AudioRecordingManager {
                 } else {
                     Some(samples)
                 }
-            }
-            _ => None,
-        }
+            })
+            .flatten()
     }
     pub fn is_recording(&self) -> bool {
         // Lock-free: mirrors the `state` {Recording, Stopping} membership via
@@ -1077,15 +1103,12 @@ impl AudioRecordingManager {
 
     /// Cancel any ongoing recording without returning audio samples
     pub fn cancel_recording(&self) {
+        let mut state = self.state.lock().unwrap();
         self.invalidate_recording_readiness();
         self.cancel_generation.fetch_add(1, Ordering::AcqRel);
-        let mut state = self.state.lock().unwrap();
 
         match *state {
-            RecordingState::Recording { .. } => {
-                self.set_state(&mut state, RecordingState::Idle);
-                drop(state);
-
+            RecordingState::Recording { .. } | RecordingState::Stopping => {
                 if let Some(rec) = self.recorder.lock().unwrap().as_ref() {
                     let _ = rec.stop(); // Discard the result
                 }
@@ -1100,9 +1123,7 @@ impl AudioRecordingManager {
                         self.stop_microphone_stream();
                     }
                 }
-            }
-            RecordingState::Stopping => {
-                debug!("Cancellation requested while recording is stopping");
+                self.set_state(&mut state, RecordingState::Idle);
             }
             RecordingState::Idle => {}
         }

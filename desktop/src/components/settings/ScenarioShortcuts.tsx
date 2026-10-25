@@ -5,18 +5,13 @@ import { Input } from "../ui/Input";
 import { Button } from "../ui/Button";
 import { SettingContainer } from "../ui/SettingContainer";
 
-const defaults = {
-  transcribe: "alt_right",
-  translation: "alt_right+shift_right",
-  ask: "alt_right+space",
-  stop: "alt_right",
-};
-type BindingId = keyof typeof defaults;
+const bindingIds = ["transcribe", "translation", "ask", "stop"] as const;
+type BindingId = (typeof bindingIds)[number];
 
 function BindingEditor({ id }: { id: BindingId }) {
   const { t } = useTranslation();
   const { settings, updateBinding, resetBinding } = useSettings();
-  const stored = settings?.bindings?.[id]?.current_binding ?? defaults[id];
+  const stored = settings?.bindings?.[id]?.current_binding ?? "";
   const [value, setValue] = useState(stored);
   const [status, setStatus] = useState("");
   const [working, setWorking] = useState(false);
@@ -79,7 +74,7 @@ export function ScenarioShortcuts() {
       <p className="px-4 py-2 text-sm text-text/70">
         {t("notype.hotkeys.description")}
       </p>
-      {(Object.keys(defaults) as BindingId[]).map((id) => (
+      {bindingIds.map((id) => (
         <BindingEditor key={id} id={id} />
       ))}
       <p className="px-4 py-2 text-sm text-text/70">

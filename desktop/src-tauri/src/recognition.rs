@@ -63,6 +63,20 @@ fn normalize_transcript(
         .find_iter(raw)
         .map(|m| (m.start(), m.end()))
         .collect();
+    static PATHS: OnceLock<Regex> = OnceLock::new();
+    // An unquoted slash alone is prose, not proof of a relative file path.
+    // Explicit roots need a token boundary; bare relative files need an extension.
+    // UNC has its own unambiguous prefix, including next to spoken Chinese prose.
+    let paths = PATHS.get_or_init(|| Regex::new(
+        r###"(?P<unc>\\\\[^\s"`，。！？；]+)|(?:\A|[\s(\[{:：])(?P<absolute>(?:/|~/|\.{1,2}[\\/])[^\s"`，。！？；]+)|(?:\A|[\s(\[{:：])(?P<relative>(?:[\p{L}\p{N}_.-]+[\\/])+[\p{L}\p{N}_.-]+\.[A-Za-z][A-Za-z0-9]*)"###,
+    ).expect("static path expression"));
+    spans.extend(paths.captures_iter(raw).filter_map(|capture| {
+        capture
+            .name("unc")
+            .or_else(|| capture.name("absolute"))
+            .or_else(|| capture.name("relative"))
+            .map(|path| (path.start(), path.end()))
+    }));
     for term in protected_terms.iter().filter(|term| !term.is_empty()) {
         spans.extend(
             raw.match_indices(term)
