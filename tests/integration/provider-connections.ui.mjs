@@ -96,3 +96,56 @@ test("API options preserve zero temperature and send an explicit key replacement
     /legacy-secret|synthetic-new-key/,
   );
 });
+
+test("model IDs are queried and copied only on user action without changing the manual model", async (t) => {
+  const page = await providerConnectionsFixture(t, "en", [savedConnection]);
+  await page
+    .getByRole("button", { name: "Edit Company writing", exact: true })
+    .click();
+  assert.equal(
+    await page.evaluate(
+      () =>
+        window.calls.filter((call) => call.cmd === "list_text_models").length,
+    ),
+    0,
+  );
+  await page
+    .getByRole("button", { name: "View model ID list", exact: true })
+    .click();
+  await page
+    .getByRole("list", { name: "Model ID list", exact: true })
+    .waitFor();
+  await page
+    .getByRole("button", { name: "Copy catalog/model-a", exact: true })
+    .click();
+  await page.waitForFunction(() => window.copiedText === "catalog/model-a");
+  assert.equal(
+    await page
+      .getByLabel("Model ID (manual entry)", { exact: true })
+      .inputValue(),
+    "manual-model",
+  );
+  assert.equal(
+    await page.evaluate(() => window.configuration.active_connection_id),
+    null,
+  );
+  assert.equal(
+    await page.evaluate(
+      () =>
+        window.calls.filter((call) => call.cmd === "save_text_connection")
+          .length,
+    ),
+    0,
+  );
+  await page
+    .getByLabel("Model ID (manual entry)", { exact: true })
+    .fill("catalog/model-a");
+  assert.equal(
+    await page.evaluate(
+      () =>
+        window.calls.filter((call) => call.cmd === "save_text_connection")
+          .length,
+    ),
+    0,
+  );
+});

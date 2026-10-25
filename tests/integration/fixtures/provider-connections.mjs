@@ -18,6 +18,7 @@ export async function providerConnectionsFixture(
   await page.evaluate(
     async ({ language, connections, activeId }) => {
       window.calls = [];
+      window.modelMode = "ok";
       window.configuration = {
         schema_version: 2,
         revision: 0,
@@ -56,6 +57,37 @@ export async function providerConnectionsFixture(
           if (cmd === "check_custom_sounds")
             return { start: false, stop: false };
           if (cmd === "is_update_checks_locked") return false;
+          if (cmd === "list_text_models") {
+            const request = args.request;
+            const response = {
+              request_id: request.request_id,
+              configuration_revision: request.expected_revision,
+              connection_id: request.connection.id,
+              status:
+                window.modelMode === "unsupported"
+                  ? "unsupported"
+                  : window.modelMode === "error"
+                    ? "error"
+                    : "ok",
+              models:
+                window.modelMode === "empty"
+                  ? []
+                  : [{ id: "catalog/model-a" }, { id: "catalog/model-b" }],
+              error_code:
+                window.modelMode === "error" ? "Bearer upstream-secret" : null,
+              retry_after_seconds: null,
+              credential_source: "none",
+              cache_hit: false,
+            };
+            if (window.modelMode === "pending")
+              await new Promise((resolve) => (window.releaseModels = resolve));
+            return response;
+          }
+          if (cmd === "cancel_text_models") return null;
+          if (cmd === "plugin:clipboard-manager|write_text") {
+            window.copiedText = args.text;
+            return null;
+          }
           if (cmd === "save_text_connection") {
             if (window.mode === "save-error")
               throw "Bearer should-never-render";
