@@ -347,3 +347,61 @@ fn active_app_priority_and_anonymous_no_active_custom_local_never_read_home() {
     assert_eq!(reader.0.lock().unwrap().len(), 1);
     assert_eq!(frozen.credential_source.as_deref(), Some("app"));
 }
+
+#[test]
+fn anonymous_view_distinguishes_stored_key_presence_from_effective_credential_source() {
+    let store = store();
+    let mut draft = store
+        .create(
+            0,
+            "Anonymous switch".into(),
+            ConnectionKind::Provider,
+            ProviderDialect::Deepseek,
+        )
+        .unwrap()
+        .connections
+        .remove(0)
+        .connection;
+    store
+        .save(
+            1,
+            draft.clone(),
+            KeyAction::Replace {
+                value: "DORMANT_KEY_SENTINEL".into(),
+            },
+        )
+        .unwrap();
+    draft.authentication = Authentication::None;
+    let view = store.save(2, draft, KeyAction::Keep).unwrap();
+    assert!(view.connections[0].app_key_present);
+    assert_eq!(view.connections[0].credential_source, "none");
+    assert_eq!(view.connections[0].credential_present, Some(false));
+}
+
+#[test]
+fn unknown_model_capability_remains_saved_but_view_explains_generation_unavailability() {
+    let store = store();
+    let mut draft = store
+        .create(
+            0,
+            "Unknown".into(),
+            ConnectionKind::Custom,
+            ProviderDialect::Generic,
+        )
+        .unwrap()
+        .connections
+        .remove(0)
+        .connection;
+    draft.api_address = "https://custom.example/v1".into();
+    draft.model = "user-model".into();
+    draft.authentication = Authentication::None;
+    let view = store.save(1, draft, KeyAction::Clear).unwrap();
+    assert_eq!(
+        view.connections[0].resolution.as_ref().unwrap().reason,
+        "unresolved"
+    );
+    assert_eq!(
+        view.connections[0].configuration_error.as_deref(),
+        Some("configuration-capability-required")
+    );
+}
