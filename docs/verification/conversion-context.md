@@ -1,6 +1,6 @@
 # 本機繁簡轉換：保留詞義與 literal
 
-2026-10-25。這是 #12 的本機轉換修正，ASR 模型、原始測試錄音、raw outputs 與 gold 沒有被改寫。新的 normalizer 已通過純 Rust 公開 session 測試；**最新 native binary 的編譯／執行證明仍待 #13 合併後一次建置**，不把舊 retained CLI 當成新 backend 的 native proof。
+2026-10-25。這是 #12 的本機轉換修正，ASR 模型、原始測試錄音、raw outputs 與 gold 沒有被改寫。新的 normalizer 已通過純 Rust 公開 session 測試，以及 #13 一次必要建置後的實際 native CLI／正常使用者 Tauri session 證明；舊 retained CLI 的完整模型矩陣仍保留原本版本標記。
 
 ## 原因與修正
 
@@ -35,4 +35,12 @@ cargo clippy --offline --locked --manifest-path tests/integration/desktop-contra
 
 `conversion-context-derived.json` 把既有 24 個已觀察 raw ASR rows 通過公開 `DesktopWorkflow.begin/finish` 與真正 SQLite 原稿保存，停用文字 transport，逐筆檢查 ASCII／mode／saved original。這 24 筆新的 normalized text 都與舊 corpus 相同；舊 Small 的英語省略與模型音近字錯誤因此仍留著。這是新 converter 對凍結輸入的衍生結果，沒有重新推論模型或宣稱模型品質通過。
 
-CLI 另增加 `recognition_ms`／`normalization_ms` arrays，原 `transcribe_ms` 繼續表示兩個階段的總時間。下一次必要 native 建置只需一個固定 WAV、`--repeat 2 --json`，即可分開觀察 first initialization 與 reuse；目前尚未把純 Rust／舊 binary 測量當成最新 native proof 或整體 5 秒驗收。
+CLI 另增加 `recognition_ms`／`normalization_ms` arrays，原 `transcribe_ms` 繼續表示兩個階段的總時間。
+
+## 實際最新 native proof
+
+#13 的單次 CPU no-bundle debug 建置通過，未另建新 cache 或擴充 C++ engine features。實際 exe SHA256 `633f5821671edd4e13a634ed21acecda18a11cc763769bbccb9f2c189be34b93`；完整 runtime receipts 在 `conversion-native-proof.json`。
+
+只跑一個既有 numbers WAV、Qwen3-ASR 0.6B、`--repeat 2 --json`，沒有重跑整個模型矩陣。actual ASR phase `[3327,3389]ms`，local normalization `[1176,0]ms`，合計 `[4503,3389]ms`，model load891ms另計。第一個1176ms含 embedded dictionaries／regex初始化；reuse的0ms是毫秒取整，不代表沒有工作。這個量測不含公司LLM、交付、麥克風或其它session階段，不能宣稱整體5秒／p95通過。
+
+同一 binary 透過 pinned normal-user／fixed WebView2 `156.0.4314.42` helper，真正呼叫 Tauri public begin/finish/search：`保留发展，不要留发；头发和发展。`、URL後接`保留发展`、繁體轉簡體共3cases均得到正確 saved original／mode，並讀回3筆SQLite歷史。captureInput=false、text transport未配置，沒有讀取原輸入目標、麥克風、公司API或交付動作。正常使用者helper exit0、剩餘owned processes0；compiled source bindings 前後hash相同，已原樣還原，slot已釋放。這僅證明normalizer／保存路徑，沒有代替 #13 的實際前景輸入驗收。

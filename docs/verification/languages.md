@@ -20,14 +20,17 @@
 
 正式 app CLI、i5-1135G7／4 核 8 執行緒，每個模型每個 profile 跑相同三個 WAV，每次 fresh process load＋兩次 inference。Whisper CPU session 明確四執行緒；ONNX 是既有 library default，未宣稱四執行緒或 GPU 綁定。完整 raw ASR、轉字形後 text、gold、錯字率、required literal 損失、每次 load/decode 時間在 `recognition-quality.json`。
 
-| 模型 | 實測 decode 範圍 | 字元錯誤率範圍 | 結果 |
+| 模型 | 當時 CLI transcribe_ms 範圍 | 字元錯誤率範圍 | 結果 |
 | --- | --- | --- | --- |
 | Whisper Small FP16／MIT | 3,563–4,088 ms | 44.4–87.5% | 英文片段被省略；英文開頭時中文片段被譯為英文，未通過 |
 | 本機量化 Small Q5_1／MIT derivative | 5,284–7,934 ms | 44.4–87.5% | 相同混語損失，這台機器也較慢，未通過 |
 | SenseVoice int8／僅私人比較 | 948–1,481 ms | 1.6–8.3% | 保留雙語，但 API→AP、Visual 被省略、GitHub 分詞與 髮→法 仍錯；授權詮釋待釐清，未選作公開配送 |
 | Breeze ASR 25 Q5_K／Apache-2.0 candidate | 28,284–33,385 ms | 0–1.67% | 六個 mode／WAV cases 都保留中英、名稱、否定與髮／發；殘差為兩／2及發布／發佈。速度未達預期，未選作配送預設 |
+| Qwen3-ASR 0.6B Q6_K／Apache-2.0 candidate | 3,229–3,795 ms | 0–6.67% | 中英／名稱／否定保留；數字是中文書寫形式，字名有法音近字錯誤；仍無人聲／整體p95通過聲明 |
 
-CER 定義是 NFKC／小寫後移除標點／空白的 Levenshtein，**未修補英文、未將中文數字當阿拉伯數字**。required literal 是另列的大小寫不敏感 exact substring 診斷；`兩`／`2`、`Git hub`／`GitHub` 應人工分辨，不把 literal diagnostic 當完整品質分數。沒有從這個小樣本宣稱 p95／人聲／公司通過；RAM 尚未量測。cold 指 fresh process/model load，沒有清除 OS file cache；warm 指同 process 第二次 decode。
+CER 定義是 NFKC／小寫後移除標點／空白的 Levenshtein，**未修補英文、未將中文數字當阿拉伯數字**。required literal 是另列的大小寫不敏感 exact substring 診斷；`兩`／`2`、`Git hub`／`GitHub` 應人工分辨，不把 literal diagnostic 當完整品質分數。沒有從這個小樣本宣稱 p95／人聲／公司通過；Small／Q5／SenseVoice 的 RAM 未量測，Breeze／Qwen 分述下方。cold 指 fresh process/model load，沒有清除 OS file cache；warm 指同 process 第二次 decode。
+
+Qwen 是後續加入的精確 runtime-publisher candidate，6cases／12decodes與memory另見 [Qwen完整receipt](qwen3-quality.md)；來源、不同binary／新normalizer初始化的界線都有記錄，沒有用模型大小或首段速度代替整體驗收。
 
 參考勘誤：最初簡體 numbers gold 把來源語音的「測試資料」寫成「测试数据」，現人工修正為只轉字形的「测试资料」；這使該簡體 case 的 CER 降低 3.3 個百分點。另修正 numeric literal 邊界，讓 required `2` 不再誤匹配 `42`。原始模型輸出完全保留，JSON 的 `originalDiagnostic` 保存舊 gold／分數／literal 診斷，`referenceErrata` 記錄理由；外部原始 receipts 不覆寫。這些修正沒有讓 Small 的英文省略／翻譯通過。
 

@@ -1,0 +1,60 @@
+{
+  "repository": "handy-computer/Qwen3-ASR-0.6B-gguf",
+  "revision": "7e7c69a577fa2725dfedbe34b5e999336e30a19b",
+  "artifact": {
+    "rfilename": "Qwen3-ASR-0.6B-Q6_K.gguf",
+    "blobId": "971e171a83ca7b6b5f5212a3cb4c5189c6e0064c",
+    "size": 690417824,
+    "lfs": {
+      "sha256": "3b051f108f03c0c91bbe1a3b2c1ee15e3ed51e4caec2a48751b01f2a21441cc3",
+      "size": 690417824,
+      "pointerSize": 134
+    }
+  },
+  "freeBytesBefore": 7174311936,
+  "snapshots": [
+    {
+      "file": "LICENSE.snapshot",
+      "url": "https://huggingface.co/handy-computer/Qwen3-ASR-0.6B-gguf/raw/7e7c69a577fa2725dfedbe34b5e999336e30a19b/LICENSE",
+      "bytes": 11358,
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "file": "NOTICE.snapshot",
+      "url": "https://huggingface.co/handy-computer/Qwen3-ASR-0.6B-gguf/raw/7e7c69a577fa2725dfedbe34b5e999336e30a19b/NOTICE",
+      "bytes": 392,
+      "sha256": "8ce09c74b1929991d1c775bd21662e2a7a863e9669d2537ddba15b780b138adc"
+    },
+    {
+      "file": "README.md.snapshot",
+      "url": "https://huggingface.co/handy-computer/Qwen3-ASR-0.6B-gguf/raw/7e7c69a577fa2725dfedbe34b5e999336e30a19b/README.md",
+      "bytes": 62869,
+      "sha256": "555b6809341ad4a3aa9f5b9587df89d951f86b77d1b8eb021b898e57c9168548"
+    }
+  ],
+  "baseModel": "Qwen/Qwen3-ASR-0.6B@5eb1441",
+  "engineSource": "handy-computer/transcribe.cpp@4807edaf210d0d7e8a6f7fb2a44b65966a2797f0",
+  "license": "Apache-2.0; preserve LICENSE+NOTICE, no base Qwen-official-GGUF claim",
+  "purpose": "Verified exact runtime-publisher Qwen GGUF; primary provenance, not original Qwen-official GGUF or reproduced conversion",
+  "observed": {
+    "bytes": 690417824,
+    "sha256": "3b051f108f03c0c91bbe1a3b2c1ee15e3ed51e4caec2a48751b01f2a21441cc3",
+    "fullFileVerified": true,
+    "ranges": 165,
+    "rangeBytes": 4194304,
+    "freeBytesBefore": 7174217728,
+    "freeBytesAfter": 6435135488,
+    "storage": "One inplace verified model; benchmark directories use same-volume hardlinks, no duplicate model data"
+  },
+  "runtimeCatalogId": "handy-computer/Qwen3-ASR-0.6B-gguf/Qwen3-ASR-0.6B-Q6_K.gguf",
+  "observedRuntime": {
+    "namespace": "qwen3_asr",
+    "backend": "CPU",
+    "threads": 4,
+    "streaming": false,
+    "translate": false,
+    "languageDetect": true,
+    "requiredChineseAndEnglishCapability": "Passed actual loaded-model semantic profile validation before decoding"
+  },
+  "initialSelectionErratum": "Short file-stem ID was not a registered catalog ID. First attempt failed Model not found before loading; full ID was taken from actual model discovery and successfully loaded. This was not a schema/engine rejection."
+}
