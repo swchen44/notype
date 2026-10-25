@@ -244,6 +244,56 @@ pub struct ConnectionStore {
     storage: Arc<dyn ConfigurationStorage>,
 }
 impl ConnectionStore {
+    /// Resolve only the active owned snapshot, outside the settings writer lock.
+    /// No active connection yields disabled configuration and zero key-file reads.
+    pub fn resolve_active(
+        &self,
+        reader: &dyn credentials::CredentialReader,
+    ) -> Result<crate::workflow::TextConfiguration, ConfigError> {
+        let state = self.snapshot()?;
+        let Some(id) = state.active_connection_id.as_deref() else {
+            return Ok(crate::workflow::TextConfiguration {
+                prompts: state.prompts,
+                translation: state.translation,
+                ..Default::default()
+            });
+        };
+        let record = state
+            .connections
+            .iter()
+            .find(|record| record.draft.id == id)
+            .ok_or(ConfigError("configuration-store-invalid"))?;
+        resolve_record(
+            &state,
+            record,
+            record.draft.clone(),
+            KeyAction::Keep,
+            reader,
+            true,
+        )
+    }
+    /// Resolve an explicit existing editor snapshot for GET only. This does not
+    /// persist its fields/key, activate, require a model or create generation rows.
+    pub fn resolve_models(
+        &self,
+        revision: u64,
+        draft: ConnectionDraft,
+        key_action: KeyAction,
+        reader: &dyn credentials::CredentialReader,
+    ) -> Result<crate::workflow::TextConfiguration, ConfigError> {
+        let state = self.snapshot()?;
+        if state.revision != revision {
+            return Err(ConfigError("configuration-conflict"));
+        }
+        validate_draft(&draft)?;
+        canonical_models(&draft)?;
+        let record = state
+            .connections
+            .iter()
+            .find(|record| record.draft.id == draft.id)
+            .ok_or(ConfigError("configuration-connection-missing"))?;
+        resolve_record(&state, record, draft, key_action, reader, false)
+    }
     /// Load/validate the fresh schema, failing closed on malformed/repeated/dangling IDs.
     pub fn open(storage: Arc<dyn ConfigurationStorage>) -> Result<Self, ConfigError> {
         let state = match storage.load()? {
@@ -432,7 +482,7 @@ impl ConnectionStore {
     ) -> Result<ConnectionSettingsView, ConfigError> {
         self.update(revision, |state| {
             let defaults = ScenarioPrompts::default();
-            let prompt = prompt.unwrap_or_else(|| match scenario {
+            let prompt = prompt.unwrap_or(match scenario {
                 notype_core::Scenario::Dictation => defaults.dictation,
                 notype_core::Scenario::Translation => defaults.translation,
                 notype_core::Scenario::Ask => defaults.ask,
@@ -459,6 +509,139 @@ impl ConnectionStore {
             state.translation = translation;
             Ok(())
         })
+    }
+}
+
+fn resolve_record(
+    state: &StoredSettings,
+    record: &StoredConnection,
+    draft: ConnectionDraft,
+    key_action: KeyAction,
+    reader: &dyn credentials::CredentialReader,
+    generation: bool,
+) -> Result<crate::workflow::TextConfiguration, ConfigError> {
+    use crate::workflow::{
+        TextAuthentication, TextConfiguration, TextProviderProfile, TextTransport,
+    };
+    let endpoint = canonical_chat(&draft)?;
+    let binding = binding(&draft)?;
+    let resolution = capabilities::resolve(&draft)?;
+    if generation && draft.model.trim().is_empty() {
+        return Err(ConfigError("configuration-model-required"));
+    }
+    if generation && resolution.reason == "unresolved" {
+        return Err(ConfigError("configuration-capability-required"));
+    }
+    let app_key = match key_action {
+        KeyAction::Clear => None,
+        KeyAction::Keep => {
+            if record
+                .key
+                .as_ref()
+                .is_some_and(|key| key.binding != binding)
+            {
+                return Err(ConfigError("configuration-key-binding-required"));
+            }
+            record.key.as_ref().map(|key| key.value.clone())
+        }
+        KeyAction::Replace { value } => {
+            let value = value.trim().to_owned();
+            if value.is_empty() || value.len() > 8192 || value.chars().any(char::is_control) {
+                return Err(ConfigError("configuration-key-invalid"));
+            }
+            Some(value)
+        }
+    };
+    let (key, source) = if draft.authentication == Authentication::None {
+        (None, "none")
+    } else if let Some(key) = app_key {
+        (Some(key), "app")
+    } else if let Some(name) = credentials::public_key(&draft) {
+        (
+            Some(
+                reader
+                    .read(name)?
+                    .filter(|value| !value.trim().is_empty())
+                    .ok_or(ConfigError("configuration-credentials-unavailable"))?,
+            ),
+            "home_env",
+        )
+    } else {
+        return Err(ConfigError("configuration-credentials-unavailable"));
+    };
+    let parameters = notype_core::observations::RequestParameters {
+        requested_thinking: draft.thinking_preference == ThinkingPreference::On,
+        preference_effort: draft.effort.clone(),
+        effective_thinking: resolution.effective_thinking,
+        effective_effort: resolution.effective_effort.clone(),
+        capability_provenance: resolution.provenance.clone(),
+        resolution_reason: resolution.reason.clone(),
+        configured_temperature: draft.temperature.map(|value| value.to_string()),
+        wire_temperature: resolution.temperature_wire.map(|value| value.to_string()),
+        temperature_resolution: resolution.temperature_resolution.clone(),
+        configured_top_p: draft.top_p.map(|value| value.to_string()),
+        wire_top_p: resolution.top_p_wire.map(|value| value.to_string()),
+        top_p_resolution: resolution.top_p_resolution.clone(),
+        documented_top_p: resolution.documented_top_p.map(|value| value.to_string()),
+        max_output_tokens: draft.max_output_tokens,
+    };
+    let mut configuration = TextConfiguration {
+        transport: TextTransport::OpenAiChat,
+        endpoint: endpoint.into(),
+        model: draft.model,
+        authentication: if draft.authentication == Authentication::None {
+            TextAuthentication::None
+        } else {
+            TextAuthentication::Bearer
+        },
+        api_key: String::new(),
+        timeout_ms: draft.timeout_ms,
+        provider_profile: match draft.dialect {
+            ProviderDialect::Generic => TextProviderProfile::Generic,
+            ProviderDialect::Deepseek => TextProviderProfile::DeepSeek,
+            ProviderDialect::Openrouter => TextProviderProfile::OpenRouter,
+            ProviderDialect::Gemini => TextProviderProfile::Gemini,
+            ProviderDialect::OllamaOpenai => TextProviderProfile::OllamaOpenAi,
+        },
+        effort: resolution.effective_effort,
+        thinking_override: resolution.effective_thinking,
+        temperature: resolution.temperature_wire,
+        top_p: resolution.top_p_wire,
+        max_output_tokens: draft.max_output_tokens,
+        request_parameters: Some(parameters),
+        credential_source: Some(source.into()),
+        bypass_proxy: draft.kind == ConnectionKind::Local,
+        prompts: state.prompts.clone(),
+        translation: state.translation.clone(),
+        ..Default::default()
+    };
+    configuration.runtime_credential = key.map(crate::workflow::RuntimeCredential::new);
+    Ok(configuration)
+}
+
+/// Convert a failed selected snapshot into a processor result that is surfaced
+/// only after SessionService saves the original. No filesystem error is exposed.
+pub fn failed_preparation(error: ConfigError) -> crate::workflow::TextConfiguration {
+    use notype_core::PreparationFailure as P;
+    let failure = match error.0 {
+        "configuration-credentials-unavailable"
+        | "configuration-home-file-invalid"
+        | "configuration-home-file-unavailable"
+        | "configuration-home-unavailable" => P::Credentials,
+        "configuration-capability-required" | "configuration-capability-invalid" => P::Capability,
+        "configuration-address-invalid"
+        | "configuration-address-required"
+        | "configuration-address-mode-invalid"
+        | "configuration-key-binding-required"
+        | "configuration-local-loopback-required" => P::Route,
+        "configuration-store-invalid"
+        | "configuration-storage-failed"
+        | "configuration-file-unavailable" => P::Storage,
+        _ => P::Options,
+    };
+    crate::workflow::TextConfiguration {
+        preparation_failure: Some(failure),
+        ..Default::default()
     }
 }
 fn new_id() -> String {
@@ -550,10 +733,11 @@ fn validate_draft(value: &ConnectionDraft) -> Result<(), ConfigError> {
     if value.model.len() > 256
         || value.model.chars().any(char::is_control)
         || value.api_address.len() > 2048
+        || value.api_address.chars().any(char::is_control)
         || value
             .models_endpoint
             .as_ref()
-            .is_some_and(|s| s.len() > 2048)
+            .is_some_and(|s| s.len() > 2048 || s.chars().any(char::is_control))
         || !(1..=120_000).contains(&value.timeout_ms)
     {
         return Err(ConfigError("configuration-invalid-options"));

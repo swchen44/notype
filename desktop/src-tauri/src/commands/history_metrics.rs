@@ -151,9 +151,63 @@ pub struct HistoryFeeDto {
     /// Number of actual calls returning amount and currency.
     pub reported_calls: u64,
 }
+/// Safe configured/wire request projection; contains no credentials or addresses.
+#[derive(Serialize, Type)]
+pub struct HistoryRequestParametersDto {
+    /// User OFF/ON preference, distinct from mandatory minimum resolution.
+    pub requested_thinking: bool,
+    /// Remembered ON preference, even when OFF ignores it on the wire.
+    pub preference_effort: Option<String>,
+    /// Effective request switch, absent when no switch is sent.
+    pub effective_thinking: Option<bool>,
+    /// Actual wire effort; reported effort remains receipt-only.
+    pub effective_effort: Option<String>,
+    /// documented, provider_metadata, user_declared or unknown.
+    pub capability_provenance: String,
+    /// non_reasoning, disabled, enabled, mandatory_minimum or unresolved.
+    pub resolution_reason: String,
+    /// Configured finite temperature decimal, absent when omitted.
+    pub configured_temperature: Option<String>,
+    /// Actual serialized temperature, absent when omitted/ignored.
+    pub wire_temperature: Option<String>,
+    /// omitted, sent, ignored_by_provider or unsupported.
+    pub temperature_resolution: String,
+    /// Configured finite top_p decimal.
+    pub configured_top_p: Option<String>,
+    /// Actual serialized top_p, without silently applying documented normalization.
+    pub wire_top_p: Option<String>,
+    /// omitted, sent, ignored_by_provider or unsupported.
+    pub top_p_resolution: String,
+    /// Documented normalization only, not an observed server value.
+    pub documented_top_p: Option<String>,
+    /// Configured/serialized positive output maximum, absent when omitted.
+    pub max_output_tokens: Option<u32>,
+}
+impl From<core::RequestParameters> for HistoryRequestParametersDto {
+    fn from(value: core::RequestParameters) -> Self {
+        Self {
+            requested_thinking: value.requested_thinking,
+            preference_effort: value.preference_effort,
+            effective_thinking: value.effective_thinking,
+            effective_effort: value.effective_effort,
+            capability_provenance: value.capability_provenance,
+            resolution_reason: value.resolution_reason,
+            configured_temperature: value.configured_temperature,
+            wire_temperature: value.wire_temperature,
+            temperature_resolution: value.temperature_resolution,
+            configured_top_p: value.configured_top_p,
+            wire_top_p: value.wire_top_p,
+            top_p_resolution: value.top_p_resolution,
+            documented_top_p: value.documented_top_p,
+            max_output_tokens: value.max_output_tokens,
+        }
+    }
+}
 /// Preserve requested/reported model and effort associations.
 #[derive(Serialize, Type)]
 pub struct HistoryModelEffortDto {
+    /// Observed configured/wire tuple, absent when unavailable.
+    pub parameters: Option<HistoryRequestParametersDto>,
     /// Requested model name, if known.
     pub requested_model: Option<String>,
     /// Explicit response model name, if returned.
@@ -207,6 +261,7 @@ impl From<core::ApiSummary> for HistoryApiSummaryDto {
                 .model_efforts
                 .into_iter()
                 .map(|m| HistoryModelEffortDto {
+                    parameters: m.parameters.map(Into::into),
                     requested_model: m.requested_model,
                     reported_model: m.reported_model,
                     requested_effort: m.requested_effort,

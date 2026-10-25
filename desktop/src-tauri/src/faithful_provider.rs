@@ -41,6 +41,29 @@ pub enum TextProviderProfile {
     /// Documented DeepSeek thinking/effort/output-limit controls.
     #[serde(rename = "deepseek")]
     DeepSeek,
+    /// Explicit OpenRouter reasoning object.
+    #[serde(rename = "openrouter")]
+    OpenRouter,
+    /// Explicit Gemini compatibility controls.
+    Gemini,
+    /// Explicit Ollama OpenAI-compatible protocol.
+    #[serde(rename = "ollama_openai")]
+    OllamaOpenAi,
+}
+
+/// Runtime-only resolved credential. No Debug/Serialize/Display implementation;
+/// cloned immutable snapshots share the owned secret rather than returning it.
+#[derive(Clone)]
+pub struct RuntimeCredential(Arc<str>);
+impl RuntimeCredential {
+    /// Consume backend-only resolved input; never used as an IPC return type.
+    pub fn new(value: String) -> Self {
+        Self(Arc::from(value))
+    }
+    /// Prevent literal credential reflection in provider-supplied reference IDs.
+    pub(crate) fn reflected_in(&self, text: &str) -> bool {
+        !self.0.is_empty() && text.contains(self.0.as_ref())
+    }
 }
 
 // Deliberately no Debug: configuration contains a locally stored credential.
@@ -49,6 +72,28 @@ pub enum TextProviderProfile {
 /// Locally persisted provider preferences, cloned into each recording's processing snapshot.
 /// Contains credentials and deliberately does not implement Debug.
 pub struct TextConfiguration {
+    /// Runtime-only credential from the selected record/home resolver.
+    #[serde(skip)]
+    #[specta(skip)]
+    pub runtime_credential: Option<RuntimeCredential>,
+    /// Runtime-only typed failure; processor surfaces it after original saving.
+    #[serde(skip)]
+    #[specta(skip)]
+    pub preparation_failure: Option<notype_core::PreparationFailure>,
+    /// Safe configured/wire tuple destined for business history, not diagnostics.
+    #[serde(skip)]
+    #[specta(skip)]
+    pub request_parameters: Option<notype_core::observations::RequestParameters>,
+    /// Already-resolved provenance only; no credential discovery by diagnostics.
+    pub credential_source: Option<String>,
+    /// Effective switch resolved from requested preference/capability.
+    pub thinking_override: Option<bool>,
+    /// Actual serialized sampling, omitting documented ignored fields.
+    pub temperature: Option<f64>,
+    /// Actual serialized nucleus sampling.
+    pub top_p: Option<f64>,
+    /// Explicit Local connection policy; other normal clients retain proxy behavior.
+    pub bypass_proxy: bool,
     pub transport: TextTransport,
     pub endpoint: String,
     pub model: String,
@@ -67,6 +112,14 @@ pub struct TextConfiguration {
 impl Default for TextConfiguration {
     fn default() -> Self {
         Self {
+            runtime_credential: None,
+            preparation_failure: None,
+            request_parameters: None,
+            credential_source: None,
+            thinking_override: None,
+            temperature: None,
+            top_p: None,
+            bypass_proxy: false,
             transport: TextTransport::Disabled,
             endpoint: String::new(),
             model: String::new(),
@@ -127,17 +180,49 @@ impl Default for TranslationSettings {
     }
 }
 impl TextConfiguration {
+    /// Build a sensitive header for the already selected runtime snapshot. The
+    /// raw secret has no getter; None/unspecified policy never discovers a key.
+    pub(crate) fn authorization_header(
+        &self,
+    ) -> Result<Option<reqwest::header::HeaderValue>, TextFailure> {
+        match self.authentication {
+            TextAuthentication::None => Ok(None),
+            TextAuthentication::Unspecified => Err(TextFailure::ConfigurationRequired),
+            TextAuthentication::Bearer => {
+                let key = self
+                    .runtime_credential
+                    .as_ref()
+                    .map_or(self.api_key.as_str(), |key| key.0.as_ref());
+                if key.trim().is_empty() {
+                    return Err(TextFailure::ConfigurationRequired);
+                }
+                let mut value =
+                    reqwest::header::HeaderValue::from_str(&format!("Bearer {}", key.trim()))
+                        .map_err(|_| TextFailure::ConfigurationRequired)?;
+                value.set_sensitive(true);
+                Ok(Some(value))
+            }
+        }
+    }
     /// Validate explicit option spellings/bounds without a request or settings I/O.
     pub fn options_valid(&self) -> bool {
         let effort = self
             .effort
             .as_deref()
             .is_none_or(|value| match self.provider_profile {
-                TextProviderProfile::Generic => notype_core::observations::valid_effort(value),
+                TextProviderProfile::Generic
+                | TextProviderProfile::OpenRouter
+                | TextProviderProfile::Gemini
+                | TextProviderProfile::OllamaOpenAi => {
+                    notype_core::observations::valid_effort(value)
+                }
                 TextProviderProfile::DeepSeek => matches!(value, "none" | "low" | "high" | "max"),
             });
         let maximum = match self.provider_profile {
-            TextProviderProfile::Generic => 1_000_000,
+            TextProviderProfile::Generic
+            | TextProviderProfile::OpenRouter
+            | TextProviderProfile::Gemini
+            | TextProviderProfile::OllamaOpenAi => 1_000_000,
             TextProviderProfile::DeepSeek => 393_216,
         };
         effort
@@ -247,7 +332,7 @@ fn messages(
     ]
 }
 
-struct NotConfigured;
+struct NotConfigured(TextFailure);
 impl TextProcessor for NotConfigured {
     fn generate_observed(
         &self,
@@ -266,7 +351,8 @@ impl TextProcessor for NotConfigured {
         self.back_translate(request, cancellation)
     }
     fn polish(&self, _: TextRequest, _: CancellationToken) -> TextFuture {
-        Box::pin(async { Err(TextFailure::ConfigurationRequired) })
+        let error = self.0;
+        Box::pin(async move { Err(error) })
     }
 }
 
@@ -275,7 +361,7 @@ impl TextProcessor for NotConfigured {
 pub fn processor(configuration: TextConfiguration) -> Arc<dyn TextProcessor> {
     match ChatProcessor::new(configuration) {
         Ok(processor) => Arc::new(processor),
-        Err(_) => Arc::new(NotConfigured),
+        Err(error) => Arc::new(NotConfigured(error)),
     }
 }
 
@@ -290,7 +376,7 @@ pub fn scoped_processor(
             processor.tracing = diagnostic::TraceContext::global(scope);
             Arc::new(processor)
         }
-        Err(_) => Arc::new(NotConfigured),
+        Err(error) => Arc::new(NotConfigured(error)),
     }
 }
 
@@ -305,7 +391,7 @@ pub fn processor_with_trace(
             processor.tracing = tracing;
             Arc::new(processor)
         }
-        Err(_) => Arc::new(NotConfigured),
+        Err(error) => Arc::new(NotConfigured(error)),
     }
 }
 
@@ -314,7 +400,7 @@ pub fn processor_with_trace(
 pub fn probe_processor(configuration: TextConfiguration) -> Arc<dyn TextProcessor> {
     match ChatProcessor::new_with_policy(configuration, true) {
         Ok(processor) => Arc::new(processor),
-        Err(_) => Arc::new(NotConfigured),
+        Err(error) => Arc::new(NotConfigured(error)),
     }
 }
 
@@ -326,6 +412,11 @@ impl TextConfiguration {
 }
 
 struct ChatProcessor {
+    request_parameters: Option<notype_core::observations::RequestParameters>,
+    credential_source: Option<String>,
+    thinking_override: Option<bool>,
+    temperature: Option<f64>,
+    top_p: Option<f64>,
     tracing: diagnostic::TraceContext,
     client: reqwest::Client,
     endpoint: reqwest::Url,
@@ -348,6 +439,9 @@ impl ChatProcessor {
         probe_network: bool,
     ) -> Result<Self, TextFailure> {
         let invalid = TextFailure::ConfigurationRequired;
+        if let Some(error) = configuration.preparation_failure {
+            return Err(TextFailure::Preparation(error));
+        }
         if configuration.transport != TextTransport::OpenAiChat
             || !configuration.options_valid()
             || configuration.authentication == TextAuthentication::Unspecified
@@ -373,31 +467,23 @@ impl ChatProcessor {
         {
             return Err(invalid);
         }
-        let authorization = if configuration.authentication == TextAuthentication::Bearer {
-            if configuration.api_key.trim().is_empty() {
-                return Err(invalid);
-            }
-            let mut value = reqwest::header::HeaderValue::from_str(&format!(
-                "Bearer {}",
-                configuration.api_key.trim()
-            ))
-            .map_err(|_| invalid)?;
-            value.set_sensitive(true);
-            Some(value)
-        } else {
-            None
-        };
+        let authorization = configuration.authorization_header()?;
         let deadline = Duration::from_millis(configuration.timeout_ms);
         let mut client = reqwest::Client::builder()
             .timeout(deadline)
             .connect_timeout(deadline.min(Duration::from_secs(5)))
             .retry(reqwest::retry::never())
             .redirect(reqwest::redirect::Policy::none());
-        if probe_network {
+        if probe_network || configuration.bypass_proxy {
             client = client.no_proxy();
         }
         let client = client.build().map_err(|_| invalid)?;
         Ok(Self {
+            request_parameters: configuration.request_parameters,
+            credential_source: configuration.credential_source,
+            thinking_override: configuration.thinking_override,
+            temperature: configuration.temperature,
+            top_p: configuration.top_p,
             tracing: diagnostic::TraceContext::global(None),
             client,
             endpoint,
@@ -546,6 +632,11 @@ impl ChatProcessor {
         let max_output_tokens = self.max_output_tokens;
         let probe_network = self.probe_network;
         let tracing = self.tracing.clone();
+        let request_parameters = self.request_parameters.clone();
+        let credential_source = self.credential_source.clone();
+        let thinking_override = self.thinking_override;
+        let temperature = self.temperature;
+        let top_p = self.top_p;
         Box::pin(async move {
             if cancellation.is_cancelled() {
                 return Err(TextFailure::Cancelled);
@@ -554,22 +645,43 @@ impl ChatProcessor {
             if probe_network {
                 body["stream"] = json!(false);
             }
-            let thinking = if profile == TextProviderProfile::DeepSeek {
-                effort.as_ref().map(|value| value != "none")
-            } else {
-                None
-            };
+            let thinking = thinking_override.or_else(|| {
+                if profile == TextProviderProfile::DeepSeek {
+                    effort.as_ref().map(|value| value != "none")
+                } else {
+                    None
+                }
+            });
             if let Some(enabled) = thinking {
-                body["thinking"] = json!({"type":if enabled {"enabled"}else{"disabled"}});
+                match profile {
+                    TextProviderProfile::DeepSeek => {
+                        body["thinking"] = json!({"type":if enabled {"enabled"}else{"disabled"}})
+                    }
+                    TextProviderProfile::OpenRouter => {
+                        body["reasoning"] = json!({"enabled":enabled})
+                    }
+                    _ => {}
+                }
             }
             if let Some(value) = &effort {
-                body["reasoning_effort"] = json!(value);
+                if profile == TextProviderProfile::OpenRouter {
+                    body["reasoning"]["effort"] = json!(value);
+                } else {
+                    body["reasoning_effort"] = json!(value);
+                }
+            }
+            if let Some(value) = temperature {
+                body["temperature"] = json!(value);
+            }
+            if let Some(value) = top_p {
+                body["top_p"] = json!(value);
             }
             if let Some(value) = max_output_tokens {
                 body["max_tokens"] = json!(value);
             }
             let wire = serde_json::to_vec(&body).map_err(|_| TextFailure::ConfigurationRequired)?;
             let descriptor = ApiCallDescriptor {
+                parameters: request_parameters,
                 endpoint_class: if endpoint.as_str() == "https://api.deepseek.com/chat/completions"
                 {
                     ApiEndpointClass::DeepSeekHttps
@@ -587,6 +699,9 @@ impl ChatProcessor {
                 profile: match profile {
                     TextProviderProfile::Generic => ApiProviderProfile::Generic,
                     TextProviderProfile::DeepSeek => ApiProviderProfile::DeepSeek,
+                    TextProviderProfile::OpenRouter => ApiProviderProfile::OpenRouter,
+                    TextProviderProfile::Gemini => ApiProviderProfile::Gemini,
+                    TextProviderProfile::OllamaOpenAi => ApiProviderProfile::OllamaOpenAi,
                 },
                 requested_model: Some(model),
                 requested_effort: effort,
@@ -621,6 +736,9 @@ impl ChatProcessor {
                 profile: match profile {
                     TextProviderProfile::Generic => diagnostic::ApiProfile::Generic,
                     TextProviderProfile::DeepSeek => diagnostic::ApiProfile::DeepSeek,
+                    TextProviderProfile::OpenRouter => diagnostic::ApiProfile::OpenRouter,
+                    TextProviderProfile::Gemini => diagnostic::ApiProfile::Gemini,
+                    TextProviderProfile::OllamaOpenAi => diagnostic::ApiProfile::OllamaOpenAi,
                 },
                 endpoint: match descriptor.endpoint_class {
                     ApiEndpointClass::Loopback => diagnostic::EndpointClass::Loopback,
@@ -632,7 +750,12 @@ impl ChatProcessor {
                 } else {
                     diagnostic::AuthKind::None
                 },
-                credential_source: diagnostic::CredentialSource::Unknown,
+                credential_source: match credential_source.as_deref() {
+                    Some("app") => diagnostic::CredentialSource::App,
+                    Some("home_env") => diagnostic::CredentialSource::HomeEnv,
+                    Some("none") => diagnostic::CredentialSource::None,
+                    _ => diagnostic::CredentialSource::Unknown,
+                },
                 credential_present: authorization.is_some(),
                 model_present: descriptor.requested_model.is_some(),
                 effort: match descriptor.requested_effort.as_deref() {
@@ -839,6 +962,7 @@ fn trace_transport(trace: &mut diagnostic::CallTrace, error: reqwest::Error) -> 
 fn trace_failure(error: TextFailure) -> (diagnostic::ApiResult, diagnostic::ApiErrorCategory) {
     use diagnostic::{ApiErrorCategory as E, ApiResult as R};
     let category = match error {
+        TextFailure::Preparation(_) => E::Configuration,
         TextFailure::ConfigurationRequired => E::Configuration,
         TextFailure::InvalidPrompt => E::InvalidPrompt,
         TextFailure::HistoryStorage => E::HistoryStorage,

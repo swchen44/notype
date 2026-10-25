@@ -280,3 +280,70 @@ fn every_public_mutation_returns_safe_views_and_key_keep_is_route_bound() {
     );
     assert_eq!(store.view().unwrap().revision, 5);
 }
+
+#[test]
+fn active_app_priority_and_anonymous_no_active_custom_local_never_read_home() {
+    struct Reader(Mutex<Vec<credentials::PublicKey>>);
+    impl credentials::CredentialReader for Reader {
+        fn read(&self, key: credentials::PublicKey) -> Result<Option<String>, ConfigError> {
+            self.0.lock().unwrap().push(key);
+            Ok(Some("HOME_SECRET_SENTINEL".into()))
+        }
+    }
+    let reader = Reader(Mutex::new(vec![]));
+    let store = store();
+    assert!(!store.resolve_active(&reader).unwrap().is_ready());
+    assert!(reader.0.lock().unwrap().is_empty());
+    let mut draft = store
+        .create(
+            0,
+            "Public".into(),
+            ConnectionKind::Provider,
+            ProviderDialect::Deepseek,
+        )
+        .unwrap()
+        .connections
+        .remove(0)
+        .connection;
+    draft.model = "my-model".into();
+    let id = draft.id.clone();
+    store
+        .save(
+            1,
+            draft.clone(),
+            KeyAction::Replace {
+                value: "APP_SECRET_SENTINEL".into(),
+            },
+        )
+        .unwrap();
+    store.activate(2, Some(id)).unwrap();
+    let frozen = store.resolve_active(&reader).unwrap();
+    assert_eq!(frozen.credential_source.as_deref(), Some("app"));
+    assert!(reader.0.lock().unwrap().is_empty());
+    assert!(!serde_json::to_string(&frozen)
+        .unwrap()
+        .contains("APP_SECRET_SENTINEL"));
+    store.save(3, draft.clone(), KeyAction::Clear).unwrap();
+    let home = store.resolve_active(&reader).unwrap();
+    assert_eq!(home.credential_source.as_deref(), Some("home_env"));
+    assert_eq!(
+        reader.0.lock().unwrap().as_slice(),
+        &[credentials::PublicKey::DeepSeek]
+    );
+    assert!(!serde_json::to_string(&home)
+        .unwrap()
+        .contains("HOME_SECRET_SENTINEL"));
+    draft.authentication = Authentication::None;
+    store.save(4, draft.clone(), KeyAction::Keep).unwrap();
+    store.resolve_active(&reader).unwrap();
+    assert_eq!(reader.0.lock().unwrap().len(), 1);
+    draft.authentication = Authentication::Bearer;
+    draft.kind = ConnectionKind::Custom;
+    store.save(5, draft.clone(), KeyAction::Clear).unwrap();
+    assert_eq!(
+        store.resolve_active(&reader).err().unwrap().0,
+        "configuration-credentials-unavailable"
+    );
+    assert_eq!(reader.0.lock().unwrap().len(), 1);
+    assert_eq!(frozen.credential_source.as_deref(), Some("app"));
+}

@@ -97,6 +97,7 @@ const HEADERS: &[&str] = &[
     "api_requested_models",
     "api_reported_models",
     "api_model_efforts",
+    "api_request_options",
 ];
 
 impl SessionService {
@@ -295,7 +296,7 @@ fn cells(entry: &SessionEntry) -> Result<Vec<String>, CsvExportError> {
         })
         .unwrap_or_default();
     Ok(vec![
-        "1".into(),
+        "2".into(),
         entry.id.clone(),
         entry.created_at.clone(),
         entry.updated_at.clone(),
@@ -353,5 +354,11 @@ fn cells(entry: &SessionEntry) -> Result<Vec<String>, CsvExportError> {
         json(&api.requested_models)?,
         json(&api.reported_models)?,
         json(&api.model_efforts)?,
+        json(
+            &api.model_efforts
+                .iter()
+                .filter(|tuple| tuple.parameters.is_some())
+                .collect::<Vec<_>>(),
+        )?,
     ])
 }

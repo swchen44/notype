@@ -201,6 +201,12 @@ pub enum ApiProviderProfile {
     /// Explicit DeepSeek option rules.
     #[serde(rename = "deepseek")]
     DeepSeek,
+    /// Explicit OpenRouter compatibility mapping.
+    OpenRouter,
+    /// Explicit Gemini OpenAI compatibility mapping.
+    Gemini,
+    /// Explicit Ollama OpenAI compatibility mapping, without native APIs.
+    OllamaOpenAi,
     /// Shared noncompany development HTTP protocol.
     Development,
 }
@@ -224,6 +230,8 @@ pub enum ApiEndpointClass {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct ApiCallDescriptor {
+    /// Configured versus actual wire options, independent of diagnostics ON/OFF.
+    pub parameters: Option<RequestParameters>,
     /// Derived from the actual transport URL, never supplied as a provider preference.
     pub endpoint_class: ApiEndpointClass,
     /// Scenario generation or independent reverse translation.
@@ -250,6 +258,7 @@ pub struct ApiCallDescriptor {
 impl Default for ApiCallDescriptor {
     fn default() -> Self {
         Self {
+            parameters: None,
             endpoint_class: Default::default(),
             purpose: Default::default(),
             profile: Default::default(),
@@ -271,6 +280,87 @@ impl ApiCallDescriptor {
                 .requested_effort
                 .as_ref()
                 .is_none_or(|s| valid_effort(s))
+            && self
+                .parameters
+                .as_ref()
+                .is_none_or(RequestParameters::valid)
+    }
+}
+
+/// Credential-free configured/wire request tuple. Numeric decimal strings are
+/// constructed from finite validated inputs, not arbitrary provider metadata.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+pub struct RequestParameters {
+    /// User OFF/ON preference, distinct from mandatory minimum resolution.
+    pub requested_thinking: bool,
+    /// Remembered ON preference, even when OFF ignores it on the wire.
+    pub preference_effort: Option<String>,
+    /// Effective request switch, absent when no switch is sent.
+    pub effective_thinking: Option<bool>,
+    /// Actual wire effort; reported effort remains receipt-only.
+    pub effective_effort: Option<String>,
+    /// documented, provider_metadata, user_declared or unknown.
+    pub capability_provenance: String,
+    /// non_reasoning, disabled, enabled, mandatory_minimum or unresolved.
+    pub resolution_reason: String,
+    /// Configured finite temperature decimal, absent when omitted.
+    pub configured_temperature: Option<String>,
+    /// Actual serialized temperature, absent when omitted/ignored.
+    pub wire_temperature: Option<String>,
+    /// omitted, sent, ignored_by_provider or unsupported.
+    pub temperature_resolution: String,
+    /// Configured finite top_p decimal.
+    pub configured_top_p: Option<String>,
+    /// Actual serialized top_p, without silently applying documented normalization.
+    pub wire_top_p: Option<String>,
+    /// omitted, sent, ignored_by_provider or unsupported.
+    pub top_p_resolution: String,
+    /// Documented normalization only, not an observed server value.
+    pub documented_top_p: Option<String>,
+    /// Configured/serialized positive output maximum, absent when omitted.
+    pub max_output_tokens: Option<u32>,
+}
+impl RequestParameters {
+    fn valid(&self) -> bool {
+        let number = |value: &Option<String>, lower: f64, upper: f64| {
+            value.as_ref().is_none_or(|text| {
+                text.len() <= 64
+                    && text
+                        .parse::<f64>()
+                        .is_ok_and(|value| value.is_finite() && value >= lower && value <= upper)
+            })
+        };
+        self.preference_effort.as_deref().is_none_or(valid_effort)
+            && self.effective_effort.as_deref().is_none_or(valid_effort)
+            && [
+                "documented",
+                "provider_metadata",
+                "user_declared",
+                "unknown",
+            ]
+            .contains(&self.capability_provenance.as_str())
+            && [
+                "non_reasoning",
+                "disabled",
+                "enabled",
+                "mandatory_minimum",
+                "unresolved",
+            ]
+            .contains(&self.resolution_reason.as_str())
+            && [&self.temperature_resolution, &self.top_p_resolution]
+                .iter()
+                .all(|value| {
+                    ["omitted", "sent", "ignored_by_provider", "unsupported"]
+                        .contains(&value.as_str())
+                })
+            && number(&self.configured_temperature, 0.0, 2.0)
+            && number(&self.wire_temperature, 0.0, 2.0)
+            && number(&self.configured_top_p, f64::MIN_POSITIVE, 1.0)
+            && number(&self.wire_top_p, f64::MIN_POSITIVE, 1.0)
+            && number(&self.documented_top_p, f64::MIN_POSITIVE, 1.0)
+            && self
+                .max_output_tokens
+                .is_none_or(|value| value > 0 && value <= 1_000_000)
     }
 }
 
@@ -539,6 +629,9 @@ pub struct FeeTotal {
 /// Preserve which requested/reported model was associated with each effort.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ModelEffort {
+    /// Safe option tuple bound to these requested/reported models, if observed.
+    #[serde(default)]
+    pub parameters: Option<RequestParameters>,
     /// Model sent to the API.
     pub requested_model: Option<String>,
     /// Model explicitly returned by the API.
@@ -662,6 +755,7 @@ impl SummaryAccumulator {
             self.reported.insert(value.clone());
         }
         self.pairs.insert(ModelEffort {
+            parameters: descriptor.parameters,
             requested_model: descriptor.requested_model,
             reported_model: receipt.reported_model,
             requested_effort: descriptor.requested_effort,

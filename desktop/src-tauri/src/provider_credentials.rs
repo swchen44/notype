@@ -26,6 +26,13 @@ pub trait CredentialReader: Send + Sync {
     /// Resolve one allowlisted variable without exporting other values.
     fn read(&self, key: PublicKey) -> Result<Option<String>, ConfigError>;
 }
+/// Lazy native adapter: App/anonymous/no-active paths never even resolve home.
+pub struct CurrentUserReader;
+impl CredentialReader for CurrentUserReader {
+    fn read(&self, key: PublicKey) -> Result<Option<String>, ConfigError> {
+        HomeFileReader::current_user()?.read(key)
+    }
+}
 /// Exact preset eligibility; custom/local/anonymous never receive public keys.
 pub fn public_key(draft: &ConnectionDraft) -> Option<PublicKey> {
     if draft.kind != ConnectionKind::Provider || draft.authentication != Authentication::Bearer {
