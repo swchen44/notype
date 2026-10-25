@@ -110,7 +110,7 @@ fn configured(endpoint: String) -> TextConfiguration {
 
 #[tokio::test]
 async fn deepseek_non_thinking_effort_and_token_limit_reach_the_actual_http_wire() {
-    let (endpoint,request,server)=fixture(r#"{"choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"整理 API。"}}]}"#,Duration::ZERO).await;
+    let (endpoint,request,server)=fixture(r#"{"model":"actual-flash","usage":{"prompt_tokens":17,"completion_tokens":5},"choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"整理 API。"}}]}"#,Duration::ZERO).await;
     let mut configuration = configured(endpoint);
     configuration.provider_profile = TextProviderProfile::DeepSeek;
     configuration.effort = Some("none".into());
@@ -124,10 +124,115 @@ async fn deepseek_non_thinking_effort_and_token_limit_reach_the_actual_http_wire
         .await
         .unwrap();
     assert_eq!(result.result.as_deref(), Some("整理 API。"));
+    assert_eq!(result.api_summary.call_count, Some(1));
+    assert_eq!(result.api_summary.input.total, Some(17));
+    assert_eq!(result.api_summary.output.total, Some(5));
+    assert_eq!(result.api_summary.reported_models, vec!["actual-flash"]);
+    assert_eq!(
+        result.api_summary.model_efforts[0]
+            .requested_effort
+            .as_deref(),
+        Some("none")
+    );
     let request = request.await.unwrap();
     assert_eq!(request["reasoning_effort"], "none");
     assert_eq!(request["thinking"]["type"], "disabled");
     assert_eq!(request["max_tokens"], 512);
+    server.await.unwrap();
+}
+
+#[tokio::test]
+async fn invalid_output_retains_reported_usage_without_inventing_price_or_effort() {
+    let reply=json!({"model":"returned-model","usage":{"prompt_tokens":23,"completion_tokens":-1},"cost":0.2,"currency":"USD","choices":[{"finish_reason":"length","message":{"role":"assistant","content":"partial"}}]}).to_string();
+    let (endpoint, request, server) = fixture(&reply, Duration::ZERO).await;
+    let workflow = DesktopWorkflow::new(SessionService::in_memory().unwrap(), Arc::new(|| {}));
+    let generation = workflow
+        .begin(RecognitionMode::TraditionalEnglish, None)
+        .unwrap();
+    let result = workflow
+        .finish(generation, "recover original", configured(endpoint), vec![])
+        .await
+        .unwrap();
+    assert_eq!(result.status, SessionStatus::Failed);
+    assert_eq!(result.error.as_deref(), Some("llm-invalid-response"));
+    assert_eq!(result.api_summary.input.total, Some(23));
+    assert_eq!(result.api_summary.output.total, None);
+    assert_eq!(
+        result.api_summary.output.status,
+        notype_core::observations::Completeness::Unknown
+    );
+    assert_eq!(
+        result.api_summary.fees.status,
+        notype_core::observations::Completeness::Unknown
+    );
+    assert!(result.api_summary.fees.totals.is_empty());
+    assert_eq!(result.api_summary.model_efforts[0].reported_effort, None);
+    assert_eq!(result.api_summary.model_efforts[0].requested_effort, None);
+    assert_eq!(result.transcript, "recover original");
+    request.await.unwrap();
+    server.await.unwrap();
+}
+
+#[tokio::test]
+async fn provider_defaults_and_explicit_efforts_preserve_actual_request_vocabulary() {
+    for (profile, effort, thinking) in [
+        (TextProviderProfile::Generic, None, None),
+        (TextProviderProfile::DeepSeek, None, None),
+        (TextProviderProfile::DeepSeek, Some("high"), Some("enabled")),
+        (TextProviderProfile::Generic, Some("custom_effort-2"), None),
+    ] {
+        let (endpoint, request, server) = fixture(r#"{"choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"ready"}}]}"#, Duration::ZERO).await;
+        let mut configuration = configured(endpoint);
+        configuration.provider_profile = profile;
+        configuration.effort = effort.map(str::to_owned);
+        let workflow = DesktopWorkflow::new(SessionService::in_memory().unwrap(), Arc::new(|| {}));
+        let generation = workflow
+            .begin(RecognitionMode::TraditionalEnglish, None)
+            .unwrap();
+        let entry = workflow
+            .finish(generation, "original", configuration, vec![])
+            .await
+            .unwrap();
+        assert_eq!(entry.result.as_deref(), Some("ready"));
+        let request = request.await.unwrap();
+        assert_eq!(
+            request.get("reasoning_effort").and_then(Value::as_str),
+            effort
+        );
+        assert_eq!(request["thinking"]["type"].as_str(), thinking);
+        assert!(request.get("max_tokens").is_none());
+        assert_eq!(entry.api_summary.model_efforts[0].reported_effort, None);
+        server.await.unwrap();
+    }
+}
+
+#[tokio::test]
+async fn invalid_translation_envelope_keeps_received_usage_and_original() {
+    let (endpoint, request, server) = fixture(r#"{"model":"translation-producer","usage":{"prompt_tokens":29,"completion_tokens":11},"choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"not a JSON envelope"}}]}"#, Duration::ZERO).await;
+    let mut configuration = configured(endpoint);
+    configuration.translation.back_translation = true;
+    let workflow = DesktopWorkflow::new(SessionService::in_memory().unwrap(), Arc::new(|| {}));
+    let generation = workflow
+        .begin(RecognitionMode::TraditionalEnglish, None)
+        .unwrap();
+    workflow
+        .capture_processing_snapshot(
+            generation,
+            notype_core::Scenario::Translation,
+            configuration.clone(),
+            vec![],
+        )
+        .unwrap();
+    let entry = workflow
+        .finish(generation, "saved original", configuration, vec![])
+        .await
+        .unwrap();
+    assert_eq!(entry.error.as_deref(), Some("llm-invalid-response"));
+    assert_eq!(entry.result, None);
+    assert_eq!(entry.api_summary.input.total, Some(29));
+    assert_eq!(entry.api_summary.output.total, Some(11));
+    assert_eq!(entry.api_summary.call_count, Some(1));
+    request.await.unwrap();
     server.await.unwrap();
 }
 
@@ -169,6 +274,11 @@ async fn captured_real_asr_corpus_keeps_ascii_and_mode_before_original_is_saved(
             );
             assert_eq!(entry.recognition_mode, Some(mode));
             assert_eq!(entry.error.as_deref(), Some("configuration-required"));
+            assert_eq!(entry.api_summary.call_count, Some(0));
+            assert_eq!(
+                entry.api_summary.input.status,
+                notype_core::observations::Completeness::NotApplicable
+            );
             assert_eq!(
                 workflow.sessions().get(&entry.id).unwrap().transcript,
                 entry.transcript
@@ -249,6 +359,11 @@ async fn translation_review_uses_two_requests_without_original_in_reverse_and_re
         .finish(generation, "原始私密口述 API_42", config, vec![])
         .await
         .unwrap();
+    assert_eq!(entry.api_summary.call_count, Some(2));
+    assert_eq!(
+        entry.api_summary.input.status,
+        notype_core::observations::Completeness::Unknown
+    );
     assert_eq!(entry.result.as_deref(), Some("Keep API_42."));
     assert_eq!(entry.source_language.as_deref(), Some("zh-TW"));
     assert_eq!(entry.back_translation.as_deref(), Some("保留 API_42。"));
@@ -716,6 +831,11 @@ async fn cancelling_desktop_session_during_http_keeps_cancelled_original_and_ign
     assert_eq!(saved.transcript, "cancel me");
     assert_eq!(saved.result, None);
     assert_eq!(saved.status, SessionStatus::Cancelled);
+    assert!(saved.observations.latest_processing_ms.is_some());
+    assert_eq!(
+        saved.observations.latest_outcome.as_deref(),
+        Some("cancelled")
+    );
 }
 
 #[tokio::test]
@@ -745,10 +865,22 @@ async fn malformed_response_is_recoverable_after_real_sqlite_restart_and_retry_u
     let workflow = DesktopWorkflow::new(SessionService::open(&path).unwrap(), Arc::new(|| {}));
     let reply=json!({"choices":[{"message":{"role":"assistant","content":"對，然後保留 `session_id` https://example.test/v1.2?value=0.5 [無法辨識]，不要改 42。"},"finish_reason":"stop"}]}).to_string();
     let (endpoint, request, server) = fixture(&reply, Duration::ZERO).await;
+    let mut retry_configuration = configured(endpoint);
+    retry_configuration.model = "retry-model".into();
+    retry_configuration.effort = Some("low".into());
     let retried = workflow
-        .retry(&failed.id, configured(endpoint), vec!["session_id".into()])
+        .retry(&failed.id, retry_configuration, vec!["session_id".into()])
         .await
         .unwrap();
+    assert_eq!(retried.api_summary.call_count, Some(2));
+    assert_eq!(
+        retried.api_summary.requested_models,
+        vec!["fixture-model", "retry-model"]
+    );
+    assert_eq!(
+        retried.observations.latest_processing_kind.as_deref(),
+        Some("retry")
+    );
     assert_eq!(retried.id, failed.id);
     assert_eq!(retried.created_at, failed.created_at);
     assert_eq!(retried.status, SessionStatus::Pending);
@@ -823,4 +955,199 @@ async fn aborted_desktop_future_releases_recording_lifetime_and_leaves_original_
     assert_eq!(saved.error.as_deref(), Some("interrupted"));
     assert_eq!(saved.transcript, "interrupted raw");
     server.await.unwrap();
+}
+
+#[tokio::test]
+async fn durable_accounting_refuses_send_before_network_and_preserves_original() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("sessions.db");
+    let service = SessionService::open(&path).unwrap();
+
+    fixture_sql(&path,"CREATE TRIGGER reject_prepare BEFORE INSERT ON api_calls BEGIN SELECT RAISE(ABORT,'owned storage fault'); END;");
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let configuration = configured(format!(
+        "http://{}/v1/chat/completions",
+        listener.local_addr().unwrap()
+    ));
+    let workflow = DesktopWorkflow::new(service, Arc::new(|| {}));
+    let generation = workflow
+        .begin(RecognitionMode::TraditionalEnglish, None)
+        .unwrap();
+    let entry = workflow
+        .finish(generation, "retained original", configuration, vec![])
+        .await
+        .unwrap();
+    assert_eq!(entry.error.as_deref(), Some("history-storage-failed"));
+    assert_eq!(entry.api_summary.call_count, Some(0));
+    assert_eq!(entry.transcript, "retained original");
+    assert!(
+        tokio::time::timeout(Duration::from_millis(50), listener.accept())
+            .await
+            .is_err()
+    );
+}
+#[tokio::test]
+async fn post_send_storage_fault_never_reissues_http_and_prepared_call_recovers_unknown() {
+    for transient in [true, false] {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("sessions.db");
+        let service = SessionService::open(&path).unwrap();
+
+        let condition = if transient {
+            " WHEN NEW.outcome='pending' AND NEW.receipt IS NOT NULL"
+        } else {
+            " WHEN NEW.receipt IS NOT NULL"
+        };
+        fixture_sql(&path,&format!("CREATE TRIGGER reject_receipt BEFORE UPDATE ON api_calls{condition} BEGIN SELECT RAISE(ABORT,'owned storage fault'); END;"));
+        let reply=json!({"model":"receipt-model","usage":{"prompt_tokens":31,"completion_tokens":7},"choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"ready result"}}]}).to_string();
+        let (endpoint, request, server) = fixture(&reply, Duration::ZERO).await;
+        let workflow = DesktopWorkflow::new(service.clone(), Arc::new(|| {}));
+        let generation = workflow
+            .begin(RecognitionMode::TraditionalEnglish, None)
+            .unwrap();
+        let result = workflow
+            .finish(generation, "durable original", configured(endpoint), vec![])
+            .await;
+        request.await.unwrap();
+        server.await.unwrap();
+        let entry = service.search("").unwrap().remove(0);
+        assert_eq!(entry.transcript, "durable original");
+        assert_eq!(entry.api_summary.call_count, Some(1));
+        if transient {
+            assert!(result.is_ok());
+            assert_eq!(entry.result.as_deref(), Some("ready result"));
+            assert_eq!(entry.api_summary.input.total, Some(31));
+            assert_eq!(entry.api_summary.output.total, Some(7));
+        } else {
+            assert!(matches!(result, Err(notype_core::CoreError::Storage)));
+            assert_eq!(entry.result, None);
+            assert_eq!(entry.api_summary.input.total, None);
+            fixture_sql(&path, "DROP TRIGGER reject_receipt;");
+            drop(workflow);
+            drop(service);
+
+            let reopened = SessionService::open(&path).unwrap().get(&entry.id).unwrap();
+            assert_eq!(
+                reopened.api_summary.input.status,
+                notype_core::observations::Completeness::Unknown
+            );
+            assert_eq!(reopened.result, None);
+        }
+    }
+}
+
+fn fixture_sql(path: &std::path::Path, sql: &str) {
+    let executable = std::env::var_os("NOTYPE_TEST_PYTHON")
+        .unwrap_or_else(|| if cfg!(windows) { "python" } else { "python3" }.into());
+    let mut command = std::process::Command::new(executable);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x08000000);
+    }
+    let output=command.args(["-X","utf8","-c","import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); c.executescript(sys.argv[2]); c.close()"]).arg(path).arg(sql).output().unwrap();
+    assert!(
+        output.status.success(),
+        "owned SQLite fixture failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[tokio::test]
+async fn real_workflow_http_receipts_export_with_exact_text_and_no_transport_secrets() {
+    use notype_core::csv::{CsvExportError, CsvSpaceProbe};
+    use notype_core::observations::{ModelIdentity, RecordingObservation};
+    struct Space;
+    impl CsvSpaceProbe for Space {
+        fn available_bytes(&self, _: &std::path::Path) -> Result<u64, CsvExportError> {
+            Ok(u64::MAX)
+        }
+    }
+    let directory = tempfile::tempdir().unwrap();
+    let workflow = DesktopWorkflow::new(
+        SessionService::open(directory.path().join("sessions.db")).unwrap(),
+        Arc::new(|| {}),
+    );
+    let reply=json!({"model":"actual-api-producer","usage":{"prompt_tokens":43,"completion_tokens":8},"cost":0.02,"currency":"USD","choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"整理 API。\n第二行"}}]}).to_string();
+    let (endpoint, request, server) = fixture(&reply, Duration::ZERO).await;
+    let mut configuration = configured(endpoint.clone());
+    configuration.authentication = TextAuthentication::Bearer;
+    configuration.api_key = "OWNED_TEST_ONLY_KEY_NOT_EXPORTED".into();
+    configuration.provider_profile = TextProviderProfile::DeepSeek;
+    configuration.effort = Some("none".into());
+    configuration.max_output_tokens = Some(512);
+    let generation = workflow
+        .begin(RecognitionMode::TraditionalEnglish, None)
+        .unwrap();
+    workflow
+        .capture_requested_model(generation, "selected-asr".into())
+        .unwrap();
+    workflow
+        .accept_stop(
+            generation,
+            std::time::Instant::now() - Duration::from_millis(80),
+        )
+        .unwrap();
+    workflow
+        .capture_recognition_observation(
+            generation,
+            Some(RecordingObservation::new(24000, 48000, Some(0)).unwrap()),
+            Some(ModelIdentity {
+                id: "producer-asr".into(),
+                name: Some("Producer ASR".into()),
+                backend: Some("fixture".into()),
+            }),
+        )
+        .unwrap();
+    let entry = workflow
+        .finish(generation, "原稿 API,\n\"逐字\"", configuration, vec![])
+        .await
+        .unwrap();
+    request.await.unwrap();
+    server.await.unwrap();
+    let destination = directory.path().join("research.csv");
+    assert_eq!(
+        workflow
+            .sessions()
+            .export_csv(&destination, &Space, &notype_core::CancellationToken::new())
+            .unwrap()
+            .rows,
+        1
+    );
+    let executable = std::env::var_os("NOTYPE_TEST_PYTHON")
+        .unwrap_or_else(|| if cfg!(windows) { "python" } else { "python3" }.into());
+    let mut command = std::process::Command::new(executable);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x08000000);
+    }
+    let output=command.args(["-X","utf8","-c","import csv,json,sys; f=open(sys.argv[1],encoding='utf-8-sig',newline=''); print(json.dumps(list(csv.DictReader(f)),ensure_ascii=False))"]).arg(&destination).output().unwrap();
+    assert!(output.status.success());
+    let rows: Value = serde_json::from_slice(&output.stdout).unwrap();
+    let row = &rows[0];
+    assert_eq!(row["history_id"], entry.id);
+    assert_eq!(row["original_text"], entry.transcript);
+    assert_eq!(row["result_text"], "整理 API。\n第二行");
+    assert_eq!(row["input_tokens"], "43");
+    assert_eq!(row["output_tokens"], "8");
+    assert_eq!(row["actual_fee_status"], "unknown");
+    assert_eq!(row["actual_fee_totals_by_currency"], "[]");
+    assert_eq!(row["recording_audio_seconds"], "0.500");
+    assert_eq!(row["asr_actual_model"], "producer-asr");
+    assert_eq!(row["asr_tokens_status"], "not_reported");
+    assert_eq!(row["asr_tokens"], "");
+    assert_eq!(
+        row["original_count"],
+        entry.observations.original_count.unwrap().to_string()
+    );
+    assert!(
+        entry.observations.initial_stop_to_result_ms.unwrap()
+            >= entry.observations.asr_after_stop_ms.unwrap()
+    );
+    let text = String::from_utf8(std::fs::read(destination).unwrap()).unwrap();
+    assert!(!text.contains("OWNED_TEST_ONLY_KEY_NOT_EXPORTED"));
+    assert!(!text.contains(&endpoint));
+    assert!(!text.contains("Authorization"));
+    assert!(!text.contains("messages"));
 }

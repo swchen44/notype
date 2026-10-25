@@ -15,6 +15,7 @@ use crate::settings::{
 use crate::workflow::recognition::{RecognitionProfile, CPU_THREADS};
 use anyhow::Result;
 use log::{debug, error, info, warn};
+use notype_core::observations::ModelIdentity;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -116,18 +117,22 @@ enum StreamCmd {
 
 struct FinalizedStreamText {
     text: String,
+    model: Option<ModelIdentity>,
 }
 
 /// Detached reply for one stopped stream; waiting never touches the global router.
 pub struct StreamFinalization(Option<mpsc::Receiver<Option<FinalizedStreamText>>>);
 impl StreamFinalization {
-    /// Wait outside generation ownership, allowing Esc and a new recording immediately.
-    pub fn wait(self) -> Result<Option<String>> {
+    /// Return final text with its stream lease identity before any global state is read.
+    pub fn wait_observed(self) -> Result<Option<RecognizedText>> {
         let Some(reply) = self.0 else {
             return Ok(None);
         };
         match reply.recv_timeout(STREAM_FINALIZE_REPLY_TIMEOUT) {
-            Ok(Some(text)) => Ok(Some(text.text)),
+            Ok(Some(text)) => Ok(Some(RecognizedText {
+                text: text.text,
+                model: text.model,
+            })),
             Ok(None) | Err(mpsc::RecvTimeoutError::Disconnected) => Ok(None),
             Err(mpsc::RecvTimeoutError::Timeout) => Err(anyhow::anyhow!(
                 "Timed out waiting for live transcription to finalize"
@@ -199,7 +204,20 @@ impl StreamRouter {
     }
 }
 
-enum LoadedEngine {
+struct LoadedEngine {
+    kind: EngineKind,
+    identity: ModelIdentity,
+}
+
+/// Recognition text and identity moved together from the same decoder lease.
+pub struct RecognizedText {
+    /// Raw engine output, before captured script normalization.
+    pub text: String,
+    /// Actual producing engine, never a later selected model.
+    pub model: Option<ModelIdentity>,
+}
+
+enum EngineKind {
     /// Whisper-family models (whisper, breeze-asr, custom .bin/.gguf) via
     /// transcribe-cpp. Holds the live `Session`, which keeps its `Model` alive
     /// internally, so repeated dictation reuses the session without reloading.
@@ -686,7 +704,7 @@ impl TranscriptionManager {
                     caps.supports_translate,
                     caps.supports_language_detect
                 );
-                LoadedEngine::TranscribeCpp(session)
+                EngineKind::TranscribeCpp(session)
             }
             EngineType::Parakeet => {
                 let engine =
@@ -696,7 +714,7 @@ impl TranscriptionManager {
                         emit_loading_failed(&error_msg);
                         anyhow::anyhow!(error_msg)
                     })?;
-                LoadedEngine::Parakeet(engine)
+                EngineKind::Parakeet(engine)
             }
             EngineType::Moonshine => {
                 let engine = MoonshineModel::load(
@@ -709,7 +727,7 @@ impl TranscriptionManager {
                     emit_loading_failed(&error_msg);
                     anyhow::anyhow!(error_msg)
                 })?;
-                LoadedEngine::Moonshine(engine)
+                EngineKind::Moonshine(engine)
             }
             EngineType::MoonshineStreaming => {
                 let engine = StreamingModel::load(&model_path, 0, &Quantization::default())
@@ -721,7 +739,7 @@ impl TranscriptionManager {
                         emit_loading_failed(&error_msg);
                         anyhow::anyhow!(error_msg)
                     })?;
-                LoadedEngine::MoonshineStreaming(engine)
+                EngineKind::MoonshineStreaming(engine)
             }
             EngineType::SenseVoice => {
                 let engine =
@@ -731,7 +749,7 @@ impl TranscriptionManager {
                         emit_loading_failed(&error_msg);
                         anyhow::anyhow!(error_msg)
                     })?;
-                LoadedEngine::SenseVoice(engine)
+                EngineKind::SenseVoice(engine)
             }
             EngineType::GigaAM => {
                 let engine = GigaAMModel::load(&model_path, &Quantization::Int8).map_err(|e| {
@@ -739,7 +757,7 @@ impl TranscriptionManager {
                     emit_loading_failed(&error_msg);
                     anyhow::anyhow!(error_msg)
                 })?;
-                LoadedEngine::GigaAM(engine)
+                EngineKind::GigaAM(engine)
             }
             EngineType::Canary => {
                 let engine = CanaryModel::load(&model_path, &Quantization::Int8).map_err(|e| {
@@ -747,7 +765,7 @@ impl TranscriptionManager {
                     emit_loading_failed(&error_msg);
                     anyhow::anyhow!(error_msg)
                 })?;
-                LoadedEngine::Canary(engine)
+                EngineKind::Canary(engine)
             }
             EngineType::Cohere => {
                 let engine = CohereModel::load(&model_path, &Quantization::Int8).map_err(|e| {
@@ -755,14 +773,25 @@ impl TranscriptionManager {
                     emit_loading_failed(&error_msg);
                     anyhow::anyhow!(error_msg)
                 })?;
-                LoadedEngine::Cohere(engine)
+                EngineKind::Cohere(engine)
             }
         };
 
         // Update the current engine and model ID
         {
             let mut engine = self.lock_engine();
-            *engine = Some(loaded_engine);
+            let backend = match &loaded_engine {
+                EngineKind::TranscribeCpp(session) => session.model().backend().to_string(),
+                _ => "onnx".into(),
+            };
+            *engine = Some(LoadedEngine {
+                kind: loaded_engine,
+                identity: ModelIdentity {
+                    id: model_id.to_owned(),
+                    name: Some(model_info.name.clone()),
+                    backend: Some(backend),
+                },
+            });
         }
         {
             let mut current_model = self.current_model_id.lock().unwrap();
@@ -860,10 +889,8 @@ impl TranscriptionManager {
     /// its real backend string; ONNX engines report "onnx"; `None` when no
     /// model is loaded.
     pub fn current_backend(&self) -> Option<String> {
-        match self.lock_engine().as_ref() {
-            Some(LoadedEngine::TranscribeCpp(session)) => {
-                Some(session.model().backend().to_string())
-            }
+        match self.lock_engine().as_ref().map(|engine| &engine.kind) {
+            Some(EngineKind::TranscribeCpp(session)) => Some(session.model().backend().to_string()),
             Some(_) => Some("onnx".to_string()),
             None => None,
         }
@@ -980,8 +1007,8 @@ impl TranscriptionManager {
         // Only transcribe-cpp models expose streaming; ONNX engines fall back to
         // batch. The loaded session (not the ModelManager copy) is the source of
         // truth for run-path capabilities.
-        let (supports_streaming, supports_translate, languages) = match &engine {
-            LoadedEngine::TranscribeCpp(session) => {
+        let (supports_streaming, supports_translate, languages) = match &engine.kind {
+            EngineKind::TranscribeCpp(session) => {
                 let model = session.model();
                 let caps = model.capabilities();
                 info!(
@@ -1049,12 +1076,13 @@ impl TranscriptionManager {
         // (and thus the engine) for its lifetime, so the feed/finalize loop
         // lives in a labeled block — when it exits, the borrow is released and
         // the engine can be moved into return_engine().
+        let producer_model = engine.identity.clone();
         let mut preview_script = PreviewScript::new(settings.chinese_script, &output_language);
         let mut finalize_reply: Option<mpsc::Sender<Option<FinalizedStreamText>>> = None;
         let mut finalize_result: Option<Option<FinalizedStreamText>> = None;
         let stream_started = 'stream: {
-            let session = match &mut engine {
-                LoadedEngine::TranscribeCpp(s) => s,
+            let session = match &mut engine.kind {
+                EngineKind::TranscribeCpp(s) => s,
                 _ => break 'stream false,
             };
 
@@ -1136,6 +1164,7 @@ impl TranscriptionManager {
                                 );
                                 Some(FinalizedStreamText {
                                     text: stream.text().full,
+                                    model: Some(producer_model.clone()),
                                 })
                             }
                             Err(e) => {
@@ -1263,7 +1292,7 @@ impl TranscriptionManager {
         if result.is_ok() {
             self.maybe_unload_immediately("headless transcription");
         }
-        result
+        result.map(|result| result.text)
     }
 
     /// Decode only this generation's captured audio; late return/panic cannot replace a newer engine.
@@ -1272,7 +1301,7 @@ impl TranscriptionManager {
         audio: Vec<f32>,
         profile: &RecognitionProfile,
         owner: crate::workflow::GenerationToken,
-    ) -> Result<String> {
+    ) -> Result<RecognizedText> {
         let started = Instant::now();
         crate::diagnostics::record(
             crate::diagnostics::Phase::Transcription,
@@ -1296,7 +1325,7 @@ impl TranscriptionManager {
         audio: Vec<f32>,
         profile: &RecognitionProfile,
         owner: Option<crate::workflow::GenerationToken>,
-    ) -> Result<String> {
+    ) -> Result<RecognizedText> {
         #[cfg(debug_assertions)]
         if std::env::var("HANDY_FORCE_TRANSCRIPTION_FAILURE").is_ok() {
             return Err(anyhow::anyhow!(
@@ -1314,7 +1343,10 @@ impl TranscriptionManager {
 
         if audio.is_empty() {
             debug!("Empty audio vector");
-            return Ok(String::new());
+            return Ok(RecognizedText {
+                text: String::new(),
+                model: None,
+            });
         }
 
         // Check if model is loaded, if not try to load it
@@ -1382,6 +1414,7 @@ impl TranscriptionManager {
         // Perform transcription with the appropriate engine.
         // We use catch_unwind to prevent engine panics from poisoning the mutex,
         // which would make the app hang indefinitely on subsequent operations.
+        let producer_model;
         let result = {
             let take = || self.lock_engine().take();
             let engine = if let Some(owner) = &owner {
@@ -1398,6 +1431,7 @@ impl TranscriptionManager {
                 }
             };
 
+            producer_model = Some(engine.identity.clone());
             // No ownership gate or engine mutex is held during native decoding.
 
             // Probe live transcribe-cpp capabilities once (cheap GGUF-metadata
@@ -1414,7 +1448,7 @@ impl TranscriptionManager {
             let mut output_was_translated = false;
             let mut applied_language_hint: Option<String> = None;
             let mut model_detected_language: Option<String> = None;
-            if let LoadedEngine::TranscribeCpp(session) = &engine {
+            if let EngineKind::TranscribeCpp(session) = &engine.kind {
                 let model = session.model();
                 let caps = model.capabilities();
                 let model_takes_initial_prompt = model.supports(Feature::InitialPrompt);
@@ -1432,8 +1466,8 @@ impl TranscriptionManager {
             }
 
             let transcribe_result = catch_unwind(AssertUnwindSafe(|| -> Result<String> {
-                match &mut engine {
-                    LoadedEngine::TranscribeCpp(session) => {
+                match &mut engine.kind {
+                    EngineKind::TranscribeCpp(session) => {
                         // Custom words become the initial prompt ONLY for models
                         // that accept one (whisper family). Attaching the
                         // whisper run extension to a non-whisper arch is rejected
@@ -1484,7 +1518,7 @@ impl TranscriptionManager {
                                 anyhow::anyhow!("transcribe-cpp transcription failed: {}", e)
                             })
                     }
-                    LoadedEngine::Parakeet(parakeet_engine) => {
+                    EngineKind::Parakeet(parakeet_engine) => {
                         let params = ParakeetParams {
                             timestamp_granularity: Some(TimestampGranularity::Segment),
                             ..Default::default()
@@ -1494,17 +1528,17 @@ impl TranscriptionManager {
                             .map(|r| r.text)
                             .map_err(|e| anyhow::anyhow!("Parakeet transcription failed: {}", e))
                     }
-                    LoadedEngine::Moonshine(moonshine_engine) => moonshine_engine
+                    EngineKind::Moonshine(moonshine_engine) => moonshine_engine
                         .transcribe(&audio, &TranscribeOptions::default())
                         .map(|r| r.text)
                         .map_err(|e| anyhow::anyhow!("Moonshine transcription failed: {}", e)),
-                    LoadedEngine::MoonshineStreaming(streaming_engine) => streaming_engine
+                    EngineKind::MoonshineStreaming(streaming_engine) => streaming_engine
                         .transcribe(&audio, &TranscribeOptions::default())
                         .map(|r| r.text)
                         .map_err(|e| {
                             anyhow::anyhow!("Moonshine streaming transcription failed: {}", e)
                         }),
-                    LoadedEngine::SenseVoice(sense_voice_engine) => {
+                    EngineKind::SenseVoice(sense_voice_engine) => {
                         let language = match validated_language.as_str() {
                             "zh" => Some("zh".to_string()),
                             "en" => Some("en".to_string()),
@@ -1523,11 +1557,11 @@ impl TranscriptionManager {
                             .map(|r| r.text)
                             .map_err(|e| anyhow::anyhow!("SenseVoice transcription failed: {}", e))
                     }
-                    LoadedEngine::GigaAM(gigaam_engine) => gigaam_engine
+                    EngineKind::GigaAM(gigaam_engine) => gigaam_engine
                         .transcribe(&audio, &TranscribeOptions::default())
                         .map(|r| r.text)
                         .map_err(|e| anyhow::anyhow!("GigaAM transcription failed: {}", e)),
-                    LoadedEngine::Canary(canary_engine) => {
+                    EngineKind::Canary(canary_engine) => {
                         output_was_translated = settings.translate_to_english;
                         let lang = if validated_language == "auto" {
                             None
@@ -1545,7 +1579,7 @@ impl TranscriptionManager {
                             .map(|r| r.text)
                             .map_err(|e| anyhow::anyhow!("Canary transcription failed: {}", e))
                     }
-                    LoadedEngine::Cohere(cohere_engine) => {
+                    EngineKind::Cohere(cohere_engine) => {
                         let lang = if validated_language == "auto" {
                             None
                         } else {
@@ -1658,7 +1692,10 @@ impl TranscriptionManager {
             );
         }
 
-        Ok(final_result)
+        Ok(RecognizedText {
+            text: final_result,
+            model: producer_model,
+        })
     }
 }
 

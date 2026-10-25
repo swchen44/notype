@@ -113,7 +113,20 @@ impl Default for SessionObservations {
 }
 impl SessionObservations {
     /// Validate only typed metadata, never a settings document or raw response.
-    pub(crate) fn validate(&self) -> Result<(), crate::CoreError> {
+    pub fn validate(&self) -> Result<(), crate::CoreError> {
+        if self
+            .latest_processing_kind
+            .as_deref()
+            .is_some_and(|value| !matches!(value, "initial" | "retry"))
+            || self.latest_outcome.as_deref().is_some_and(|value| {
+                !matches!(
+                    value,
+                    "original_only" | "pending" | "failed" | "cancelled" | "interrupted"
+                )
+            })
+        {
+            return Err(crate::CoreError::InvalidInput);
+        }
         if let Some(recording) = &self.recording {
             RecordingObservation::new(
                 recording.received_frames,
@@ -186,6 +199,7 @@ pub enum ApiProviderProfile {
     #[default]
     Generic,
     /// Explicit DeepSeek option rules.
+    #[serde(rename = "deepseek")]
     DeepSeek,
     /// Shared noncompany development HTTP protocol.
     Development,
@@ -579,10 +593,10 @@ impl SummaryAccumulator {
         self.output.add(receipt.usage.output);
         if let Some(charge) = receipt.actual_charge {
             if let Some(value) = Decimal::parse(&charge.amount) {
+                self.fee_count += 1;
                 let old = self.fees.entry(charge.currency).or_insert(Decimal(0));
                 if let Some(sum) = old.0.checked_add(value.0) {
                     old.0 = sum;
-                    self.fee_count += 1;
                 } else {
                     self.overflow = true;
                 }
@@ -610,7 +624,11 @@ impl SummaryAccumulator {
                 amount: value.text(),
             })
             .collect();
-        let fee_status = complete_status(self.count, self.fee_count, self.unknown || self.overflow);
+        let fee_status = if self.overflow {
+            Completeness::Unknown
+        } else {
+            complete_status(self.count, self.fee_count, self.unknown)
+        };
         ApiSummary {
             call_count: (!self.unknown).then_some(self.count),
             observed_call_count: self.count,

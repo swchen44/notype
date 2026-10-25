@@ -87,6 +87,11 @@ async fn complete_session_uses_real_http_with_only_saved_original_and_manual_glo
         .await
         .unwrap();
     assert_eq!(result.status, SessionStatus::Pending);
+    assert_eq!(result.api_summary.call_count, Some(1));
+    assert_eq!(
+        result.api_summary.input.status,
+        notype_core::observations::Completeness::Unknown
+    );
     assert_eq!(result.transcript, "不要刪除 API 42");
     assert_eq!(result.result.as_deref(), Some("不要刪除 API 42。"));
     assert_eq!(

@@ -384,6 +384,9 @@ pub(crate) fn begin_scenario_recording(
         .begin_with_profile(profile, target)
         .map_err(|error| error.to_string())?;
     workflow
+        .capture_requested_model(generation, preferences.selected_model.clone())
+        .map_err(|error| error.to_string())?;
+    workflow
         .capture_source_context(generation, context)
         .map_err(|error| error.to_string())?;
     workflow

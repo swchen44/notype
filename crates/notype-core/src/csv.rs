@@ -66,6 +66,8 @@ const HEADERS: &[&str] = &[
     "asr_actual_model",
     "asr_model_name",
     "asr_backend",
+    "asr_tokens_status",
+    "asr_tokens",
     "original_text",
     "original_count",
     "result_text",
@@ -316,6 +318,9 @@ fn cells(entry: &SessionEntry) -> Result<Vec<String>, CsvExportError> {
         model.map(|m| m.id.clone()).unwrap_or_default(),
         model.and_then(|m| m.name.clone()).unwrap_or_default(),
         model.and_then(|m| m.backend.clone()).unwrap_or_default(),
+        // Current engine contracts return text only; never copy API usage or counts.
+        "not_reported".into(),
+        String::new(),
         entry.transcript.clone(),
         number(observations.original_count),
         entry.result.clone().unwrap_or_default(),

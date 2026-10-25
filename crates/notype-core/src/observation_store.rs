@@ -34,6 +34,7 @@ pub(crate) struct StoreObserver {
     revision: i64,
     pending: Mutex<HashMap<String, Pending>>,
     unavailable: AtomicBool,
+    stage: Mutex<Option<(std::time::Instant, std::time::Instant)>>,
 }
 impl StoreObserver {
     pub(crate) fn new(service: SessionService, history: String, revision: i64) -> Self {
@@ -43,7 +44,15 @@ impl StoreObserver {
             revision,
             pending: Mutex::new(HashMap::new()),
             unavailable: AtomicBool::new(false),
+            stage: Mutex::new(None),
         }
+    }
+    pub(crate) fn stage_ms(&self) -> Option<u64> {
+        self.stage.lock().ok()?.as_ref().map(|(start, end)| {
+            end.duration_since(*start)
+                .as_millis()
+                .min(u128::from(u64::MAX)) as u64
+        })
     }
     pub(crate) fn has_sent(&self) -> bool {
         self.pending
@@ -140,6 +149,12 @@ impl ApiCallObserver for StoreObserver {
             .get_mut(id)
         {
             value.sent = true;
+            if let Ok(mut stage) = self.stage.lock() {
+                stage.get_or_insert_with(|| {
+                    let now = std::time::Instant::now();
+                    (now, now)
+                });
+            }
         }
         Ok(())
     }
@@ -155,6 +170,13 @@ impl ApiCallObserver for StoreObserver {
         if let Ok(mut pending) = self.pending.lock() {
             if let Some(value) = pending.get_mut(id) {
                 value.outcome = Some(outcome);
+                if value.sent {
+                    if let Ok(mut stage) = self.stage.lock() {
+                        if let Some((_, end)) = stage.as_mut() {
+                            *end = std::time::Instant::now();
+                        }
+                    }
+                }
                 value.elapsed_ms = Some(elapsed_ms.min(i64::MAX as u64));
             }
         }

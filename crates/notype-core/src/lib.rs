@@ -251,9 +251,15 @@ impl From<std::io::Error> for CoreError {
 #[derive(Clone)]
 pub struct SessionService {
     connection: Arc<Mutex<Connection>>,
-    active: Arc<Mutex<HashMap<String, (i64, CancellationToken)>>>,
+    active: Arc<Mutex<HashMap<String, ActiveAttempt>>>,
     _owner: Option<Arc<File>>,
     database_path: Option<Arc<std::path::PathBuf>>,
+}
+
+struct ActiveAttempt {
+    revision: i64,
+    cancellation: CancellationToken,
+    started: std::time::Instant,
 }
 
 fn now() -> String {
@@ -282,10 +288,10 @@ impl Drop for AttemptGuard {
             if let Ok(mut active) = self.service.active.lock() {
                 if active
                     .get(&self.id)
-                    .is_some_and(|(attempt, _)| *attempt == self.attempt)
+                    .is_some_and(|active| active.revision == self.attempt)
                 {
-                    if let Some((_, cancellation)) = active.remove(&self.id) {
-                        cancellation.cancel();
+                    if let Some(active) = active.remove(&self.id) {
+                        active.cancellation.cancel();
                     }
                 }
             }
@@ -452,6 +458,44 @@ impl SessionService {
         )
     }
 
+    /// Preserve a script-failed original with the same validated capture metadata.
+    pub fn create_recognition_failure_observed(
+        &self,
+        transcript: &str,
+        options: SessionOptions,
+        observations: observations::SessionObservations,
+    ) -> Result<SessionEntry, CoreError> {
+        self.create_entry(
+            transcript,
+            options,
+            "failed",
+            Some("recognition-script-failed"),
+            observations,
+        )
+    }
+    /// Record the same-process stop-to-durable-original endpoint before API work.
+    /// Revision zero fences this observation from later retries or cancellations.
+    pub fn observe_original_ready(
+        &self,
+        id: &str,
+        stopped_at: std::time::Instant,
+    ) -> Result<SessionEntry, CoreError> {
+        let connection = self.connection()?;
+        let mut entry = read_entry(&connection, id)?;
+        if entry.revision != 0 {
+            return Err(CoreError::InvalidTransition);
+        }
+        entry.observations.asr_after_stop_ms = Some(elapsed_ms(stopped_at));
+        connection.execute(
+            "UPDATE sessions SET observations=?2 WHERE id=?1 AND attempt=0",
+            params![
+                id,
+                serde_json::to_string(&entry.observations).map_err(|_| CoreError::Storage)?
+            ],
+        )?;
+        read_entry(&connection, id)
+    }
+
     fn create_entry(
         &self,
         transcript: &str,
@@ -512,13 +556,13 @@ impl SessionService {
             return Err(CoreError::Busy);
         }
         connection.execute("DELETE FROM sessions WHERE id=?1", [id])?;
-        if let Some((_, cancellation)) = self
+        if let Some(active) = self
             .active
             .lock()
             .map_err(|_| CoreError::Storage)?
             .remove(id)
         {
-            cancellation.cancel();
+            active.cancellation.cancel();
         }
         Ok(())
     }
@@ -615,14 +659,23 @@ impl SessionService {
             } else {
                 "cancelled"
             };
-            connection.execute("UPDATE sessions SET status=?2,error='cancelled',attempt=attempt+1,updated_at=?3 WHERE id=?1", params![id,status,now()])?;
-            if let Some((_, cancellation)) = self
+            let mut observations = entry.observations.clone();
+            if entry.status == SessionStatus::Processing {
+                if let Some(active) = self.active.lock().map_err(|_| CoreError::Storage)?.get(id) {
+                    if active.revision == entry.revision {
+                        observations.latest_processing_ms = Some(elapsed_ms(active.started));
+                        observations.latest_outcome = Some("cancelled".into());
+                    }
+                }
+            }
+            connection.execute("UPDATE sessions SET status=?2,error='cancelled',attempt=attempt+1,updated_at=?3,observations=?4 WHERE id=?1", params![id,status,now(),serde_json::to_string(&observations).map_err(|_|CoreError::Storage)?])?;
+            if let Some(active) = self
                 .active
                 .lock()
                 .map_err(|_| CoreError::Storage)?
                 .remove(id)
             {
-                cancellation.cancel();
+                active.cancellation.cancel();
             }
         }
         self.get(id)
@@ -720,7 +773,21 @@ impl SessionService {
         processor: Arc<dyn TextProcessor>,
         review: bool,
     ) -> Result<SessionEntry, CoreError> {
+        self.process_with_stop(id, glossary, processor, review, None)
+            .await
+    }
+    /// Process one revision with an optional same-process accepted-stop origin.
+    /// Retry callers omit it; durations never span human waiting or restarts.
+    pub async fn process_with_stop(
+        &self,
+        id: &str,
+        glossary: Vec<String>,
+        processor: Arc<dyn TextProcessor>,
+        review: bool,
+        stopped_at: Option<std::time::Instant>,
+    ) -> Result<SessionEntry, CoreError> {
         let cancellation = CancellationToken::new();
+        let processing_started = std::time::Instant::now();
         let (entry, attempt, mut observations) = {
             let connection = self.connection()?;
             let entry = read_entry(&connection, id)?;
@@ -763,13 +830,16 @@ impl SessionService {
             observations.latest_api_ms = None;
             observations.latest_outcome = None;
             connection.execute("UPDATE sessions SET status='processing',result=NULL,back_translation=NULL,source_language=NULL,review_required=?4,review_confirmed=0,error=NULL,selection='polished',attempt=?3,updated_at=?2,observations=?5 WHERE id=?1", params![id, now(), attempt,review&&entry.scenario==Scenario::Translation,serde_json::to_string(&observations).map_err(|_|CoreError::Storage)?])?;
-            self.active
-                .lock()
-                .map_err(|_| CoreError::Storage)?
-                .insert(id.to_owned(), (attempt, cancellation.clone()));
+            self.active.lock().map_err(|_| CoreError::Storage)?.insert(
+                id.to_owned(),
+                ActiveAttempt {
+                    revision: attempt,
+                    cancellation: cancellation.clone(),
+                    started: processing_started,
+                },
+            );
             (entry, attempt, observations)
         };
-        let processing_started = std::time::Instant::now();
         let api_observer = Arc::new(observation_store::StoreObserver::new(
             self.clone(),
             id.to_owned(),
@@ -854,30 +924,51 @@ impl SessionService {
         let mut active = self.active.lock().map_err(|_| CoreError::Storage)?;
         if active
             .get(id)
-            .is_some_and(|(generation, _)| *generation == attempt)
+            .is_some_and(|active| active.revision == attempt)
         {
             active.remove(id);
         }
         observations.result_count = result.as_ref().map(|text| observations::mixed_count(text));
-        observations.latest_processing_ms = Some(
-            processing_started
-                .elapsed()
-                .as_millis()
-                .min(u128::from(u64::MAX)) as u64,
+        let original_only =
+            result.is_none() && !api_observer.has_sent() && error == Some("configuration-required");
+        observations.latest_outcome = Some(
+            if original_only {
+                "original_only"
+            } else {
+                status
+            }
+            .into(),
         );
-        observations.latest_api_ms = api_observer
-            .has_sent()
-            .then_some(observations.latest_processing_ms)
-            .flatten();
-        observations.latest_outcome = Some(status.into());
         observations.api_metadata_unavailable |= api_observer.missing();
         let transaction = connection.transaction()?;
         api_observer.flush(&transaction)?;
         transaction.execute("UPDATE sessions SET status=?2,result=?3,error=?4,updated_at=?5,source_language=?7,back_translation=?8,observations=?9 WHERE id=?1 AND attempt=?6 AND status='processing'", params![id,status,result,error,now(),attempt,source_language,back_translation,serde_json::to_string(&observations).map_err(|_|CoreError::Storage)?])?;
         transaction.commit()?;
+        // Measure after durable result/status availability, before human review or delivery.
+        observations.latest_processing_ms = Some(elapsed_ms(processing_started));
+        observations.latest_api_ms = api_observer.stage_ms();
+        if observations.latest_processing_kind.as_deref() == Some("initial") {
+            if result.is_some() {
+                observations.initial_stop_to_result_ms = stopped_at.map(elapsed_ms);
+            } else if original_only {
+                observations.initial_stop_to_result_ms = observations.asr_after_stop_ms;
+            }
+        }
+        connection.execute(
+            "UPDATE sessions SET observations=?3 WHERE id=?1 AND attempt=?2 AND status=?4",
+            params![
+                id,
+                attempt,
+                serde_json::to_string(&observations).map_err(|_| CoreError::Storage)?,
+                status
+            ],
+        )?;
         guard.armed = false;
         read_entry(&connection, id)
     }
+}
+fn elapsed_ms(started: std::time::Instant) -> u64 {
+    started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64
 }
 
 fn read_entry(connection: &Connection, id: &str) -> Result<SessionEntry, CoreError> {
@@ -923,7 +1014,10 @@ fn read_entry(connection: &Connection, id: &str) -> Result<SessionEntry, CoreErr
         )
         .optional()?
         .ok_or(CoreError::NotFound)?;
-    entry.api_summary =
-        observation_store::summary(connection, id, entry.observations.api_metadata_unavailable)?;
+    entry.api_summary = observation_store::summary(
+        connection,
+        id,
+        entry.observations.api_metadata_unavailable || entry.status == SessionStatus::Processing,
+    )?;
     Ok(entry)
 }

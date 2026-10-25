@@ -49,6 +49,20 @@ fn fresh_history_persists_received_audio_models_and_both_text_counts() {
     assert_eq!(saved.created_at, entry.created_at);
 }
 
+#[test]
+fn typed_history_observations_cannot_accept_arbitrary_control_labels() {
+    let service = SessionService::in_memory().unwrap();
+    let observation = SessionObservations {
+        latest_outcome: Some("https://private.invalid/arbitrary-data".into()),
+        ..Default::default()
+    };
+    assert!(matches!(
+        service.create_observed("original", SessionOptions::default(), observation),
+        Err(notype_core::CoreError::InvalidInput)
+    ));
+    assert!(service.search("").unwrap().is_empty());
+}
+
 struct Metered {
     model: &'static str,
     input: u64,
@@ -245,6 +259,8 @@ async fn one_utf8_csv_row_joins_exact_texts_and_every_api_total_by_history_id() 
     assert_eq!(row["original_count"], "7");
     assert_eq!(row["result_count"], "3");
     assert_eq!(row["recording_audio_seconds"], "0.500");
+    assert_eq!(row["asr_tokens_status"], "not_reported");
+    assert_eq!(row["asr_tokens"], "");
     assert_eq!(row["input_tokens"], "140");
     assert_eq!(row["output_tokens"], "40");
     let amounts: serde_json::Value =
@@ -256,4 +272,333 @@ async fn one_utf8_csv_row_joins_exact_texts_and_every_api_total_by_history_id() 
     let models: serde_json::Value =
         serde_json::from_str(row["api_requested_models"].as_str().unwrap()).unwrap();
     assert_eq!(models, serde_json::json!(["model-a", "model-b"]));
+}
+
+struct MutateAfterSnapshot {
+    service: SessionService,
+    delete: String,
+}
+impl CsvSpaceProbe for MutateAfterSnapshot {
+    fn available_bytes(&self, _: &std::path::Path) -> Result<u64, CsvExportError> {
+        self.service.delete(&self.delete).unwrap();
+        self.service
+            .create("new after snapshot", SessionOptions::default())
+            .unwrap();
+        Ok(u64::MAX)
+    }
+}
+#[test]
+fn csv_snapshot_survives_concurrent_delete_and_insert_without_holding_writer() {
+    let directory = tempfile::tempdir().unwrap();
+    let service = SessionService::open(directory.path().join("sessions.db")).unwrap();
+    let old = service
+        .create("snapshot original", SessionOptions::default())
+        .unwrap();
+    let destination = directory.path().join("research.csv");
+    service
+        .export_csv(
+            &destination,
+            &MutateAfterSnapshot {
+                service: service.clone(),
+                delete: old.id.clone(),
+            },
+            &CancellationToken::new(),
+        )
+        .unwrap();
+    let rows = read_csv(&destination);
+    assert_eq!(rows.as_array().unwrap().len(), 1);
+    assert_eq!(rows[0]["history_id"], old.id);
+    assert_eq!(rows[0]["original_text"], "snapshot original");
+    assert_eq!(
+        service.search("").unwrap()[0].transcript,
+        "new after snapshot"
+    );
+}
+struct NoSpace;
+impl CsvSpaceProbe for NoSpace {
+    fn available_bytes(&self, _: &std::path::Path) -> Result<u64, CsvExportError> {
+        Ok(0)
+    }
+}
+#[test]
+fn csv_failure_and_cancellation_preserve_destination_and_leave_no_owned_partial() {
+    let directory = tempfile::tempdir().unwrap();
+    let service = SessionService::open(directory.path().join("sessions.db")).unwrap();
+    service
+        .create("original", SessionOptions::default())
+        .unwrap();
+    let destination = directory.path().join("research.csv");
+    std::fs::write(&destination, b"existing destination").unwrap();
+    assert_eq!(
+        service
+            .export_csv(&destination, &NoSpace, &CancellationToken::new())
+            .unwrap_err(),
+        CsvExportError::SpaceUnavailable
+    );
+    let cancel = CancellationToken::new();
+    cancel.cancel();
+    assert_eq!(
+        service
+            .export_csv(&destination, &PlentySpace, &cancel)
+            .unwrap_err(),
+        CsvExportError::Cancelled
+    );
+    assert_eq!(
+        std::fs::read(&destination).unwrap(),
+        b"existing destination"
+    );
+    let blocked = directory.path().join("directory.csv");
+    std::fs::create_dir(&blocked).unwrap();
+    std::fs::write(blocked.join("sentinel"), b"keep").unwrap();
+    assert_eq!(
+        service
+            .export_csv(&blocked, &PlentySpace, &CancellationToken::new())
+            .unwrap_err(),
+        CsvExportError::WriteFailed
+    );
+    assert_eq!(std::fs::read(blocked.join("sentinel")).unwrap(), b"keep");
+    assert!(std::fs::read_dir(directory.path())
+        .unwrap()
+        .all(|entry| !entry
+            .unwrap()
+            .file_name()
+            .to_string_lossy()
+            .ends_with(".partial")));
+}
+#[test]
+fn large_csv_exports_every_row_with_fixed_columns_and_exact_unicode() {
+    let directory = tempfile::tempdir().unwrap();
+    let service = SessionService::open(directory.path().join("sessions.db")).unwrap();
+    for i in 0..1200 {
+        service
+            .create(
+                &format!("原稿 API {i},\"line\"\n第二行"),
+                SessionOptions::default(),
+            )
+            .unwrap();
+    }
+    let destination = directory.path().join("all.csv");
+    assert_eq!(
+        service
+            .export_csv(&destination, &PlentySpace, &CancellationToken::new())
+            .unwrap()
+            .rows,
+        1200
+    );
+    let rows = read_csv(&destination);
+    let rows = rows.as_array().unwrap();
+    assert_eq!(rows.len(), 1200);
+    let width = rows[0].as_object().unwrap().len();
+    assert!(rows
+        .iter()
+        .all(|row| row.as_object().unwrap().len() == width));
+    assert_eq!(
+        rows.iter()
+            .map(|row| row["history_id"].as_str().unwrap())
+            .collect::<std::collections::HashSet<_>>()
+            .len(),
+        1200
+    );
+}
+
+struct Receipts(Vec<ApiReceipt>);
+impl TextProcessor for Receipts {
+    fn polish(&self, _: TextRequest, _: CancellationToken) -> TextFuture {
+        Box::pin(async { Ok("result".into()) })
+    }
+    fn generate_observed(
+        &self,
+        _: TextRequest,
+        _: CancellationToken,
+        observer: Arc<dyn ApiCallObserver>,
+    ) -> GenerationFuture {
+        let receipts = self.0.clone();
+        Box::pin(async move {
+            for receipt in receipts {
+                let mut call = ApiCallGuard::begin(observer.clone(), ApiCallDescriptor::default())?;
+                call.mark_sent()?;
+                call.response(receipt);
+                call.finish(ApiOutcome::Success);
+            }
+            Ok(TextOutput {
+                text: "result".into(),
+                source_language: None,
+            })
+        })
+    }
+}
+#[tokio::test]
+async fn independent_partial_usage_and_exact_currencies_never_fake_missing_zero() {
+    use notype_core::observations::Completeness;
+    let service = SessionService::in_memory().unwrap();
+    let entry = service
+        .create("original", SessionOptions::default())
+        .unwrap();
+    let receipts = vec![
+        ApiReceipt {
+            usage: TokenUsage {
+                input: Some(0),
+                output: Some(4),
+                cached_input: Some(80),
+                reasoning_output: Some(3),
+                ..Default::default()
+            },
+            actual_charge: Some(ActualCharge::new("0.1", "USD", "fixture").unwrap()),
+            ..Default::default()
+        },
+        ApiReceipt {
+            usage: TokenUsage {
+                input: Some(0),
+                output: None,
+                ..Default::default()
+            },
+            actual_charge: Some(ActualCharge::new("0.2", "USD", "fixture").unwrap()),
+            ..Default::default()
+        },
+        ApiReceipt {
+            usage: TokenUsage {
+                input: Some(0),
+                output: Some(0),
+                ..Default::default()
+            },
+            actual_charge: Some(ActualCharge::new("12", "TWD", "fixture").unwrap()),
+            ..Default::default()
+        },
+    ];
+    let result = service
+        .process(&entry.id, vec![], Arc::new(Receipts(receipts)))
+        .await
+        .unwrap();
+    assert_eq!(result.api_summary.input.status, Completeness::Complete);
+    assert_eq!(result.api_summary.input.total, Some(0));
+    assert_eq!(result.api_summary.output.status, Completeness::Partial);
+    assert_eq!(result.api_summary.output.total, None);
+    assert_eq!(result.api_summary.output.known_subtotal, Some(4));
+    assert_eq!(result.api_summary.output.reported_calls, 2);
+    assert_eq!(
+        result
+            .api_summary
+            .fees
+            .totals
+            .iter()
+            .map(|value| (value.currency.as_str(), value.amount.as_str()))
+            .collect::<Vec<_>>(),
+        vec![("TWD", "12"), ("USD", "0.3")]
+    );
+    let partial = service
+        .process(
+            &entry.id,
+            vec![],
+            Arc::new(Receipts(vec![ApiReceipt::default()])),
+        )
+        .await
+        .unwrap();
+    assert_eq!(partial.api_summary.input.status, Completeness::Partial);
+    assert_eq!(partial.api_summary.input.known_subtotal, Some(0));
+    assert_eq!(partial.api_summary.fees.status, Completeness::Partial);
+    assert!(partial.api_summary.fees.totals.is_empty());
+    assert_eq!(partial.api_summary.fees.known_subtotals.len(), 2);
+}
+
+#[tokio::test]
+async fn checked_totals_report_overflow_as_unknown_and_preserve_reported_call_counts() {
+    use notype_core::observations::Completeness;
+    let service = SessionService::in_memory().unwrap();
+    let entry = service
+        .create("original", SessionOptions::default())
+        .unwrap();
+    let receipt = ApiReceipt {
+        usage: TokenUsage {
+            input: Some(9_007_199_254_740_991),
+            ..Default::default()
+        },
+        actual_charge: Some(ActualCharge::new("100000000000000000000", "USD", "fixture").unwrap()),
+        ..Default::default()
+    };
+    let entry = service
+        .process(
+            &entry.id,
+            vec![],
+            Arc::new(Receipts(vec![receipt.clone(), receipt])),
+        )
+        .await
+        .unwrap();
+    assert_eq!(entry.api_summary.input.status, Completeness::Unknown);
+    assert_eq!(entry.api_summary.input.total, None);
+    assert_eq!(entry.api_summary.input.known_subtotal, None);
+    assert_eq!(entry.api_summary.input.reported_calls, 2);
+    assert_eq!(entry.api_summary.fees.reported_calls, 2);
+    assert_eq!(entry.api_summary.fees.status, Completeness::Unknown);
+    assert!(entry.api_summary.fees.totals.is_empty());
+    assert!(entry.api_summary.fees.known_subtotals.is_empty());
+}
+struct DelayedReceipt {
+    sent: Arc<tokio::sync::Notify>,
+    release: Arc<tokio::sync::Notify>,
+}
+impl TextProcessor for DelayedReceipt {
+    fn polish(&self, _: TextRequest, _: CancellationToken) -> TextFuture {
+        Box::pin(async { Ok("result".into()) })
+    }
+    fn generate_observed(
+        &self,
+        _: TextRequest,
+        _: CancellationToken,
+        observer: Arc<dyn ApiCallObserver>,
+    ) -> GenerationFuture {
+        let sent = self.sent.clone();
+        let release = self.release.clone();
+        Box::pin(async move {
+            let mut call = ApiCallGuard::begin(observer, ApiCallDescriptor::default())?;
+            call.mark_sent()?;
+            sent.notify_one();
+            release.notified().await;
+            call.response(ApiReceipt {
+                usage: TokenUsage {
+                    input: Some(9),
+                    output: Some(2),
+                    ..Default::default()
+                },
+                ..Default::default()
+            });
+            call.finish(ApiOutcome::Success);
+            Ok(TextOutput {
+                text: "late result".into(),
+                source_language: None,
+            })
+        })
+    }
+}
+#[tokio::test]
+async fn deleting_during_an_observed_call_cascades_ledger_and_late_completion_cannot_recreate_it() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("sessions.db");
+    let service = SessionService::open(&path).unwrap();
+    let entry = service
+        .create("original", SessionOptions::default())
+        .unwrap();
+    let sent = Arc::new(tokio::sync::Notify::new());
+    let release = Arc::new(tokio::sync::Notify::new());
+    let task_service = service.clone();
+    let id = entry.id.clone();
+    let processor = Arc::new(DelayedReceipt {
+        sent: sent.clone(),
+        release: release.clone(),
+    });
+    let task = tokio::spawn(async move { task_service.process(&id, vec![], processor).await });
+    sent.notified().await;
+    let active = service.get(&entry.id).unwrap();
+    assert_eq!(active.api_summary.call_count, None);
+    service.delete(&entry.id).unwrap();
+    release.notify_one();
+    assert!(task.await.unwrap().is_err());
+    assert!(service.search("").unwrap().is_empty());
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    assert_eq!(
+        connection
+            .query_row("SELECT COUNT(*) FROM api_calls", [], |row| row
+                .get::<_, u64>(0))
+            .unwrap(),
+        0
+    );
 }

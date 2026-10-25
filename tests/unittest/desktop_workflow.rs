@@ -1,7 +1,10 @@
+#[allow(dead_code)]
 #[path = "../../desktop/src-tauri/src/capture_startup.rs"]
 mod capture_startup;
+#[allow(dead_code)]
 #[path = "../../desktop/src-tauri/src/diagnostics.rs"]
 mod diagnostics;
+#[allow(dead_code, unused_imports)]
 #[path = "../../desktop/src-tauri/src/workflow.rs"]
 mod workflow;
 use notype_core::{RecognitionMode, SessionService, SessionStatus};
@@ -569,4 +572,85 @@ async fn cancelled_recording_cannot_create_history_or_start_processing_after_stt
         .unwrap();
     assert_eq!(entry.transcript, "new recording");
     assert_eq!(workflow.sessions().search("").unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn received_audio_and_producer_snapshot_survive_stop_scheduling_without_api() {
+    use notype_core::observations::{Completeness, ModelIdentity, RecordingObservation};
+    struct MemoryDiagnostics;
+    impl diagnostics::service::DiagnosticStorage for MemoryDiagnostics {
+        fn load_preference(&self) -> Result<Option<bool>, &'static str> {
+            Ok(Some(false))
+        }
+        fn save_preference(&self, _: bool) -> Result<(), &'static str> {
+            Ok(())
+        }
+        fn write_report(&self, _: &std::path::Path, _: &str) -> Result<(), &'static str> {
+            Err("unused-fixture")
+        }
+    }
+    let diagnostics = diagnostics::service::global();
+    assert!(
+        !diagnostics
+            .initialize(Arc::new(MemoryDiagnostics))
+            .effective_enabled
+    );
+    let workflow = DesktopWorkflow::new(SessionService::in_memory().unwrap(), Arc::new(|| {}));
+    let generation = workflow
+        .begin(RecognitionMode::TraditionalEnglish, None)
+        .unwrap();
+    workflow
+        .capture_requested_model(generation, "requested-model".into())
+        .unwrap();
+    let stopped = std::time::Instant::now() - std::time::Duration::from_millis(80);
+    workflow.accept_stop(generation, stopped).unwrap();
+    workflow
+        .capture_recognition_observation(
+            generation,
+            Some(RecordingObservation::new(24000, 48000, Some(0)).unwrap()),
+            Some(ModelIdentity {
+                id: "producer-model".into(),
+                name: None,
+                backend: Some("fixture".into()),
+            }),
+        )
+        .unwrap();
+    let entry = workflow
+        .finish(
+            generation,
+            "我們用 API 測試。",
+            TextConfiguration::default(),
+            vec![],
+        )
+        .await
+        .unwrap();
+    assert_eq!(entry.observations.recording.unwrap().audio_ms(), 500);
+    assert_eq!(
+        entry.observations.requested_asr_model.as_deref(),
+        Some("requested-model")
+    );
+    assert_eq!(
+        entry.observations.actual_asr_model.unwrap().id,
+        "producer-model"
+    );
+    assert!(entry.observations.asr_after_stop_ms.unwrap() >= 80);
+    assert_eq!(
+        entry.observations.initial_stop_to_result_ms,
+        entry.observations.asr_after_stop_ms
+    );
+    assert_eq!(
+        entry.observations.latest_outcome.as_deref(),
+        Some("original_only")
+    );
+    assert_eq!(entry.api_summary.input.status, Completeness::NotApplicable);
+    let saved = workflow.sessions().get(&entry.id).unwrap();
+    assert_eq!(saved.observations.original_count, Some(6));
+    let observation = serde_json::to_value(saved.observations).unwrap();
+    diagnostics.clear();
+    assert!(diagnostics.set_enabled(true).effective_enabled);
+    diagnostics.clear();
+    assert_eq!(
+        serde_json::to_value(workflow.sessions().get(&entry.id).unwrap().observations).unwrap(),
+        observation
+    );
 }
