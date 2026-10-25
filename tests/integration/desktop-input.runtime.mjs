@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, execFileSync } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile, lstat, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { once } from "node:events";
@@ -49,6 +49,17 @@ async function ownedControls() {
   }
   const ready = await response();
   assert.equal(ready.ready, true);
+  assert.equal(
+    ready.pid,
+    child.pid,
+    "Only the child spawned by this harness is owned",
+  );
+  const fixtureImage = await realpath(executable);
+  const imageStat = await lstat(fixtureImage);
+  assert.ok(
+    imageStat.isFile() && !imageStat.isSymbolicLink(),
+    "Owned fixture image is regular",
+  );
   // UIA SetFocus targets only the verified fixture HWND/PID/image. Production never focuses targets.
   if (process.env.NOTYPE_MANUAL_FIXTURE_FOCUS !== "1")
     execFileSync(
@@ -63,6 +74,7 @@ async function ownedControls() {
     return state;
   }
   return {
+    owner: { pid: child.pid, image: fixtureImage },
     command,
     async close() {
       if (child.exitCode === null) {
@@ -91,12 +103,38 @@ test(
       app = await desktop.launch();
       controls = await ownedControls();
       const reset = () => controls.command("reset");
-      async function begin() {
-        return invoke(app.page, "debug_begin_session", {
+      const captureReceipts = [];
+      async function begin(requireInputTarget = true) {
+        const state = await controls.command("state");
+        const observation = {
+          case: captureReceipts.length + 1,
+          foregroundOwned: state.foregroundOwned,
+          requireInputTarget,
+          capturedRequiredTarget: false,
+        };
+        captureReceipts.push(observation);
+        const receiptPath = join(
+          process.env.NOTYPE_DATA_DIR,
+          "owned-captures.json",
+        );
+        await writeFile(receiptPath, JSON.stringify(captureReceipts, null, 2));
+        assert.equal(
+          state.foregroundOwned,
+          true,
+          "Owned fixture must remain foreground before every capture",
+        );
+        const generation = await invoke(app.page, "debug_begin_session", {
           recognitionMode: "traditional_english",
           scenario: "dictation",
           captureInput: true,
+          fixtureOwner: controls.owner,
+          requireInputTarget,
         });
+        // With requireInputTarget=true, success is the native command's receipt
+        // that it captured an owned token; no invented target or fallback exists.
+        observation.capturedRequiredTarget = requireInputTarget;
+        await writeFile(receiptPath, JSON.stringify(captureReceipts, null, 2));
+        return generation;
       }
       async function finish(generation, transcript = "[notype Ω 🧪]") {
         const entry = await invoke(app.page, "debug_finish_session", {
@@ -190,7 +228,7 @@ test(
       for (const id of ["readonly", "password", "unsupported"]) {
         await reset();
         await controls.command("focus", { id });
-        entry = await deliver(await finish(await begin()));
+        entry = await deliver(await finish(await begin(false)));
         assert.equal(entry.status, "pending", id);
         state = await controls.command("state");
         assert.equal(state.controls.first.text, "alpha beta gamma");

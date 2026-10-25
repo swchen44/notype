@@ -33,7 +33,7 @@ cargo test --locked --manifest-path tests/integration/desktop-contracts/Cargo.to
 
 `Shared core contracts` CI 也執行以上兩個 target，並在 workflow、文字 provider、辨識正規化或測試 harness 變動時觸發；這部分在 Linux 驗證平台中立的桌面流程，不載入 Windows adapter。
 
-實體快捷鍵另有 std-only `physical-gestures` target；`native-delivery` 在 Windows 驗證未知 token 不能成為目前前景目標，在其他平台驗證 unavailable。CI 也執行這兩個 target。`desktop-shortcuts.runtime.mjs` 與 `desktop-input.runtime.mjs` 是需明確 `NOTYPE_DESKTOP_EXE` 的獨立 Windows 原生驗證；後者必須讓自有 fixture 真正取得前景焦點，缺少條件會失敗，不會假稱通過或 skip。命令與實際限制見 [guarded input receipt](../docs/verification/guarded-input.md)。
+實體快捷鍵另有 std-only `physical-gestures` target；`native-delivery` 在 Windows 驗證未知 token 與不符的 QA fixture 身分不能成為目前前景目標，在其他平台驗證 unavailable。CI 也執行這兩個 target。`desktop-shortcuts.runtime.mjs`、`desktop-input-scope.runtime.mjs` 與 `desktop-input.runtime.mjs` 是需明確 `NOTYPE_DESKTOP_EXE` 的獨立 Windows 原生驗證。scope 測試只開始後立即取消，不 finish 或交付；人工 input 測試每次捕捉都必須確認自有 fixture 真正取得前景，並提供 PID／建立身分／完整執行檔限制，缺少條件會失敗，不會假稱通過或 skip。命令、三次歷史人工結果及實際限制見 [guarded input receipt](../docs/verification/guarded-input.md)。
 
 - 每個產品行為隨實作加入可執行測試，先驗證失敗，再確認修正通過；驗證公開行為，不鎖死內部呼叫順序或複製實作。
 - unit tests 與 integration tests 應有可分開執行的命令。框架與命令在 Windows 實作選定 stack 後，於本檔及對應套件設定中補上。

@@ -448,9 +448,15 @@ pub fn debug_begin_session(
     recognition_mode: Option<RecognitionMode>,
     scenario: Option<SceneId>,
     capture_input: Option<bool>,
+    fixture_owner: Option<crate::native_input::DebugFixtureOwner>,
+    require_input_target: Option<bool>,
 ) -> Result<u64, String> {
     let capture = if capture_input == Some(true) {
-        app.state::<crate::native_input::NativeInput>().capture()
+        app.state::<crate::native_input::NativeInput>()
+            .capture_owned_fixture(
+                fixture_owner.ok_or("owned-fixture-identity-required")?,
+                require_input_target.unwrap_or(true),
+            )?
     } else {
         Default::default()
     };

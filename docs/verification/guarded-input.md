@@ -1,6 +1,6 @@
 # Physical tap routing and guarded Windows delivery (#13)
 
-2026-10-25 Asia/Taipei. Functional implementation and deterministic contracts are present. **Positive native insertion acceptance is still open:** both bounded owned-fixture manual runs ended without the fixture becoming foreground. The guard refused delivery before any target write. No real five-App, live physical keyboard/IME, live microphone or company API acceptance is claimed.
+2026-10-25 Asia/Taipei. A user-started owned native-control suite passed once on `633f5821…`; two other user-started runs failed their assertions with safe Pending outcomes. All three are retained below. QA isolation was subsequently strengthened because the old harness checked foreground ownership only at its initial wait. The new scoped build passes 30 Rust contracts and two hidden IPC/restart tests; its positive human-fixture suite has **not** been rerun. No real five-App, live physical keyboard/IME, live microphone or company API acceptance is claimed.
 
 ## Behavior and public seams
 
@@ -15,16 +15,17 @@
 
 ## Executed verification
 
-Product code was built after merging integration `3d9b7ed0516bad0e731166e6ab780d4fbf5c214f`; later merge `b33b2ca` adds #12 evidence only. Product fixes are in `079b547` and `29d09cc`.
+The latest QA scope build includes integration `b1aa22bddc8058560678d19426f5a948bad34ff9`. Initial product changes are in `079b547` and `29d09cc`; the later QA scope fix is documented below.
 
 | Check | Actual result |
 | --- | --- |
-| Portable desktop Rust harness | 29 passed, 0 failed/ignored: 10 workflow, 12 HTTP/provider, 6 gesture, 1 unknown native-token rejection |
-| Actual Windows shortcut IPC/restart/UI reload | 1 passed, 0 failed/skipped; all four edits survive immediate restart, conflicts reject, all four defaults reset, localized fields render |
+| Portable desktop Rust harness | 30 passed, 0 failed/ignored: 10 workflow, 12 HTTP/provider, 6 gesture, 2 native token/fixture-identity checks |
+| Actual Windows hidden IPC/restart/UI reload | 2 passed, 0 failed/skipped: missing/mismatched QA owners reject without finish/delivery/history; all four shortcut edits survive immediate restart, conflicts reject, all defaults reset, localized fields render |
 | Frontend TypeScript/Vite | Passed, 2031 modules; existing large theme chunk warning |
 | Frontend ESLint / changed-file Prettier / Rustfmt | Passed |
-| CPU-only x64 native no-bundle debug build | Passed in 32.86 s; existing unused `Emitter` warning in `secure_input.rs` |
-| Owned native delivery runtime suite | 1 failed at required foreground precondition, before any delivery write; 0 skipped. Positive insertion/selection/timeout cases remain unperformed |
+| CPU-only x64 native no-bundle debug build | Latest scope build passed in 24.53 s; existing unused `Emitter` warning in `secure_input.rs` |
+| User-started owned native delivery on old `633f5821…` | Three runs: 1 passed in 19.57 s, 2 failed with Pending; all cleanup 0, 0 skipped. Exact failed native snapshot differences were not recorded |
+| New scoped QA positive human suite | Not rerun; old user-start entry retired, replacement prepared inactive |
 | Actual user keyboard, Windows IME, five applications, microphone, company API | Not performed |
 
 Commands (PowerShell, repository root unless stated):
@@ -43,11 +44,12 @@ bun run tauri build --no-bundle --debug -- --locked
 # With a normal-user interactive desktop/fixed WebView2 and explicit isolated test profile:
 $env:NOTYPE_DESKTOP_EXE='D:/git/notype-build/debug/notype.exe'
 node --test tests/integration/desktop-shortcuts.runtime.mjs
+node --test tests/integration/desktop-input-scope.runtime.mjs
 $env:NOTYPE_MANUAL_FIXTURE_FOCUS='1'
 node --test tests/integration/desktop-input.runtime.mjs
 ```
 
-Final executable SHA256: `8e93741935ddddb318f513de467d7375bbb82dfdb98889aabde3a84261eb3d6b`. Debug-only CDP/test commands are absent from release invoke handling. The test driver explicitly blanks all six legacy/new bindings, leaves the selected model empty and disables always-on microphone; the settings test alone substitutes rare F20–F23 bindings. Audio is never recorded by these tests. Fixture state reads are restricted to its own synthetic controls.
+Latest scoped executable SHA256: `9fbe2c0ffdd8bf33bda96601f69fe7e3ffd9d81b8cd907dc1cab8832d586f654`. The previous shortcut fix built `8e937419…`. Debug-only CDP/test commands are absent from release invoke handling. The test driver explicitly blanks all six legacy/new bindings, leaves the selected model empty and disables always-on microphone; the settings test alone substitutes rare F20–F23 bindings. Audio is never recorded by these tests. Fixture state reads are restricted to its own synthetic controls.
 
 RED→GREEN evidence: the adapter-boundary test first exposed missing delivery composition; shortcut restart then reproduced a successful edit lost before Store autosave, fixed with synchronous saving. A separate legacy-default Reset test failed with `shortcut-physical-key-required`, fixed by selecting current product defaults. The final runtime suite includes both persistence and legacy Reset and passes. The HTTP/workflow seam uses actual loopback HTTP/SQLite and an explicit delivery adapter substitute, not invented native insertion results.
 
@@ -64,7 +66,33 @@ Outside receipt roots under `%LOCALAPPDATA%/notype-study/agent-notes/input-runti
 - `profile-positive-ef94a68b5f36489ca6b70fea39c90022/`: final `8e937419…` shortcut/restart GREEN and cleanup 0.
 - `profile-positive-525ab3d9648e45fa868b74a81dae2ac1/`: #12 actual three-session normalizer proof on `633f5821…`, cleanup 0; corresponding language receipts are separate.
 
-A user-startable fixture is prepared, **not executed**, at `%LOCALAPPDATA%/notype-study/build-cache/input-runtime-app-probe-u3opQ0/manual-input/Start-owned-input-test.cmd`. Starting it creates a fresh five-minute wait only when the user is ready; click the first field of `notype OWNED input fixture` and keep it foreground for about 20 seconds. It uses a verified regular snapshot of `633f5821671edd4e13a634ed21acecda18a11cc763769bbccb9f2c189be34b93` (guard implementation identical; before the Reset-only fix), 71 regular app/DLL/resource files, 115,205,271 bytes, plus 13,054,404 bytes of frozen test/Playwright files. It pins app, manifests, script and runtime, disables all starts and microphone, preserves the source binding file only if semantically unchanged, and refuses launch if compiled source bindings changed. Keep the input worktree present until this optional manual acceptance is completed. `prepared.json` records hashes; no mutable/deleted D-target binary or runtime package install is needed.
+The former user-startable fixture at `%LOCALAPPDATA%/notype-study/build-cache/input-runtime-app-probe-u3opQ0/manual-input/Start-owned-input-test.cmd` was used in the three runs below. It is now **retired**: its original bytes/hash are preserved beside it, while the active CMD only prints an informational stop and launches nothing. Its old `633f5821…` app snapshot and completed receipts remain unchanged.
+
+## Three completed user-started runs and bounded diagnosis
+
+All three roots below are under `build-cache/input-runtime-app-probe-u3opQ0/manual-input/`. Every `complete.json` records zero owned processes, and every binding-restoration receipt matches the captured original hash.
+
+| Profile suffix | Actual result | What the existing evidence proves |
+| --- | --- | --- |
+| `b3edc354c3ba4f5584d4d885de5c6fa4` | Failed at frozen source line 177: expected `target-changed`, got `configuration-required`; initial foregroundOwned=true | First Edit/Unicode/dedup and RichEdit cases had passed. A later focus-change case remained Pending; exact loop iteration/capture precondition is unknown |
+| `2b4f1ade4cb8498ab9f93721197edbdd` | Full suite passed, 19.570 s test / 24.296 s Node run, initial foregroundOwned=true | Own Edit and RichEdit selection insertion, once-only delivery, changed focus/A→B→A/selection, readonly/password/unsupported/length limits, timeout after write and no resend all met assertions in this run |
+| `619f71f0958c4828a7ff4c793f43cb8d` | First delivery failed expected Delivered, actual Pending/`target-changed`, frozen line 150; initial foregroundOwned=true | A target token existed, then native pre-write snapshot/equality validation failed. No replacement message was sent for that attempt. The exact changed field is unknown |
+
+The initial foreground receipt is not a continuous observation: in `619f…` it was written at `02:24:17.113Z`, while the session was created at `02:24:18.584Z`. No per-begin focus/selection/style/epoch diagnostics were retained, and the driver disposed its isolated session SQLite/log directory in `finally`; none exists in these outer receipt roots. The records therefore cannot attribute a specific focus/selection/epoch change or blame user action.
+
+For `b3ed…`, shared core `choose_original` preserves the earlier `configuration-required` error. `deliver` leaves that Pending entry unchanged when `original_target=None`; this is the source-supported missing-capture explanation for the observed error rather than proof of a provider request. The dictation fixture has no review requirement. No target-token/entry snapshot was printed for that assertion, so the exact capture failure remains bounded unknown. Ranked remaining possibilities were delayed focus-event epochs, focus/selection changes between async operations, or a failed native snapshot query. Existing receipts cannot distinguish them. No repeat-until-green run was used to remove the two failures.
+
+## QA confinement correction and separate RED/GREEN
+
+The old `debug_begin_session(captureInput=true)` could capture any supported foreground Edit on later cases, because the JavaScript harness checked owned foreground only once. This was a test-isolation defect even though observed failed attempts remained Pending. One authorized **hidden** old-633f negative IPC run (`agent-notes/input-runtime-launch/profile-positive-1410eddad01c4a15915b2fde82fe614b/`) proved omitted and mismatched owner arguments were both incorrectly accepted. Each accepted generation was immediately cancelled; no finish, history, delivery, fixture window or keyboard injection occurred. The test failed as intended and job cleanup was 0.
+
+The debug command now requires `fixtureOwner:{pid,image}` whenever `captureInput=true`. Native code requires the generated `NativeInputFixture.exe` basename, absolute exact image path and live PID, resolves creation identity, verifies owned foreground before capture, and stores that immutable owner scope in the opaque token. Scoped snapshot checks root and control PID/creation/image before selection metadata messages. Delivery uses the same scope before its write and afterward; there is no unscoped debug fallback. `requireInputTarget` defaults true, so expected positive captures fail immediately if no native token is available. Only the deliberate readonly/password/unsupported cases explicitly allow no token, still within verified owner scope. Production capture behavior is unchanged; this debug argument/type is absent from release.
+
+The harness verifies ready PID equals its spawned child PID, resolves its own regular image, checks own foreground before **every** begin, and supplies the native owner scope. `owned-captures.json` records only case number, owned foreground and required/captured-target booleans. It never records another application's name or content. The new adapter contract rejects PID 0 and the owned test process with an incorrect expected image before foreground capture.
+
+GREEN on the new `9fbe2c0f…` build is in `agent-notes/input-runtime-launch/profile-positive-d021ba50270843cfbe1190ba3b82b898/`: 2 hidden IPC/restart tests pass, missing/mismatched owners reject, no finish/delivery/history from the negative case, cleanup 0 and bindings restored. The portable four-target suite passes all 30 tests. No new user fixture was opened or human repeat requested after this correction.
+
+A newly frozen scoped helper exists at `build-cache/input-scoped-runtime-app-probe-a42N1B/manual-input/`, **inactive and not launched**. Its entry file is `Start-owned-input-test.cmd.disabled.txt`; `prepared.json` records `activeEntryPoint=false`. It pins the new `9fbe2c0f…` app plus 71 regular app/DLL/resource files (115,226,263 bytes), 548 frozen test/Playwright files (13,055,930 bytes), fixed runtime 156 and compiled source bindings. Final helper SHA256 is `f22c3bf64a957de17d84f300f165a3b08794ecb693ca0fcbdbeb8beb8fc10046`. This preserves reviewability without requiring a mutable D-target binary or another human run. Keep the input worktree present if this archived debug helper is ever intentionally enabled, because the app's debug binding export path is compiled there and must pass the guard/restore check.
 
 ## Build storage adjustment
 

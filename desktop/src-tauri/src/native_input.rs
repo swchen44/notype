@@ -10,6 +10,15 @@ pub struct InputCapture {
     pub application: Option<String>,
 }
 
+/// Debug QA may capture only the exact process launched by its owned fixture harness.
+#[cfg(debug_assertions)]
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DebugFixtureOwner {
+    pub pid: u32,
+    pub image: String,
+}
+
 #[derive(Clone)]
 pub struct NativeInput {
     #[cfg(windows)]
@@ -24,6 +33,22 @@ impl Default for NativeInput {
     }
 }
 impl NativeInput {
+    #[cfg(debug_assertions)]
+    pub fn capture_owned_fixture(
+        &self,
+        owner: DebugFixtureOwner,
+        require_target: bool,
+    ) -> Result<InputCapture, String> {
+        #[cfg(windows)]
+        {
+            self.inner.capture_fixture(owner, require_target)
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = (owner, require_target);
+            Err("owned-fixture-platform-unsupported".into())
+        }
+    }
     pub fn capture(&self) -> InputCapture {
         #[cfg(windows)]
         {
@@ -119,6 +144,34 @@ mod platform {
         });
     }
     #[derive(Clone, PartialEq, Eq)]
+    enum TargetScope {
+        Production,
+        #[cfg(debug_assertions)]
+        Fixture {
+            pid: u32,
+            created: u64,
+            image: String,
+        },
+    }
+    impl TargetScope {
+        fn matches(&self, pid: u32) -> bool {
+            match self {
+                Self::Production => true,
+                #[cfg(debug_assertions)]
+                Self::Fixture {
+                    pid: expected,
+                    created,
+                    image,
+                } => {
+                    pid == *expected
+                        && process_details(pid).is_some_and(|(actual_created, actual_image)| {
+                            actual_created == *created && actual_image.eq_ignore_ascii_case(image)
+                        })
+                }
+            }
+        }
+    }
+    #[derive(Clone, PartialEq, Eq)]
     struct Target {
         foreground: isize,
         control: isize,
@@ -128,6 +181,7 @@ mod platform {
         length: usize,
         style: isize,
         epoch: u64,
+        scope: TargetScope,
     }
     pub struct Registry {
         targets: Mutex<HashMap<String, Target>>,
@@ -147,9 +201,52 @@ mod platform {
             }
         }
         pub fn capture(&self) -> InputCapture {
+            self.capture_scoped(TargetScope::Production)
+        }
+        #[cfg(debug_assertions)]
+        pub fn capture_fixture(
+            &self,
+            owner: DebugFixtureOwner,
+            require_target: bool,
+        ) -> Result<InputCapture, String> {
+            if owner.pid == 0
+                || !std::path::Path::new(&owner.image).is_absolute()
+                || !std::path::Path::new(&owner.image)
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| name.eq_ignore_ascii_case("NativeInputFixture.exe"))
+            {
+                return Err("owned-fixture-identity-required".into());
+            }
+            let (created, image) = process_details(owner.pid)
+                .filter(|(_, image)| image.eq_ignore_ascii_case(&owner.image))
+                .ok_or("owned-fixture-identity-mismatch")?;
+            let scope = TargetScope::Fixture {
+                pid: owner.pid,
+                created,
+                image,
+            };
             let foreground = unsafe { GetForegroundWindow() };
+            let mut pid = 0;
+            unsafe { GetWindowThreadProcessId(foreground, &mut pid) };
+            if !scope.matches(pid) {
+                return Err("owned-fixture-not-foreground".into());
+            }
+            let capture = self.capture_scoped(scope);
+            if require_target && capture.target.is_none() {
+                return Err("owned-fixture-target-unavailable".into());
+            }
+            Ok(capture)
+        }
+        fn capture_scoped(&self, scope: TargetScope) -> InputCapture {
+            let foreground = unsafe { GetForegroundWindow() };
+            let mut pid = 0;
+            unsafe { GetWindowThreadProcessId(foreground, &mut pid) };
+            if !scope.matches(pid) {
+                return InputCapture::default();
+            }
             let application = application_name(foreground);
-            let Some(target) = snapshot() else {
+            let Some(target) = snapshot(&scope) else {
                 return InputCapture {
                     target: None,
                     application,
@@ -194,7 +291,7 @@ mod platform {
             {
                 return DeliveryOutcome::Unavailable;
             }
-            let Some(current) = snapshot() else {
+            let Some(current) = snapshot(&target.scope) else {
                 return DeliveryOutcome::TargetChanged;
             };
             if current != target {
@@ -216,14 +313,14 @@ mod platform {
             }
             let mut text: Vec<u16> = request.text.encode_utf16().collect();
             text.push(0);
-            if snapshot().as_ref() != Some(&target) {
+            if snapshot(&target.scope).as_ref() != Some(&target) {
                 return DeliveryOutcome::TargetChanged;
             }
             // Directed Unicode insertion targets the captured control, never current focus.
             if message(target.control, 0xc2, 1, text.as_ptr() as isize).is_none() {
                 return DeliveryOutcome::Uncertain;
             }
-            let Some(after) = snapshot() else {
+            let Some(after) = snapshot(&target.scope) else {
                 return DeliveryOutcome::Uncertain;
             };
             let expected_caret = target.selection.0 as usize + insertion;
@@ -247,7 +344,7 @@ mod platform {
             unsafe { SendMessageTimeoutW(window, id, w, l, 0x1 | 0x2 | 0x20, 100, &mut result) };
         (success != 0).then_some(result)
     }
-    fn snapshot() -> Option<Target> {
+    fn snapshot(scope: &TargetScope) -> Option<Target> {
         unsafe {
             if !watch_ready() {
                 return None;
@@ -259,6 +356,9 @@ mod platform {
             }
             let mut root_pid = 0;
             let thread = GetWindowThreadProcessId(foreground, &mut root_pid);
+            if !scope.matches(root_pid) {
+                return None;
+            }
             let mut gui: GuiThreadInfo = std::mem::zeroed();
             gui.size = std::mem::size_of::<GuiThreadInfo>() as u32;
             if GetGUIThreadInfo(thread, &mut gui) == 0 || gui.focus == 0 {
@@ -266,6 +366,11 @@ mod platform {
             }
             let control = gui.focus;
             if control != foreground && IsChild(foreground, control) == 0 {
+                return None;
+            }
+            let mut pid = 0;
+            GetWindowThreadProcessId(control, &mut pid);
+            if !scope.matches(pid) {
                 return None;
             }
             if IsWindowUnicode(control) == 0
@@ -288,8 +393,6 @@ mod platform {
             if style & (0x800 | 0x20) != 0 {
                 return None;
             }
-            let mut pid = 0;
-            GetWindowThreadProcessId(control, &mut pid);
             let created = process_identity(pid)?.0;
             let mut start = 0u32;
             let mut end = 0u32;
@@ -315,10 +418,23 @@ mod platform {
                 length,
                 style,
                 epoch,
+                scope: scope.clone(),
             })
         }
     }
     fn process_identity(pid: u32) -> Option<(u64, String)> {
+        let (created, image) = process_details(pid)?;
+        let basename = image
+            .rsplit(['\\', '/'])
+            .next()?
+            .strip_suffix(".exe")
+            .unwrap_or_else(|| image.rsplit(['\\', '/']).next().unwrap_or(""));
+        if basename.is_empty() || basename.len() > 100 || basename.chars().any(char::is_control) {
+            return None;
+        }
+        Some((created, basename.to_owned()))
+    }
+    fn process_details(pid: u32) -> Option<(u64, String)> {
         unsafe {
             let process = OpenProcess(0x1000, 0, pid);
             if process == 0 {
@@ -340,16 +456,7 @@ mod platform {
                 return None;
             }
             let image = String::from_utf16(&image[..size as usize]).ok()?;
-            let basename = image
-                .rsplit(['\\', '/'])
-                .next()?
-                .strip_suffix(".exe")
-                .unwrap_or_else(|| image.rsplit(['\\', '/']).next().unwrap_or(""));
-            if basename.is_empty() || basename.len() > 100 || basename.chars().any(char::is_control)
-            {
-                return None;
-            }
-            Some((times[0], basename.to_owned()))
+            Some((times[0], image))
         }
     }
     fn application_name(window: isize) -> Option<String> {
