@@ -16,13 +16,16 @@ import {
 } from "@/lib/providerForm";
 import { Input } from "../../ui/Input";
 import { Button } from "../../ui/Button";
+import { ModelIdList } from "./ModelIdList";
 
 export function ConnectionEditor({
   connection,
+  revision,
   busy,
   onSave,
 }: {
   connection: ConnectionView;
+  revision: number;
   busy: boolean;
   onSave: (draft: ConnectionDraft, keyAction: KeyAction) => Promise<boolean>;
 }) {
@@ -264,6 +267,18 @@ export function ConnectionEditor({
             onChange={(event) => edit({ model: event.target.value })}
           />
         </label>
+        <ModelIdList
+          connection={candidate}
+          keyAction={keyAction}
+          revision={revision}
+          disabled={
+            busy ||
+            !numbersValid ||
+            !replacementValid ||
+            bindingInvalid ||
+            endpoint === null
+          }
+        />
         <label className="flex flex-col gap-1 text-sm">
           {t("notype.text.authentication")}
           <select

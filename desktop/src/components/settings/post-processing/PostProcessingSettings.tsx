@@ -268,6 +268,7 @@ export const PostProcessingSettings = () => {
         <ConnectionEditor
           key={selected.id + ":" + editorVersion}
           connection={selected}
+          revision={configuration.revision}
           busy={busy}
           onSave={async (draft, keyAction) => {
             const updated = await mutate(() =>
