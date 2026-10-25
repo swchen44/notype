@@ -1,5 +1,9 @@
 ## Agent skills
 
+### Plan review
+
+新實作先取得 GPT-6-Astra 在對應 issue／ticket 的計畫審查通過紀錄。流程見 `docs/agents/plan-review.md`。
+
 ### Issue tracker
 
 工作與規格使用 GitHub Issues。見 `docs/agents/issue-tracker.md`。

@@ -2,6 +2,8 @@
 
 更新日期：2026-10-25。這份文件是接手順序與狀態快照；live [GitHub Issues](https://github.com/swchen44/notype/issues) 是工作追蹤入口。先讀 [HANDOFF.md](HANDOFF.md)。
 
+目前接續本機試用回饋 [#18](https://github.com/swchen44/notype/issues/18)／[#19](https://github.com/swchen44/notype/issues/19)／[#20](https://github.com/swchen44/notype/issues/20)／[#21](https://github.com/swchen44/notype/issues/21)。新實作先走 [GPT-6-Astra 計畫 gate](docs/agents/plan-review.md)；P20-v2／P21-v2／P19-latency-v2 尚有計畫審查問題，須修訂並複審。使用者最新的數字計時、diagnostics 開關／預設開啟／清除／敏感值遮罩已列入待審範圍，未實作或更新目前正式包。
+
 ## 已完成
 
 - [x] Typeless macOS 發行套件與 8 個 GitHub 候選研究；Handy 固定版本 source／payload／文字歷史 audit。
