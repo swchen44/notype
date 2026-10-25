@@ -17,7 +17,7 @@ export async function providerConnectionsFixture(
   page.on("pageerror", (error) => errors.push(error.message));
   t.after(() => assert.deepEqual(errors, []));
   await page.evaluate(
-    async ({ language, connections, activeId, initialMode }) => {
+    async ({ language, connections, activeId, initialMode, template }) => {
       window.calls = [];
       window.modelMode = "ok";
       window.mode = initialMode;
@@ -65,6 +65,62 @@ export async function providerConnectionsFixture(
           if (cmd === "check_custom_sounds")
             return { start: false, stop: false };
           if (cmd === "is_update_checks_locked") return false;
+          if (cmd === "create_text_connection") {
+            if (args.expectedRevision !== window.configuration.revision)
+              throw "configuration-conflict";
+            const created = {
+              ...template,
+              id: "created-connection",
+              display_name: args.displayName,
+              kind: args.kind,
+              dialect: args.dialect,
+              model: "",
+              api_address: "",
+              capability_declaration: null,
+              resolution: null,
+              effective_endpoint: null,
+              authentication: args.kind === "local" ? "none" : "bearer",
+              credential_source:
+                args.kind === "provider" ? "unresolved" : "none",
+              credential_present: null,
+            };
+            window.configuration = {
+              ...window.configuration,
+              revision: window.configuration.revision + 1,
+              connections: [...window.configuration.connections, created],
+            };
+            return structuredClone(window.configuration);
+          }
+          if (
+            [
+              "save_scenario_prompt",
+              "reset_scenario_prompt",
+              "save_translation_settings",
+            ].includes(cmd)
+          ) {
+            if (args.expectedRevision !== window.configuration.revision)
+              throw "configuration-conflict";
+            window.configuration = {
+              ...window.configuration,
+              revision: window.configuration.revision + 1,
+              prompts:
+                cmd === "save_scenario_prompt" ||
+                cmd === "reset_scenario_prompt"
+                  ? {
+                      ...window.configuration.prompts,
+                      [args.scenario]:
+                        cmd === "reset_scenario_prompt"
+                          ? "Default prompt"
+                          : args.prompt,
+                    }
+                  : window.configuration.prompts,
+              translation:
+                cmd === "save_translation_settings"
+                  ? args.translation
+                  : window.configuration.translation,
+            };
+            return structuredClone(window.configuration);
+          }
           if (cmd === "list_text_models") {
             const request = args.request;
             const response = {
@@ -161,7 +217,7 @@ export async function providerConnectionsFixture(
         window.uiRoot.render(React.createElement(PostProcessingSettings));
       window.render();
     },
-    { language, connections, activeId, initialMode },
+    { language, connections, activeId, initialMode, template: savedConnection },
   );
   return page;
 }

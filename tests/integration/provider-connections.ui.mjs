@@ -191,3 +191,180 @@ test("model-list authentication errors are actionable while manual input stays a
     "still-manual",
   );
 });
+
+test("new local connections have a blank model and are not implicitly activated", async (t) => {
+  const page = await providerConnectionsFixture(t);
+  await page
+    .getByRole("button", { name: "Add connection", exact: true })
+    .click();
+  await page
+    .getByLabel("Connection name", { exact: true })
+    .fill("My local server");
+  await page
+    .getByLabel("Connection type", { exact: true })
+    .selectOption("local");
+  await page
+    .getByLabel("API format", { exact: true })
+    .selectOption("ollama_openai");
+  await page
+    .getByRole("button", { name: "Create connection", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Edit My local server", exact: true })
+    .click();
+  assert.equal(
+    await page
+      .getByLabel("Model ID (manual entry)", { exact: true })
+      .inputValue(),
+    "",
+  );
+  assert.equal(
+    await page.getByLabel("Request thinking", { exact: true }).isChecked(),
+    false,
+  );
+  assert.equal(
+    await page.evaluate(() => window.configuration.active_connection_id),
+    null,
+  );
+  assert.equal(
+    await page.evaluate(
+      () =>
+        window.calls.filter((call) => call.cmd === "list_text_models").length,
+    ),
+    0,
+  );
+});
+
+test("removing the active connection does not activate another saved connection", async (t) => {
+  const second = {
+    ...savedConnection,
+    id: "connection-b",
+    display_name: "Second provider",
+  };
+  const page = await providerConnectionsFixture(
+    t,
+    "en",
+    [savedConnection, second],
+    savedConnection.id,
+  );
+  const row = page.getByRole("listitem").filter({ hasText: "Company writing" });
+  await row.getByRole("button", { name: "Remove", exact: true }).click();
+  await page
+    .getByText("No active connection. Originals remain recoverable.", {
+      exact: true,
+    })
+    .waitFor();
+  assert.equal(
+    await page.evaluate(() => window.configuration.connections.length),
+    1,
+  );
+  assert.equal(
+    await page.evaluate(
+      () =>
+        window.calls.filter((call) => call.cmd === "activate_text_connection")
+          .length,
+    ),
+    0,
+  );
+});
+
+test("a late model-list reply cannot enter a changed route", async (t) => {
+  const page = await providerConnectionsFixture(t, "en", [savedConnection]);
+  await page
+    .getByRole("button", { name: "Edit Company writing", exact: true })
+    .click();
+  await page.evaluate(() => (window.modelMode = "pending"));
+  await page
+    .getByRole("button", { name: "View model ID list", exact: true })
+    .click();
+  await page.waitForFunction(() => typeof window.releaseModels === "function");
+  await page
+    .getByLabel("API address", { exact: true })
+    .fill("https://another.synthetic.invalid/v1");
+  await page.waitForFunction(() =>
+    window.calls.some((call) => call.cmd === "cancel_text_models"),
+  );
+  await page.evaluate(() => window.releaseModels());
+  assert.equal(
+    await page
+      .getByRole("list", { name: "Model ID list", exact: true })
+      .count(),
+    0,
+  );
+  assert.equal(
+    await page
+      .getByLabel("Model ID (manual entry)", { exact: true })
+      .inputValue(),
+    "manual-model",
+  );
+});
+
+test("prompt saving preserves the connection collection and an unsaved model edit", async (t) => {
+  const page = await providerConnectionsFixture(t, "en", [savedConnection]);
+  await page
+    .getByRole("button", { name: "Edit Company writing", exact: true })
+    .click();
+  await page
+    .getByLabel("Model ID (manual entry)", { exact: true })
+    .fill("unsaved-model");
+  await page
+    .getByLabel("Editable prompt", { exact: true })
+    .fill("New dictation rules");
+  await page
+    .getByRole("button", { name: "Save this prompt", exact: true })
+    .click();
+  await page.getByText("Saved locally", { exact: true }).waitFor();
+  assert.equal(
+    await page
+      .getByLabel("Model ID (manual entry)", { exact: true })
+      .inputValue(),
+    "unsaved-model",
+  );
+  await page
+    .getByRole("button", { name: "Save connection", exact: true })
+    .click();
+  await page.getByText("Connection settings saved.", { exact: true }).waitFor();
+  assert.equal(
+    await page.evaluate(() => window.configuration.prompts.dictation),
+    "New dictation rules",
+  );
+  assert.equal(
+    await page.evaluate(() => window.configuration.connections[0].model),
+    "unsaved-model",
+  );
+});
+
+for (const [language, edit, label, view] of [
+  [
+    "en",
+    "Edit Company writing",
+    "Model ID (manual entry)",
+    "View model ID list",
+  ],
+  ["zh-TW", "編輯 Company writing", "模型 ID（手動輸入）", "查看模型 ID 清單"],
+  ["zh-CN", "编辑 Company writing", "模型 ID（手动输入）", "查看模型 ID 列表"],
+]) {
+  test(
+    "connection controls stay translated and usable in a narrow viewport: " +
+      language,
+    async (t) => {
+      const page = await providerConnectionsFixture(t, language, [
+        savedConnection,
+      ]);
+      await page.setViewportSize({ width: 360, height: 900 });
+      await page.getByRole("button", { name: edit, exact: true }).click();
+      await page.getByLabel(label, { exact: true }).waitFor();
+      await page.getByRole("button", { name: view, exact: true }).waitFor();
+      assert.doesNotMatch(
+        await page.locator("body").innerText(),
+        /notype\.connections|currently unavailable|目前無法顯示|\?\?/,
+      );
+      assert.equal(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= window.innerWidth,
+        ),
+        true,
+      );
+    },
+  );
+}
