@@ -2,7 +2,7 @@
 
 更新日期：2026-10-25。這份文件是接手順序與狀態快照；live [GitHub Issues](https://github.com/swchen44/notype/issues) 是工作追蹤入口。先讀 [HANDOFF.md](HANDOFF.md)。
 
-目前接續本機試用回饋 [#18](https://github.com/swchen44/notype/issues/18)／[#19](https://github.com/swchen44/notype/issues/19)／[#20](https://github.com/swchen44/notype/issues/20)／[#21](https://github.com/swchen44/notype/issues/21)。新實作先走 [GPT-6-Astra 計畫 gate](docs/agents/plan-review.md)；[P20-v3 核准](https://github.com/swchen44/notype/issues/20#issuecomment-6398249625) 與 [P21-v3 核准](https://github.com/swchen44/notype/issues/21#issuecomment-6398249848) 均為 0 項未解問題，數字計時、diagnostics 開關／預設開啟／清除／敏感值遮罩正在依確切計畫實作。P19-latency-v3 尚待審查及前兩項實作合入，尚未確認真機延遲原因；目前正式包未更新。核准版本與連結見 HANDOFF。
+目前接續 #18～#23，source 已推送 `160ea64`，使用者實際包未更新。P20/P21 已合入，獨立複核 Spec 0／Standards 2，正依 [已核准補充計畫](https://github.com/swchen44/notype/issues/20#issuecomment-6398823972) 補測試與 doc comments；P19-latency-v3 已核准且相依完成，觀測實作中。P14 tiny npm 2 tests 通過，大型包裝／native 尚未執行。新增 [#22 歷史量測／CSV／effort](https://github.com/swchen44/notype/issues/22) 與 [#23 DeepSeek](https://github.com/swchen44/notype/issues/23) 僅在規格階段：字數與耗時定義、US$0.10 測試上限已確認，其餘決策待回覆，尚未有實作核准或送出付費請求。所有新實作先走 [GPT-6-Astra 計畫 gate](docs/agents/plan-review.md)，確切版本／連結與限制見 HANDOFF。
 
 ## 已完成
 
