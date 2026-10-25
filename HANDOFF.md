@@ -6,6 +6,12 @@
 
 ## 目前 checkpoint
 
+2026-10-26 最新整合：`ac69eb1c3c0d4cdb770ca01b59c55e3958bc2d97`。#22 backend／#24 UI 與兩個審查修正已合入；UI 子項 #24 已依 frontend-only 範圍結案，native acceptance 留在 #22／#14。Windows core 43＋doc 1、provider 20／workflow 15／DTO 1、Clippy 通過；UI integration 36／unit 1 通過；各來源差異獨立 Spec／Standards 皆 0。回譯失敗不再誤填 initial readiness；Linux 子程序繼承鎖的具名案例先實際 RED，再修正 final-owner unlock。[完整 Linux CI 40216512564](https://github.com/swchen44/notype/actions/runs/40216512564) 通過於產品來源 `fb4ab689`，文件 receipt `8214d317` 與其產品／測試雜湊相同，沒有宣稱文件 commit 自己跑過 CI。見 [history metrics](docs/verification/history-metrics.md)、[UI](docs/verification/history-api-ui.md)、[owner release](docs/verification/history-owner-release.md)。
+
+#23 portable bridge 的 [精確 source gate](https://github.com/swchen44/notype/issues/23#issuecomment-6400857513) 已成立；[補充計畫](https://github.com/swchen44/notype/issues/23#issuecomment-6400592627) 獲 [Astra APPROVED0](https://github.com/swchen44/notype/issues/23#issuecomment-6400608206)。probe_bridge worker 接手 sole portable Cargo lease，獨立 worktree 從 ac69eb1 建構實際 provider／SessionService／CSV、專屬 console 與獨立工具；source-only 新增寫入上限 128 MiB，沿唯一 Release target／offline locked／jobs1／incremental0、C≥2 GiB／D≥1 GiB 加 32 MiB guard。原 history/fixer leases 均明確交還。未取得 key、未付費呼叫；binary／離線驗證／獨立審查及後續 live gate 尚未完成。
+
+新版 App 仍未建置或安裝，使用者現用包未變。D 最近約 1.51 GB，不足 native App 起始 2 GiB 與建置預算；先前釋放至少 1 GB 的問題尚待使用者回覆。不進行未核准 cache 清理或現用資料刪除。Tauri／recording fixture／bindings／tray／實機 readiness、公司／五 App／人聲品質／p95／公開配送仍保留於 #8。下列早期快照若有舊狀態，以本段及 live issues 為準。
+
 2026-10-26 接續快照：整合分支已推送 `1dfedead8be5dc0db04fcab3bd349f77083da271`，使用者安裝包仍為舊版。P19 限定來源複核 Spec 0／Standards 0，CI 40206394843 通過。#23 離線預算／單輪重啟保護及審查修正已合入，28 tests 與 missing_docs 通過，限定獨立來源複核兩軸皆 0；尚無 key 或付費呼叫。#22 backend 收尾中，#24 UI 已完成於 `55980bc`（integration 36／unit 1 通過），待來源審查與完整 backend 一起整合；不能把 checkpoint 視為整個 #22 完成。
 
 [P23-live-v1](https://github.com/swchen44/notype/issues/23#issuecomment-6399600403) 已獲 [Astra 核准](https://github.com/swchen44/notype/issues/23#issuecomment-6399640205)，whole #22 合入後才啟動 production bridge／原生 console／binary 切片。[P14-build-v2](https://github.com/swchen44/notype/issues/14#issuecomment-6399567273) 與 [delivery-v2](https://github.com/swchen44/notype/issues/14#issuecomment-6399567585) 分別 [核准](https://github.com/swchen44/notype/issues/14#issuecomment-6399589852)／[核准](https://github.com/swchen44/notype/issues/14#issuecomment-6399590175)。舊版相容不做，使用全新版本化程式／資料目錄；目前不刪使用者程式或資料。舊段落的草擬／待複核狀態由本快照取代。
