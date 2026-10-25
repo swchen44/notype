@@ -64,46 +64,67 @@ async fn fixture_status(
     oneshot::Receiver<Value>,
     tokio::task::JoinHandle<()>,
 ) {
+    let response = format!("HTTP/1.1 {status} Fixture\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len());
+    fixture_wires(vec![response], delay).await
+}
+
+async fn fixture_wires(
+    responses: Vec<String>,
+    delay: Duration,
+) -> (
+    String,
+    oneshot::Receiver<Value>,
+    tokio::task::JoinHandle<()>,
+) {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let endpoint = format!(
         "http://{}/v1/chat/completions",
         listener.local_addr().unwrap()
     );
     let (sender, receiver) = oneshot::channel();
-    let body = body.to_owned();
     let server = tokio::spawn(async move {
-        let (mut stream, _) = tokio::time::timeout(Duration::from_secs(3), listener.accept())
-            .await
-            .unwrap()
-            .unwrap();
-        let mut bytes = Vec::new();
-        let mut buffer = [0; 4096];
-        let (end, length) = loop {
-            let size = stream.read(&mut buffer).await.unwrap();
-            assert!(size > 0);
-            bytes.extend_from_slice(&buffer[..size]);
-            if let Some(end) = bytes.windows(4).position(|part| part == b"\r\n\r\n") {
-                let headers = std::str::from_utf8(&bytes[..end]).unwrap().to_lowercase();
-                assert!(headers.starts_with("post /v1/chat/completions http/1.1"));
-                let length = headers
-                    .lines()
-                    .find_map(|line| {
-                        line.strip_prefix("content-length:")
-                            .map(|length| length.trim().parse::<usize>().unwrap())
-                    })
-                    .unwrap();
-                break (end + 4, length);
+        let mut sender = Some(sender);
+        for response in responses {
+            let (mut stream, _) = tokio::time::timeout(Duration::from_secs(3), listener.accept())
+                .await
+                .unwrap()
+                .unwrap();
+            let mut bytes = Vec::new();
+            let mut buffer = [0; 4096];
+            let (end, length) = loop {
+                let size = stream.read(&mut buffer).await.unwrap();
+                assert!(size > 0);
+                bytes.extend_from_slice(&buffer[..size]);
+                if let Some(end) = bytes.windows(4).position(|part| part == b"\r\n\r\n") {
+                    let headers = std::str::from_utf8(&bytes[..end]).unwrap().to_lowercase();
+                    assert!(headers.starts_with("post /v1/chat/completions http/1.1"));
+                    let length = headers
+                        .lines()
+                        .find_map(|line| {
+                            line.strip_prefix("content-length:")
+                                .map(|length| length.trim().parse::<usize>().unwrap())
+                        })
+                        .unwrap();
+                    break (end + 4, length);
+                }
+            };
+            while bytes.len() < end + length {
+                let size = stream.read(&mut buffer).await.unwrap();
+                assert!(size > 0);
+                bytes.extend_from_slice(&buffer[..size]);
             }
-        };
-        while bytes.len() < end + length {
-            let size = stream.read(&mut buffer).await.unwrap();
-            assert!(size > 0);
-            bytes.extend_from_slice(&buffer[..size]);
+            if let Some(sender) = sender.take() {
+                let _ = sender.send(serde_json::from_slice(&bytes[end..end + length]).unwrap());
+            }
+            tokio::time::sleep(delay).await;
+            let _ = stream.write_all(response.as_bytes()).await;
         }
-        let _ = sender.send(serde_json::from_slice(&bytes[end..end + length]).unwrap());
-        tokio::time::sleep(delay).await;
-        let response = format!("HTTP/1.1 {status} Fixture\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len());
-        let _ = stream.write_all(response.as_bytes()).await;
+        assert!(
+            tokio::time::timeout(Duration::from_millis(75), listener.accept())
+                .await
+                .is_err(),
+            "unexpected automatic request"
+        );
     });
     (endpoint, receiver, server)
 }
@@ -1194,4 +1215,249 @@ async fn unauthorized_html_keeps_original_and_safe_auth_category_after_sqlite_re
     let reopened = SessionService::open(&path).unwrap().get(&id).unwrap();
     assert_eq!(reopened.error.as_deref(), Some("provider-auth"));
     assert_eq!(reopened.transcript, "recover original");
+}
+
+#[tokio::test]
+async fn provider_error_categories_survive_real_http_and_sqlite_without_upstream_text() {
+    let cases = [
+        (
+            401,
+            r#"{"error":{"code":"rate_limit_exceeded","message":"Bearer sentinel-secret"}}"#,
+            "provider-auth",
+        ),
+        (402, "", "provider-balance"),
+        (
+            403,
+            "<html>private provider page</html>",
+            "provider-permission",
+        ),
+        (429, "not json", "provider-rate-limit"),
+        (503, "<html>unavailable</html>", "provider-unavailable"),
+        (500, "", "provider-unavailable"),
+        (502, "", "provider-unavailable"),
+        (504, "", "provider-timeout"),
+        (408, "", "provider-timeout"),
+        (
+            400,
+            r#"{"error":{"code":"context_length_exceeded"}}"#,
+            "provider-context",
+        ),
+        (
+            422,
+            r#"{"error":{"message":"context_length_exceeded"}}"#,
+            "provider-validation",
+        ),
+        (404, "", "provider-validation"),
+        (413, "", "provider-validation"),
+        (
+            418,
+            r#"{"error":{"message":"private unknown body"}}"#,
+            "provider-unknown",
+        ),
+        (
+            200,
+            r#"{"error":{"code":429,"message":"sentinel-secret"},"choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"must not accept"}}]}"#,
+            "provider-rate-limit",
+        ),
+        (
+            200,
+            r#"{"error":{"metadata":{"error_type":"context_length_exceeded"}}}"#,
+            "provider-context",
+        ),
+        (
+            200,
+            r#"{"choices":[{"error":{"code":401},"finish_reason":"stop","message":{"role":"assistant","content":"must not accept"}}]}"#,
+            "provider-auth",
+        ),
+        (
+            200,
+            r#"{"choices":[{"finish_reason":"error","message":{"role":"assistant","content":"partial"}}]}"#,
+            "provider-protocol",
+        ),
+        (
+            200,
+            r#"{"error":{"message":"rate limit exceeded"}}"#,
+            "provider-protocol",
+        ),
+        (
+            200,
+            r#"{"error":null,"choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"success control"}}]}"#,
+            "delivery-unavailable",
+        ),
+    ];
+    for (status, body, expected) in cases {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("sessions.db");
+        let workflow = DesktopWorkflow::new(SessionService::open(&path).unwrap(), Arc::new(|| {}));
+        let (endpoint, request, server) = fixture_status(body, Duration::ZERO, status).await;
+        let recording = workflow
+            .begin(RecognitionMode::TraditionalEnglish, None)
+            .unwrap();
+        let entry = workflow
+            .finish(recording, "saved original", configured(endpoint), vec![])
+            .await
+            .unwrap();
+        request.await.unwrap();
+        server.await.unwrap();
+        assert_eq!(
+            entry.error.as_deref(),
+            Some(expected),
+            "HTTP {status}: {body}"
+        );
+        assert_eq!(entry.transcript, "saved original");
+        assert_eq!(entry.api_summary.call_count, Some(1));
+        assert!(!entry.error.as_deref().unwrap().contains("sentinel"));
+        let id = entry.id;
+        drop(workflow);
+        let saved = SessionService::open(&path).unwrap().get(&id).unwrap();
+        assert_eq!(saved.error.as_deref(), Some(expected));
+        assert_eq!(
+            saved.result.as_deref(),
+            if expected == "delivery-unavailable" {
+                Some("success control")
+            } else {
+                None
+            }
+        );
+    }
+}
+
+#[tokio::test]
+async fn in_band_error_preserves_actual_receipt_and_explicit_retry_appends_same_history() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("sessions.db");
+    let workflow = DesktopWorkflow::new(SessionService::open(&path).unwrap(), Arc::new(|| {}));
+    let body = r#"{"model":"actual-provider-model","usage":{"prompt_tokens":31,"completion_tokens":7},"error":{"code":429,"message":"Bearer sentinel-secret"}}"#;
+    let (endpoint, request, server) = fixture(body, Duration::ZERO).await;
+    let recording = workflow
+        .begin(RecognitionMode::TraditionalEnglish, None)
+        .unwrap();
+    let failed = workflow
+        .finish(
+            recording,
+            "retry saved original",
+            configured(endpoint),
+            vec![],
+        )
+        .await
+        .unwrap();
+    request.await.unwrap();
+    server.await.unwrap();
+    assert_eq!(failed.error.as_deref(), Some("provider-rate-limit"));
+    assert_eq!(failed.api_summary.input.total, Some(31));
+    assert_eq!(failed.api_summary.output.total, Some(7));
+    assert_eq!(
+        failed.api_summary.reported_models,
+        vec!["actual-provider-model"]
+    );
+    let (endpoint, request, server) = fixture(r#"{"choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"recovered"}}]}"#, Duration::ZERO).await;
+    let retried = workflow
+        .retry(&failed.id, configured(endpoint), vec![])
+        .await
+        .unwrap();
+    request.await.unwrap();
+    server.await.unwrap();
+    assert_eq!(retried.id, failed.id);
+    assert_eq!(retried.api_summary.call_count, Some(2));
+    assert_eq!(retried.result.as_deref(), Some("recovered"));
+    assert_eq!(retried.api_summary.input.known_subtotal, Some(31));
+}
+
+#[tokio::test]
+async fn redirect_transport_truncation_and_body_bounds_are_safe_single_sends() {
+    let destination = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let redirect = format!("HTTP/1.1 302 Found\r\nLocation: http://{}/secret?token=sentinel\r\nContent-Length: 0\r\nConnection: close\r\n\r\n", destination.local_addr().unwrap());
+    let oversized = "x".repeat(1_048_577);
+    let oversize_wire = format!(
+        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{oversized}",
+        oversized.len()
+    );
+    for (wire, expected) in [
+        (redirect, "provider-protocol"),
+        (String::new(), "provider-transport"),
+        (
+            "HTTP/1.1 200 OK\r\nContent-Length: 999\r\nConnection: close\r\n\r\n{\"choices\":"
+                .into(),
+            "provider-transport",
+        ),
+        (oversize_wire, "provider-oversize"),
+        (
+            "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".into(),
+            "llm-invalid-response",
+        ),
+    ] {
+        let directory = tempfile::tempdir().unwrap();
+        let workflow = DesktopWorkflow::new(
+            SessionService::open(directory.path().join("sessions.db")).unwrap(),
+            Arc::new(|| {}),
+        );
+        let (endpoint, request, server) = fixture_wires(vec![wire], Duration::ZERO).await;
+        let generation = workflow
+            .begin(RecognitionMode::TraditionalEnglish, None)
+            .unwrap();
+        let entry = workflow
+            .finish(generation, "saved original", configured(endpoint), vec![])
+            .await
+            .unwrap();
+        request.await.unwrap();
+        server.await.unwrap();
+        assert_eq!(entry.error.as_deref(), Some(expected));
+        assert_eq!(entry.transcript, "saved original");
+        assert_eq!(entry.result, None);
+        assert_eq!(entry.api_summary.call_count, Some(1));
+    }
+    assert!(
+        tokio::time::timeout(Duration::from_millis(30), destination.accept())
+            .await
+            .is_err()
+    );
+}
+
+#[tokio::test]
+async fn reverse_provider_failure_retains_forward_result_and_review_after_sqlite_restart() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("sessions.db");
+    let workflow = DesktopWorkflow::new(SessionService::open(&path).unwrap(), Arc::new(|| {}));
+    let forward = json!({"model":"forward-model","usage":{"prompt_tokens":8,"completion_tokens":4},"choices":[{"finish_reason":"stop","message":{"role":"assistant","content":json!({"text":"valid translation","source_language":"zh-TW"}).to_string()}}]}).to_string();
+    let reverse = r#"{"model":"reverse-model","usage":{"prompt_tokens":9,"completion_tokens":2},"error":{"code":402}}"#;
+    let wires = [forward.as_str(), reverse].map(|body| {
+        format!(
+            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        )
+    });
+    let (endpoint, request, server) = fixture_wires(wires.to_vec(), Duration::ZERO).await;
+    let mut configuration = configured(endpoint);
+    configuration.translation.back_translation = true;
+    let generation = workflow
+        .begin(RecognitionMode::TraditionalEnglish, None)
+        .unwrap();
+    workflow
+        .capture_processing_snapshot(
+            generation,
+            notype_core::Scenario::Translation,
+            configuration.clone(),
+            vec![],
+        )
+        .unwrap();
+    let entry = workflow
+        .finish(generation, "??", configuration, vec![])
+        .await
+        .unwrap();
+    request.await.unwrap();
+    server.await.unwrap();
+    assert_eq!(entry.error.as_deref(), Some("back-provider-balance"));
+    assert_eq!(entry.status, SessionStatus::Pending);
+    assert_eq!(entry.result.as_deref(), Some("valid translation"));
+    assert_eq!(entry.back_translation, None);
+    assert!(entry.review_required && !entry.review_confirmed);
+    assert!(entry.observations.initial_stop_to_result_ms.is_none());
+    assert_eq!(entry.api_summary.call_count, Some(2));
+    assert_eq!(entry.api_summary.input.total, Some(17));
+    assert!(workflow.confirm_review(&entry.id, entry.revision).is_err());
+    let id = entry.id;
+    drop(workflow);
+    let saved = SessionService::open(&path).unwrap().get(&id).unwrap();
+    assert_eq!(saved.result.as_deref(), Some("valid translation"));
+    assert_eq!(saved.error.as_deref(), Some("back-provider-balance"));
 }
