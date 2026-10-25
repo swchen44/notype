@@ -11,7 +11,7 @@ use crate::utils::{
     self, show_processing_overlay, show_recording_overlay, show_transcribing_overlay,
 };
 use crate::TranscriptionCoordinator;
-use log::{debug, error, warn};
+use log::{debug, warn};
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -89,8 +89,8 @@ impl ShortcutAction for TranscribeAction {
             }
         }
 
-        if crate::commands::history::begin_recording(app).is_err() {
-            error!("session-start-failed");
+        if let Err(code) = crate::commands::history::begin_recording(app) {
+            let _ = app.emit("session-error", code);
             return;
         }
         let binding_id = binding_id.to_string();
@@ -122,7 +122,17 @@ impl ShortcutAction for TranscribeAction {
             VadPolicy::Offline
         };
         if model_supports_streaming {
-            tm.start_stream();
+            if let Ok(Some(generation)) = app
+                .state::<Arc<crate::workflow::DesktopWorkflow>>()
+                .active_generation()
+            {
+                if let Ok(profile) = app
+                    .state::<Arc<crate::workflow::DesktopWorkflow>>()
+                    .recognition_profile(generation)
+                {
+                    tm.start_stream_with_profile(profile);
+                }
+            }
         }
         let plan_elapsed = plan_started.elapsed();
 
@@ -250,6 +260,9 @@ impl ShortcutAction for TranscribeAction {
             tm.cancel_stream();
             return;
         };
+        let Ok(profile) = workflow.recognition_profile(generation) else {
+            return;
+        };
         set_tray_state(app, TrayIconState::Transcribing);
         let streaming =
             should_use_streaming_overlay(get_settings(app).overlay_style, tm.is_streaming());
@@ -283,13 +296,14 @@ impl ShortcutAction for TranscribeAction {
             }
             // PCM belongs only to this attempt. No persistent WAV or audio gate.
             let transcriber = Arc::clone(&tm);
-            let transcription =
-                tauri::async_runtime::spawn_blocking(move || match transcriber.finalize_stream() {
+            let transcription = tauri::async_runtime::spawn_blocking(move || {
+                match transcriber.finalize_stream_raw() {
                     Ok(Some(text)) if !text.trim().is_empty() => Ok(text),
-                    Ok(_) => transcriber.transcribe(samples),
+                    Ok(_) => transcriber.transcribe_raw_with_profile(samples, &profile),
                     Err(error) => Err(error),
-                })
-                .await;
+                }
+            })
+            .await;
             if rm.was_cancelled_since(cancel_generation) {
                 let _ = workflow.cancel_active();
                 return;
@@ -318,6 +332,10 @@ impl ShortcutAction for TranscribeAction {
                 Ok(Ok(_)) => {
                     let _ = workflow.cancel_active();
                     let _ = ah.emit("session-error", "no-speech");
+                }
+                Ok(Err(error)) if error.to_string() == "recognition-model-incompatible" => {
+                    let _ = workflow.cancel_active();
+                    let _ = ah.emit("session-error", "recognition-model-incompatible");
                 }
                 _ => {
                     let _ = workflow.cancel_active();

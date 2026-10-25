@@ -2,15 +2,17 @@
 
 更新日期：2026-10-25。Repository：[swchen44/notype](https://github.com/swchen44/notype)，private。
 
-使用者已決定在自己的 **Windows 11** 開發，MVP 只交付 **Windows amd64／x64**；2026-10-25 新增需求：架構現在就預留 **macOS／Linux**，以共用核心與平台 adapter 降低移植成本，見 [ADR 0003](docs/adr/0003-shared-core-platform-adapters.md)。目前尚未實作或驗收 macOS／Linux。Q1～Q15 延續，不必重新訪談。
+使用者已決定在自己的 **Windows 11** 開發，MVP 只交付 **Windows amd64／x64**；架構預留 **macOS／Linux**，見 [ADR 0003](docs/adr/0003-shared-core-platform-adapters.md)。目前尚未交付 macOS／Linux App。Q1～Q15 為原始決策，後續三場景與點按操作更新以 #8／decision log 為準，不重問已確認項目。
 
 ## 目前 checkpoint
 
-implement-spec 進度：#9 桌面基線及 #10 共用 Rust 核心已合入 `implement/notype-mvp`，合併點 `036c08c`；#11 正在實作。notype 原生 App 已成功啟動及驗證設定重啟保存；核心相同 contracts 已在 Windows 與 Linux 通過，見 [portability receipt](docs/verification/shared-core-portability.md) 及 [GitHub CI](https://github.com/swchen44/notype/actions/runs/40137924066)。這些不等同完整語音／公司 API／五個 App／配送驗收，#8～#16 尚未結案。
+implement-spec 進度：#9～#11 已合入 `implement/notype-mvp`，合併點 `5ad1698`。#11 通過 core 19、desktop 7、native 5 項，含可見設定→HTTP→歷史、無 WAV 原稿保存／重試、取消、重啟及唯讀匯入，見 [桌面流程 receipt](docs/verification/desktop-workflow.md)。合併後 core 19、Node 16 及前端建置通過。既有核心跨 OS 證據見 [portability receipt](docs/verification/shared-core-portability.md)；目前 #12 語言與 #17 三場景／提示詞平行實作。尚未完成公司 API／五個 App／完整語音與配送驗收，#8～#17 未結案。
+
+2026-10-25 最新需求：口述、翻譯、隨便問三場景，提示詞獨立可編輯／保存／還原；使用者只要還原預設提示詞。開始鍵依序 Right Alt、Right Alt + Right Shift、Right Alt + Space；改為點按開始，錄音中以獨立可設定停止鍵結束（預設 Right Alt），Esc 取消，取代舊按住／放開。公司 API 格式已確認為 OpenAI 相容 Chat Completions。隨便問依意圖回答或代寫；情境限 App 名稱＋網站網域，不讀頁面／輸入內容；回譯可選且預設關閉，啟用時先顯示譯文及回譯，明確確認後才嘗試受保護交付。詳見 [設計紀錄](docs/research/11-scenario-prompt-design.md)。本輪產品選項已回答，不重問；新未定案行為仍須詢問。
 
 2026-10-25 Prompt 補充：使用者提供角色／處理原則／格式／限制及 few-shot 草稿；已加入 #8／#11 的保真文字整理設計。只處理原稿文字，保留數字／否定／英文／code／既有不確定標記，依上下文刪贅詞，不新增講者或臆測音訊；原稿及術語表當作資料，不執行其指令。中英排版保護字面值，提示詞依當次辨識模式選字形，與介面 locale 獨立。真正模型品質仍待驗收，無需為 prompt 設計先提供 key。
 
-2026-10-25 implement-spec 已啟動：整合分支 `implement/notype-mvp`（起點 `be6f0a5`），實作／驗收工作圖為 #9～#16，具 GitHub 原生 blocking edges，見 [TODO](TODO.md)。#9 桌面基線與 #10 共用 Rust 核心先並行；#11 接合後解鎖語言及原生交付，再做配送／目標驗收。公司 contract／真實 App／Proxy 未就緒時 #15／#16 保持未完成。實作以 TDD、獨立 worktree、整合與最終 code review 推進；只有實際達成驗收才結案。
+2026-10-25 implement-spec 已啟動：整合分支 `implement/notype-mvp`（起點 `be6f0a5`），工作圖 #9～#17，具 GitHub 原生 blocking edges，見 [TODO](TODO.md)。#11 接合後解鎖 #12 語言及 #17 場景／提示詞；#13 需等待 #17 場景介面，再做配送／目標驗收。公司連線／真實 App／Proxy 未就緒時 #15／#16 保持未完成。實作以 TDD、獨立 worktree、整合與最終 code review 推進；只有實際達成驗收才結案。
 
 2026-10-25 語音需求補充：本機 STT 必須支援「繁體中文＋英文」及「簡體中文＋英文」兩種同段中英混合模式，保存模式偏好，預設沿用繁體中文＋英文，並在 LLM 前產生與保存所選中文字形的原稿。介面 locale 與辨識模式獨立；模式切換不改動既有歷史，整理結果預設沿用當次原稿字形。規格 #8 與 STT issue #3 同步此需求，兩種中文品質／效能尚未驗收，英文 tiny.en smoke 不能代替。
 

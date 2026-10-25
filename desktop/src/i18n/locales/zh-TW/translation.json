@@ -1,5 +1,12 @@
 {
   "notype": {
+    "recognition": {
+      "title": "語音辨識",
+      "mode": "辨識模式",
+      "traditional": "繁體中文＋English",
+      "simplified": "簡體中文＋English",
+      "description": "同一段錄音可混合中文與英文；中文使用所選字形，英文與字面值維持原樣。介面語言可獨立設定。"
+    },
     "history": {
       "title": "文字歷史",
       "search": "搜尋文字歷史",
@@ -51,6 +58,8 @@
       "no-speech": "未辨識到語音，本次未建立文字歷史。",
       "transcription-failed": "本機語音辨識失敗，請再錄製一次。",
       "history-storage-failed": "無法保存原稿，未進行文字整理或交付。",
+      "recognition-model-incompatible": "請選擇支援中文與英文的多語言模型。本次錄音尚未處理。",
+      "recognition-script-failed": "無法完成繁簡轉換。可用原稿已保存，請複製原稿或重新錄音。",
       "prompt-invalid": "無法儲存，請檢查提示詞與翻譯欄位。",
       "back-translation-failed": "回譯尚未完成；主翻譯仍保留，可複製或重試。",
       "back-translation-timeout": "回譯尚未完成；主翻譯仍保留，可複製或重試。"

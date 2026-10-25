@@ -1,0 +1,647 @@
+{
+  "purpose": "Observed synthetic bilingual recognition diagnostics, not human/company acceptance or a shipping-model decision",
+  "models": [
+    {
+      "id": "small",
+      "file": "ggml-small.bin",
+      "bytes": 487601967,
+      "sha256": "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b",
+      "provenance": "Verified publisher multilingual Small FP16, MIT"
+    },
+    {
+      "id": "ggml-small-local-q5_1",
+      "file": "ggml-small-local-q5_1.bin",
+      "bytes": 190085487,
+      "sha256": "52914f6730a59593fd6108d21dcac060a35ce569d9d70eec431e5623f387c82f",
+      "provenance": "Locally quantized verified FP16 with pinned whisper.cpp v1.8.6, MIT derivative; not publisher Q5 byte identity"
+    },
+    {
+      "id": "sense-voice-int8",
+      "file": "model.int8.onnx",
+      "bytes": 239233841,
+      "sha256": "c71f0ce00bec95b07744e116345e33d8cbbe08cef896382cf907bf4b51a2cd51",
+      "provenance": "Private comparison only; publisher-to-source hashes mapped but license-owner interpretation remains unresolved; no redistribution authorization"
+    }
+  ],
+  "runs": [
+    {
+      "model": "small",
+      "mode": "traditional_english",
+      "fixture": "numbers-negation-switch",
+      "wavSha256": "39dec0a99dff6bec753bf4a699673dbed7dac8d1a32482ec08051a25dec90433",
+      "gold": "今天請保留42筆測試資料，不要刪除。The API is not ready. 等驗證完成後，再送出2筆請求。Keep the test data.",
+      "observed": {
+        "audio_secs": 13.992625,
+        "best_ms": 3563,
+        "bound_backend": "CPU",
+        "cpu_threads": 4,
+        "load_ms": 492,
+        "model": "small",
+        "raw_text": "今天请保留42笔测试资料,不要删除。等验证完成后,再送出两笔请求。",
+        "recognition_mode": "traditional_english",
+        "requested_device": "index 0",
+        "rtf": 3.92720319955094,
+        "text": "今天請保留42筆測試資料,不要刪除。等驗證完成後,再送出兩筆請求。",
+        "transcribe_ms": [
+          3563,
+          3606
+        ]
+      },
+      "wallMs": 7838,
+      "characterErrors": 32,
+      "referenceCharacters": 60,
+      "cer": 0.5333333333333333,
+      "missingRequiredLiterals": [
+        "API",
+        "not ready",
+        "Keep the test data"
+      ],
+      "strictLiteralDiagnosticPass": false
+    },
+    {
+      "model": "small",
+      "mode": "traditional_english",
+      "fixture": "technical-names",
+      "wavSha256": "6061239d0564e331915cc48ff923b0dacd0ad83c5c8351d42372bb4a2c9ef5a9",
+      "gold": "Check the API and session underscore id. 這是測試用的設定，請保留英文名稱，不要改成中文。Use Visual Studio Code, then check GitHub.",
+      "observed": {
+        "audio_secs": 13.3440625,
+        "best_ms": 3750,
+        "bound_backend": "CPU",
+        "cpu_threads": 4,
+        "load_ms": 465,
+        "model": "small",
+        "raw_text": "Check the API and session underscore ID. This is the setting used in the test, please keep the English name, do not change it into Chinese. Use Visual Studio Code, then check GitHub.",
+        "recognition_mode": "traditional_english",
+        "requested_device": "index 0",
+        "rtf": 3.5584166666666666,
+        "text": "Check the API and session underscore ID. This is the setting used in the test, please keep the English name, do not change it into Chinese. Use Visual Studio Code, then check GitHub.",
+        "transcribe_ms": [
+          3750,
+          3822
+        ]
+      },
+      "wallMs": 8226,
+      "characterErrors": 77,
+      "referenceCharacters": 88,
+      "cer": 0.875,
+      "missingRequiredLiterals": [],
+      "strictLiteralDiagnosticPass": true
+    },
+    {
+      "model": "small",
+      "mode": "traditional_english",
+      "fixture": "script-context-version",
+      "wavSha256": "7b139bc6439bb75297bc59c108202f991d8a71159e8163c103bc8e6385de077f",
+      "gold": "頭髮的髮和發展的發意思不同，今天不要發布正式版本。This is a test build, version 2.0. 請檢查後再送出，不要自動執行命令。",
+      "observed": {
+        "audio_secs": 14.726125,
+        "best_ms": 3870,
+        "bound_backend": "CPU",
+        "cpu_threads": 4,
+        "load_ms": 468,
+        "model": "small",
+        "raw_text": "头发的法核发展的发意识不同,今天不要发布正式版本。请检查后再送出,不要自动执行命令。",
+        "recognition_mode": "traditional_english",
+        "requested_device": "index 0",
+        "rtf": 3.8052002583979325,
+        "text": "頭髮的法核發展的發意識不同,今天不要發佈正式版本。請檢查後再送出,不要自動執行命令。",
+        "transcribe_ms": [
+          3870,
+          3905
+        ]
+      },
+      "wallMs": 8447,
+      "characterErrors": 29,
+      "referenceCharacters": 63,
+      "cer": 0.4603174603174603,
+      "missingRequiredLiterals": [
+        "This is a test build",
+        "2.0"
+      ],
+      "strictLiteralDiagnosticPass": false
+    },
+    {
+      "model": "small",
+      "mode": "simplified_english",
+      "fixture": "numbers-negation-switch",
+      "wavSha256": "39dec0a99dff6bec753bf4a699673dbed7dac8d1a32482ec08051a25dec90433",
+      "gold": "今天请保留42笔测试数据，不要删除。The API is not ready. 等验证完成后，再送出2笔请求。Keep the test data.",
+      "observed": {
+        "audio_secs": 13.992625,
+        "best_ms": 3813,
+        "bound_backend": "CPU",
+        "cpu_threads": 4,
+        "load_ms": 464,
+        "model": "small",
+        "raw_text": "今天请保留42笔测试资料,不要删除。等验证完成后,再送出两笔请求。",
+        "recognition_mode": "simplified_english",
+        "requested_device": "index 0",
+        "rtf": 3.6697154471544713,
+        "text": "今天请保留42笔测试资料,不要删除。等验证完成后,再送出两笔请求。",
+        "transcribe_ms": [
+          3813,
+          3882
+        ]
+      },
+      "wallMs": 8336,
+      "characterErrors": 34,
+      "referenceCharacters": 60,
+      "cer": 0.5666666666666667,
+      "missingRequiredLiterals": [
+        "API",
+        "not ready",
+        "Keep the test data"
+      ],
+      "strictLiteralDiagnosticPass": false
+    },
+    {
+      "model": "small",
+      "mode": "simplified_english",
+      "fixture": "technical-names",
+      "wavSha256": "6061239d0564e331915cc48ff923b0dacd0ad83c5c8351d42372bb4a2c9ef5a9",
+      "gold": "Check the API and session underscore id. 这是测试用的设定，请保留英文名称，不要改成中文。Use Visual Studio Code, then check GitHub.",
+      "observed": {
+        "audio_secs": 13.3440625,
+        "best_ms": 3860,
+        "bound_backend": "CPU",
+        "cpu_threads": 4,
+        "load_ms": 457,
+        "model": "small",
+        "raw_text": "Check the API and session underscore ID. This is the setting used in the test, please keep the English name, do not change it into Chinese. Use Visual Studio Code, then check GitHub.",
+        "recognition_mode": "simplified_english",
+        "requested_device": "index 0",
+        "rtf": 3.4570110103626943,
+        "text": "Check the API and session underscore ID. This is the setting used in the test, please keep the English name, do not change it into Chinese. Use Visual Studio Code, then check GitHub.",
+        "transcribe_ms": [
+          3860,
+          4088
+        ]
+      },
+      "wallMs": 8569,
+      "characterErrors": 77,
+      "referenceCharacters": 88,
+      "cer": 0.875,
+      "missingRequiredLiterals": [],
+      "strictLiteralDiagnosticPass": true
+    },
+    {
+      "model": "small",
+      "mode": "simplified_english",
+      "fixture": "script-context-version",
+      "wavSha256": "7b139bc6439bb75297bc59c108202f991d8a71159e8163c103bc8e6385de077f",
+      "gold": "头发的发和发展的发意思不同，今天不要发布正式版本。This is a test build, version 2.0. 请检查后再送出，不要自动执行命令。",
+      "observed": {
+        "audio_secs": 14.726125,
+        "best_ms": 3913,
+        "bound_backend": "CPU",
+        "cpu_threads": 4,
+        "load_ms": 470,
+        "model": "small",
+        "raw_text": "头发的法核发展的发意识不同,今天不要发布正式版本。请检查后再送出,不要自动执行命令。",
+        "recognition_mode": "simplified_english",
+        "requested_device": "index 0",
+        "rtf": 3.7633848709430104,
+        "text": "头发的法核发展的发意识不同,今天不要发布正式版本。请检查后再送出,不要自动执行命令。",
+        "transcribe_ms": [
+          3946,
+          3913
+        ]
+      },
+      "wallMs": 8498,
+      "characterErrors": 28,
+      "referenceCharacters": 63,
+      "cer": 0.4444444444444444,
+      "missingRequiredLiterals": [
+        "This is a test build",
+        "2.0"
+      ],
+      "strictLiteralDiagnosticPass": false
+    },
+    {
+      "model": "ggml-small-local-q5_1",
+      "mode": "traditional_english",
+      "fixture": "numbers-negation-switch",
+      "wavSha256": "39dec0a99dff6bec753bf4a699673dbed7dac8d1a32482ec08051a25dec90433",
+      "gold": "今天請保留42筆測試資料，不要刪除。The API is not ready. 等驗證完成後，再送出2筆請求。Keep the test data.",
+      "observed": {
+        "audio_secs": 13.992625,
+        "best_ms": 5349,
+        "bound_backend": "CPU",
+        "cpu_threads": 4,
+        "load_ms": 195,
+        "model": "ggml-small-local-q5_1",
+        "raw_text": "今天请保留42笔测试资料,不要删除。等验证完成后,再送出两笔请求。",
+        "recognition_mode": "traditional_english",
+        "requested_device": "index 0",
+        "rtf": 2.6159328846513366,
+        "text": "今天請保留42筆測試資料,不要刪除。等驗證完成後,再送出兩筆請求。",
+        "transcribe_ms": [
+          6661,
+          5349
+        ]
+      },
+      "wallMs": 12481,
+      "characterErrors": 32,
+      "referenceCharacters": 60,
+      "cer": 0.5333333333333333,
+      "missingRequiredLiterals": [
+        "API",
+        "not ready",
+        "Keep the test data"
+      ],
+      "strictLiteralDiagnosticPass": false
+    },
+    {
+      "model": "ggml-small-local-q5_1",
+      "mode": "traditional_english",
+      "fixture": "technical-names",
+      "wavSha256": "6061239d0564e331915cc48ff923b0dacd0ad83c5c8351d42372bb4a2c9ef5a9",
+      "gold": "Check the API and session underscore id. 這是測試用的設定，請保留英文名稱，不要改成中文。Use Visual Studio Code, then check GitHub.",
+      "observed": {
+        "audio_secs": 13.3440625,
+        "best_ms": 5284,
+        "bound_backend": "CPU",
+        "cpu_threads": 4,
+        "load_ms": 189,
+        "model": "ggml-small-local-q5_1",
+        "raw_text": "Check the API and session underscore ID. This is the setting used in the test, please keep the English name, do not change it into Chinese. Use Visual Studio Code, then check GitHub.",
+        "recognition_mode": "traditional_english",
+        "requested_device": "index 0",
+        "rtf": 2.5253714042392126,
+        "text": "Check the API and session underscore ID. This is the setting used in the test, please keep the English name, do not change it into Chinese. Use Visual Studio Code, then check GitHub.",
+        "transcribe_ms": [
+          5479,
+          5284
+        ]
+      },
+      "wallMs": 11097,
+      "characterErrors": 77,
+      "referenceCharacters": 88,
+      "cer": 0.875,
+      "missingRequiredLiterals": [],
+      "strictLiteralDiagnosticPass": true
+    },
+    {
+      "model": "ggml-small-local-q5_1",
+      "mode": "traditional_english",
+      "fixture": "script-context-version",
+      "wavSha256": "7b139bc6439bb75297bc59c108202f991d8a71159e8163c103bc8e6385de077f",
+      "gold": "頭髮的髮和發展的發意思不同，今天不要發布正式版本。This is a test build, version 2.0. 請檢查後再送出，不要自動執行命令。",
+      "observed": {
+        "audio_secs": 14.726125,
+        "best_ms": 5480,
+        "bound_backend": "CPU",
+        "cpu_threads": 4,
+        "load_ms": 191,
+        "model": "ggml-small-local-q5_1",
+        "raw_text": "头发的法核发展的发意识不同,今天不要发布正式版本。请检查后再送出,不要自动执行命令。",
+        "recognition_mode": "traditional_english",
+        "requested_device": "index 0",
+        "rtf": 2.6872490875912405,
+        "text": "頭髮的法核發展的發意識不同,今天不要發佈正式版本。請檢查後再送出,不要自動執行命令。",
+        "transcribe_ms": [
+          5618,
+          5480
+        ]
+      },
+      "wallMs": 11440,
+      "characterErrors": 29,
+      "referenceCharacters": 63,
+      "cer": 0.4603174603174603,
+      "missingRequiredLiterals": [
+        "This is a test build",
+        "2.0"
+      ],
+      "strictLiteralDiagnosticPass": false
+    },
+    {
+      "model": "ggml-small-local-q5_1",
+      "mode": "simplified_english",
+      "fixture": "numbers-negation-switch",
+      "wavSha256": "39dec0a99dff6bec753bf4a699673dbed7dac8d1a32482ec08051a25dec90433",
+      "gold": "今天请保留42笔测试数据，不要删除。The API is not ready. 等验证完成后，再送出2笔请求。Keep the test data.",
+      "observed": {
+        "audio_secs": 13.992625,
+        "best_ms": 5451,
+        "bound_backend": "CPU",
+        "cpu_threads": 4,
+        "load_ms": 193,
+        "model": "ggml-small-local-q5_1",
+        "raw_text": "今天请保留42笔测试资料,不要删除。等验证完成后,再送出两笔请求。",
+        "recognition_mode": "simplified_english",
+        "requested_device": "index 0",
+        "rtf": 2.5669831223628696,
+        "text": "今天请保留42笔测试资料,不要删除。等验证完成后,再送出两笔请求。",
+        "transcribe_ms": [
+          5451,
+          7934
+        ]
+      },
+      "wallMs": 13738,
+      "characterErrors": 34,
+      "referenceCharacters": 60,
+      "cer": 0.5666666666666667,
+      "missingRequiredLiterals": [
+        "API",
+        "not ready",
+        "Keep the test data"
+      ],
+      "strictLiteralDiagnosticPass": false
+    },
+    {
+      "model": "ggml-small-local-q5_1",
+      "mode": "simplified_english",
+      "fixture": "technical-names",
+      "wavSha256": "6061239d0564e331915cc48ff923b0dacd0ad83c5c8351d42372bb4a2c9ef5a9",
+      "gold": "Check the API and session underscore id. 这是测试用的设定，请保留英文名称，不要改成中文。Use Visual Studio Code, then check GitHub.",
+      "observed": {
+        "audio_secs": 13.3440625,
+        "best_ms": 5660,
+        "bound_backend": "CPU",
+        "cpu_threads": 4,
+        "load_ms": 187,
+        "model": "ggml-small-local-q5_1",
+        "raw_text": "Check the API and session underscore ID. This is the setting used in the test, please keep the English name, do not change it into Chinese. Use Visual Studio Code, then check GitHub.",
+        "recognition_mode": "simplified_english",
+        "requested_device": "index 0",
+        "rtf": 2.357608215547703,
+        "text": "Check the API and session underscore ID. This is the setting used in the test, please keep the English name, do not change it into Chinese. Use Visual Studio Code, then check GitHub.",
+        "transcribe_ms": [
+          5660,
+          5679
+        ]
+      },
+      "wallMs": 11677,
+      "characterErrors": 77,
+      "referenceCharacters": 88,
+      "cer": 0.875,
+      "missingRequiredLiterals": [],
+      "strictLiteralDiagnosticPass": true
+    },
+    {
+      "model": "ggml-small-local-q5_1",
+      "mode": "simplified_english",
+      "fixture": "script-context-version",
+      "wavSha256": "7b139bc6439bb75297bc59c108202f991d8a71159e8163c103bc8e6385de077f",
+      "gold": "头发的发和发展的发意思不同，今天不要发布正式版本。This is a test build, version 2.0. 请检查后再送出，不要自动执行命令。",
+      "observed": {
+        "audio_secs": 14.726125,
+        "best_ms": 5368,
+        "bound_backend": "CPU",
+        "cpu_threads": 4,
+        "load_ms": 185,
+        "model": "ggml-small-local-q5_1",
+        "raw_text": "头发的法核发展的发意识不同,今天不要发布正式版本。请检查后再送出,不要自动执行命令。",
+        "recognition_mode": "simplified_english",
+        "requested_device": "index 0",
+        "rtf": 2.7433168777943364,
+        "text": "头发的法核发展的发意识不同,今天不要发布正式版本。请检查后再送出,不要自动执行命令。",
+        "transcribe_ms": [
+          5368,
+          5482
+        ]
+      },
+      "wallMs": 11185,
+      "characterErrors": 28,
+      "referenceCharacters": 63,
+      "cer": 0.4444444444444444,
+      "missingRequiredLiterals": [
+        "This is a test build",
+        "2.0"
+      ],
+      "strictLiteralDiagnosticPass": false
+    },
+    {
+      "model": "sense-voice-int8",
+      "mode": "traditional_english",
+      "fixture": "numbers-negation-switch",
+      "wavSha256": "39dec0a99dff6bec753bf4a699673dbed7dac8d1a32482ec08051a25dec90433",
+      "gold": "今天請保留42筆測試資料，不要刪除。The API is not ready. 等驗證完成後，再送出2筆請求。Keep the test data.",
+      "observed": {
+        "audio_secs": 13.992625,
+        "best_ms": 1260,
+        "bound_backend": "onnx",
+        "cpu_threads": null,
+        "load_ms": 1453,
+        "model": "sense-voice-int8",
+        "raw_text": "今天请保留42笔测试资料，不要删除AP is not ready等验证完成后再送出两笔请求 keep the test data.",
+        "recognition_mode": "traditional_english",
+        "requested_device": "settings",
+        "rtf": 11.105257936507936,
+        "text": "今天請保留42筆測試資料，不要刪除AP is not ready等驗證完成後再送出兩筆請求 keep the test data.",
+        "transcribe_ms": [
+          1260,
+          1481
+        ]
+      },
+      "wallMs": 5745,
+      "characterErrors": 5,
+      "referenceCharacters": 60,
+      "cer": 0.08333333333333333,
+      "missingRequiredLiterals": [
+        "API"
+      ],
+      "strictLiteralDiagnosticPass": false
+    },
+    {
+      "model": "sense-voice-int8",
+      "mode": "traditional_english",
+      "fixture": "technical-names",
+      "wavSha256": "6061239d0564e331915cc48ff923b0dacd0ad83c5c8351d42372bb4a2c9ef5a9",
+      "gold": "Check the API and session underscore id. 這是測試用的設定，請保留英文名稱，不要改成中文。Use Visual Studio Code, then check GitHub.",
+      "observed": {
+        "audio_secs": 13.3440625,
+        "best_ms": 1059,
+        "bound_backend": "onnx",
+        "cpu_threads": null,
+        "load_ms": 1247,
+        "model": "sense-voice-int8",
+        "raw_text": "Check the API and session underscore ID这是测试用的设定，请保留英文名称，不要改成中文 Use Studio code then check Github.",
+        "recognition_mode": "traditional_english",
+        "requested_device": "settings",
+        "rtf": 12.600625590179416,
+        "text": "Check the API and session underscore ID這是測試用的設定，請保留英文名稱，不要改成中文 Use Studio code then check Github.",
+        "transcribe_ms": [
+          1059,
+          1063
+        ]
+      },
+      "wallMs": 3552,
+      "characterErrors": 6,
+      "referenceCharacters": 88,
+      "cer": 0.06818181818181818,
+      "missingRequiredLiterals": [
+        "Visual Studio Code"
+      ],
+      "strictLiteralDiagnosticPass": false
+    },
+    {
+      "model": "sense-voice-int8",
+      "mode": "traditional_english",
+      "fixture": "script-context-version",
+      "wavSha256": "7b139bc6439bb75297bc59c108202f991d8a71159e8163c103bc8e6385de077f",
+      "gold": "頭髮的髮和發展的發意思不同，今天不要發布正式版本。This is a test build, version 2.0. 請檢查後再送出，不要自動執行命令。",
+      "observed": {
+        "audio_secs": 14.726125,
+        "best_ms": 1137,
+        "bound_backend": "onnx",
+        "cpu_threads": null,
+        "load_ms": 1248,
+        "model": "sense-voice-int8",
+        "raw_text": "头发的法和发展的发意思不同，今天不要发布正式版本。this is a test build version2.0请检查后再送出，不要自动执行命令。",
+        "recognition_mode": "traditional_english",
+        "requested_device": "settings",
+        "rtf": 12.95173702726473,
+        "text": "頭髮的法和發展的發意思不同，今天不要發佈正式版本。this is a test build version2.0請檢查後再送出，不要自動執行命令。",
+        "transcribe_ms": [
+          1137,
+          1213
+        ]
+      },
+      "wallMs": 3898,
+      "characterErrors": 2,
+      "referenceCharacters": 63,
+      "cer": 0.031746031746031744,
+      "missingRequiredLiterals": [],
+      "strictLiteralDiagnosticPass": true
+    },
+    {
+      "model": "sense-voice-int8",
+      "mode": "simplified_english",
+      "fixture": "numbers-negation-switch",
+      "wavSha256": "39dec0a99dff6bec753bf4a699673dbed7dac8d1a32482ec08051a25dec90433",
+      "gold": "今天请保留42笔测试数据，不要删除。The API is not ready. 等验证完成后，再送出2笔请求。Keep the test data.",
+      "observed": {
+        "audio_secs": 13.992625,
+        "best_ms": 1075,
+        "bound_backend": "onnx",
+        "cpu_threads": null,
+        "load_ms": 1332,
+        "model": "sense-voice-int8",
+        "raw_text": "今天请保留42笔测试资料，不要删除AP is not ready等验证完成后再送出两笔请求 keep the test data.",
+        "recognition_mode": "simplified_english",
+        "requested_device": "settings",
+        "rtf": 13.01639534883721,
+        "text": "今天请保留42笔测试资料，不要删除AP is not ready等验证完成后再送出两笔请求 keep the test data.",
+        "transcribe_ms": [
+          1075,
+          1181
+        ]
+      },
+      "wallMs": 3792,
+      "characterErrors": 7,
+      "referenceCharacters": 60,
+      "cer": 0.11666666666666667,
+      "missingRequiredLiterals": [
+        "API"
+      ],
+      "strictLiteralDiagnosticPass": false
+    },
+    {
+      "model": "sense-voice-int8",
+      "mode": "simplified_english",
+      "fixture": "technical-names",
+      "wavSha256": "6061239d0564e331915cc48ff923b0dacd0ad83c5c8351d42372bb4a2c9ef5a9",
+      "gold": "Check the API and session underscore id. 这是测试用的设定，请保留英文名称，不要改成中文。Use Visual Studio Code, then check GitHub.",
+      "observed": {
+        "audio_secs": 13.3440625,
+        "best_ms": 948,
+        "bound_backend": "onnx",
+        "cpu_threads": null,
+        "load_ms": 1239,
+        "model": "sense-voice-int8",
+        "raw_text": "Check the API and session underscore ID这是测试用的设定，请保留英文名称，不要改成中文 Use Studio code then check Github.",
+        "recognition_mode": "simplified_english",
+        "requested_device": "settings",
+        "rtf": 14.07601529535865,
+        "text": "Check the API and session underscore ID这是测试用的设定，请保留英文名称，不要改成中文 Use Studio code then check Github.",
+        "transcribe_ms": [
+          948,
+          1071
+        ]
+      },
+      "wallMs": 3439,
+      "characterErrors": 6,
+      "referenceCharacters": 88,
+      "cer": 0.06818181818181818,
+      "missingRequiredLiterals": [
+        "Visual Studio Code"
+      ],
+      "strictLiteralDiagnosticPass": false
+    },
+    {
+      "model": "sense-voice-int8",
+      "mode": "simplified_english",
+      "fixture": "script-context-version",
+      "wavSha256": "7b139bc6439bb75297bc59c108202f991d8a71159e8163c103bc8e6385de077f",
+      "gold": "头发的发和发展的发意思不同，今天不要发布正式版本。This is a test build, version 2.0. 请检查后再送出，不要自动执行命令。",
+      "observed": {
+        "audio_secs": 14.726125,
+        "best_ms": 1123,
+        "bound_backend": "onnx",
+        "cpu_threads": null,
+        "load_ms": 1203,
+        "model": "sense-voice-int8",
+        "raw_text": "头发的法和发展的发意思不同，今天不要发布正式版本。this is a test build version2.0请检查后再送出，不要自动执行命令。",
+        "recognition_mode": "simplified_english",
+        "requested_device": "settings",
+        "rtf": 13.11320124666073,
+        "text": "头发的法和发展的发意思不同，今天不要发布正式版本。this is a test build version2.0请检查后再送出，不要自动执行命令。",
+        "transcribe_ms": [
+          1123,
+          1332
+        ]
+      },
+      "wallMs": 3836,
+      "characterErrors": 1,
+      "referenceCharacters": 63,
+      "cer": 0.015873015873015872,
+      "missingRequiredLiterals": [],
+      "strictLiteralDiagnosticPass": true
+    }
+  ],
+  "hardware": {
+    "Name": "11th Gen Intel(R) Core(TM) i5-1135G7 @ 2.40GHz",
+    "NumberOfCores": 4,
+    "NumberOfLogicalProcessors": 8
+  },
+  "executables": [
+    {
+      "comparison": "language-quality-receipt",
+      "sha256": "3c9ce52164abe1f06d40e56e1395e346c5b0e19db369bf54c016a3f3b29c1a9c"
+    },
+    {
+      "comparison": "language-quality-private-sensevoice",
+      "sha256": "3986baebfd07627f5a68c32d0843b111985c61ffaf68da7af42f490f749cf107"
+    }
+  ],
+  "options": {
+    "language-quality-receipt": {
+      "task": "transcribe",
+      "decodingLanguage": "auto",
+      "translate": false,
+      "manualTerms": [],
+      "cpuThreads": 4,
+      "requestedDevice": 0,
+      "repeatsPerLoad": 2
+    },
+    "language-quality-private-sensevoice": {
+      "task": "transcribe",
+      "decodingLanguage": "auto",
+      "translate": false,
+      "manualTerms": [],
+      "cpuThreads": "ONNX library default, not set explicitly",
+      "requestedDevice": "ONNX default",
+      "repeatsPerLoad": 2
+    }
+  },
+  "metrics": {
+    "cer": "Levenshtein over NFKC/lowercase code points, punctuation and whitespace removed; no ITN or English repair",
+    "requiredLiterals": "Case-insensitive exact substring diagnostic, numbers may differ under inverse-text normalization",
+    "memory": "Not measured",
+    "p95": "Not estimated from this small sample",
+    "cold": "Fresh process/model load, OS file cache not flushed",
+    "warm": "Second inference in same process"
+  }
+}

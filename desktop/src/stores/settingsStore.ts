@@ -5,6 +5,7 @@ import type {
   AppSettings as Settings,
   AudioDevice,
   ChineseScript,
+  RecognitionModeSetting,
   TranscribeAcceleratorSetting,
   OrtAcceleratorSetting,
   ShortcutActivation,
@@ -133,6 +134,8 @@ const settingUpdaters: {
     commands.changeTranslateToEnglishSetting(value as boolean),
   selected_language: (value) =>
     commands.changeSelectedLanguageSetting(value as string),
+  recognition_mode: (value) =>
+    commands.changeRecognitionModeSetting(value as RecognitionModeSetting),
   overlay_position: (value) =>
     commands.changeOverlayPositionSetting(value as string),
   debug_mode: (value) => commands.changeDebugModeSetting(value as boolean),

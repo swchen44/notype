@@ -400,6 +400,31 @@ impl SessionService {
         transcript: &str,
         options: SessionOptions,
     ) -> Result<SessionEntry, CoreError> {
+        self.create_entry(transcript, options, "recognized", None)
+    }
+
+    /// Preserve available recognition text when the requested local script failed.
+    /// This entry cannot accidentally enter automatic text processing or delivery.
+    pub fn create_recognition_failure(
+        &self,
+        transcript: &str,
+        options: SessionOptions,
+    ) -> Result<SessionEntry, CoreError> {
+        self.create_entry(
+            transcript,
+            options,
+            "failed",
+            Some("recognition-script-failed"),
+        )
+    }
+
+    fn create_entry(
+        &self,
+        transcript: &str,
+        options: SessionOptions,
+        status: &str,
+        error: Option<&str>,
+    ) -> Result<SessionEntry, CoreError> {
         if transcript.trim().is_empty() || !options.source_context.is_valid() {
             return Err(CoreError::InvalidInput);
         }
@@ -407,8 +432,8 @@ impl SessionService {
         let timestamp = now();
         self.connection()?.execute(
             "INSERT INTO sessions
-            (id, transcript, created_at, updated_at, status, recognition_mode, original_target,scenario,translation_target,source_context)
-            VALUES (?1,?2,?3,?3,'recognized',?4,?5,?6,?7,?8)",
+            (id, transcript, created_at, updated_at, status, recognition_mode, original_target,scenario,translation_target,source_context,error)
+            VALUES (?1,?2,?3,?3,?9,?4,?5,?6,?7,?8,?10)",
             params![
                 id,
                 transcript,
@@ -419,7 +444,8 @@ impl SessionService {
                 options.original_target,
                 serde_json::to_string(&options.scenario).unwrap().trim_matches('"'),
                 options.translation_target,
-                serde_json::to_string(&options.source_context).map_err(|_|CoreError::InvalidInput)?
+                serde_json::to_string(&options.source_context).map_err(|_|CoreError::InvalidInput)?,
+                status,error
             ],
         )?;
         self.get(&id)

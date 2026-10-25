@@ -26,3 +26,9 @@ Linux 結果：[Shared core contracts run 40137924066](https://github.com/swchen
 測試從 public session／保存／HTTP seams 驗證原稿先保存、模式快照、處理錯誤／timeout／取消、遲到結果、明確選原稿、目標變更／交付去重／結果不明，以及真實 SQLite 重啟、Node v1 migration、互斥擁有權、唯讀 Handy import 與手動刪除。資料路徑由呼叫端提供，核心沒有 Tauri 或 Windows UI 型別；Linux 執行不需要 Windows SDK、桌面 App 或語音模型。
 
 本次驗證證明共用核心能在 Windows 與 Linux 執行相同 contracts。它不代表 macOS／Linux 桌面 adapter、真實 STT 品質、原生五個 App、公司 API、完整 portable payload 或 p95 已驗收；後續核心改動以對應 commit 的新 run 為準。
+
+## #11 合併後補驗
+
+`5ad169845c49881ec7873b694051117eb4cc7372` 新增需要設定的可復原錯誤分支後，Windows merger 再次通過核心 9 unit、6 persistence、3 HTTP 與 1 doc，共 19 項；Node unit／integration 仍為 11 + 5。Linux [run 40143094184](https://github.com/swchen44/notype/actions/runs/40143094184) 同樣全部通過，0 failed／0 ignored，Node 0 skipped；fmt／clippy 亦通過。已檢查實際 logs 的各 test target 數量，空的 inline harness 不計入 19。
+
+此 run 尚不包含後續 #12 辨識模式及 #17 三場景的新修改。桌面 #11 的 7 項 Rust checks 與 5 項 Windows native tests 另記於 [desktop workflow receipt](desktop-workflow.md)，不與此 Linux 核心數量混算。

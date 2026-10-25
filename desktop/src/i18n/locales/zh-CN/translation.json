@@ -51,6 +51,8 @@
       "no-speech": "未识别到语音，本次未创建文字历史。",
       "transcription-failed": "本机语音识别失败，请重新录制。",
       "history-storage-failed": "无法保存原稿，未进行文字整理或交付。",
+      "recognition-model-incompatible": "请选择支持中文和英文的多语言模型。本次录音尚未处理。",
+      "recognition-script-failed": "无法完成繁简转换。可用原稿已保存，请复制原稿或重新录音。",
       "prompt-invalid": "无法保存，请检查提示词与翻译字段。",
       "back-translation-failed": "回译尚未完成；主翻译仍保留，可复制或重试。",
       "back-translation-timeout": "回译尚未完成；主翻译仍保留，可复制或重试。"
@@ -74,6 +76,13 @@
       "notReady": "尚未完成设置，原稿会保留供你选择。",
       "preset": "下方可编辑各场景提示词。仅发送当次原稿与手动词汇，以及允许的应用程序名称／网站域名。",
       "chooseAuthentication": "请选择认证方式"
+    },
+    "recognition": {
+      "title": "语音识别",
+      "mode": "辨识模式",
+      "traditional": "繁体中文＋English",
+      "simplified": "简体中文＋English",
+      "description": "同一段录音可混用中文与英文。选择中文书写字形，并保留英文与字面内容。界面语言独立设置。"
     },
     "scenarios": {
       "title": "场景提示词",

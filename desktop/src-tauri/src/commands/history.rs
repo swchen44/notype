@@ -253,15 +253,26 @@ pub(crate) fn begin_scenario_recording(
     target: Option<String>,
     context: notype_core::SourceContext,
 ) -> Result<u64, String> {
-    let mode = match settings::get_settings(app).chinese_script {
-        settings::ChineseScript::Simplified => RecognitionMode::SimplifiedEnglish,
-        settings::ChineseScript::Traditional | settings::ChineseScript::AsTranscribed => {
-            RecognitionMode::TraditionalEnglish
+    let preferences = settings::get_settings(app);
+    let profile = crate::workflow::recognition::RecognitionProfile::new(
+        preferences.recognition_mode.into(),
+        preferences.custom_words.clone(),
+    );
+    if let Some(model) = app
+        .state::<Arc<crate::managers::model::ModelManager>>()
+        .get_model_info(&preferences.selected_model)
+    {
+        // Custom model capabilities can remain unknown until loading; the
+        // engine validates its actual capabilities before decoding as well.
+        if !model.supported_languages.is_empty() {
+            profile
+                .validate_model(&model.supported_languages)
+                .map_err(str::to_string)?;
         }
-    };
+    }
     let workflow = app.state::<Arc<DesktopWorkflow>>();
     let generation = workflow
-        .begin(mode, target)
+        .begin_with_profile(profile, target)
         .map_err(|error| error.to_string())?;
     workflow
         .capture_source_context(generation, context)
@@ -271,7 +282,7 @@ pub(crate) fn begin_scenario_recording(
             generation,
             scenario,
             read_configuration(app).unwrap_or_default(),
-            settings::get_settings(app).custom_words,
+            preferences.custom_words,
         )
         .map_err(|error| error.to_string())?;
     Ok(generation)
@@ -426,11 +437,18 @@ pub fn update_recording_retention_period(_period: String) -> Result<(), String> 
 pub fn debug_begin_session(
     app: AppHandle,
     workflow: State<'_, Arc<DesktopWorkflow>>,
-    recognition_mode: RecognitionMode,
+    recognition_mode: Option<RecognitionMode>,
     scenario: Option<SceneId>,
 ) -> Result<u64, String> {
     let generation = workflow
-        .begin(recognition_mode, None)
+        .begin_with_profile(
+            crate::workflow::recognition::RecognitionProfile::new(
+                recognition_mode
+                    .unwrap_or_else(|| settings::get_settings(&app).recognition_mode.into()),
+                settings::get_settings(&app).custom_words,
+            ),
+            None,
+        )
         .map_err(|error| error.to_string())?;
     workflow
         .capture_processing_snapshot(

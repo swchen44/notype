@@ -190,6 +190,23 @@ pub enum ChineseScript {
     Traditional,
 }
 
+/// User-facing mixed-language profile; independent of the interface locale.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Type, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum RecognitionModeSetting {
+    #[default]
+    TraditionalEnglish,
+    SimplifiedEnglish,
+}
+impl From<RecognitionModeSetting> for notype_core::RecognitionMode {
+    fn from(mode: RecognitionModeSetting) -> Self {
+        match mode {
+            RecognitionModeSetting::TraditionalEnglish => Self::TraditionalEnglish,
+            RecognitionModeSetting::SimplifiedEnglish => Self::SimplifiedEnglish,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Type, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum AutoSubmitKey {
@@ -430,6 +447,8 @@ pub struct AppSettings {
     pub translate_to_english: bool,
     #[serde(default = "default_selected_language")]
     pub selected_language: String,
+    #[serde(default)]
+    pub recognition_mode: RecognitionModeSetting,
     #[serde(default = "default_overlay_position")]
     pub overlay_position: OverlayPosition,
     #[serde(default = "default_debug_mode")]
@@ -655,9 +674,7 @@ fn default_post_process_enabled() -> bool {
 }
 
 fn default_app_language() -> String {
-    tauri_plugin_os::locale()
-        .map(|l| l.replace('_', "-"))
-        .unwrap_or_else(|| "en".to_string())
+    "zh-TW".to_string()
 }
 
 fn default_show_tray_icon() -> bool {
@@ -950,6 +967,7 @@ pub fn get_default_settings() -> AppSettings {
         selected_output_device: None,
         translate_to_english: false,
         selected_language: "auto".to_string(),
+        recognition_mode: RecognitionModeSetting::default(),
         overlay_position: default_overlay_position(),
         debug_mode: false,
         log_level: default_log_level(),
@@ -1168,6 +1186,14 @@ fn apply_settings_migrations(
         if settings.chinese_script != ChineseScript::AsTranscribed {
             settings.selected_language = "zh".to_string();
         }
+        updated = true;
+    }
+
+    if settings_value.get("recognition_mode").is_none() {
+        settings.recognition_mode = match settings.chinese_script {
+            ChineseScript::Simplified => RecognitionModeSetting::SimplifiedEnglish,
+            _ => RecognitionModeSetting::TraditionalEnglish,
+        };
         updated = true;
     }
 
