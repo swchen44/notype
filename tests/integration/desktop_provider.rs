@@ -7,6 +7,10 @@ mod diagnostics;
 #[allow(dead_code, unused_imports)]
 #[path = "../../desktop/src-tauri/src/workflow.rs"]
 mod workflow;
+// Run the focused unit and HTTP regressions in the same CI target so both
+// failure boundaries execute before the workflow advances to Clippy.
+#[path = "../unittest/gateway_error_context.rs"]
+mod gateway_error_context;
 use notype_core::{RecognitionMode, SessionOptions, SessionService, SessionStatus};
 use serde_json::{json, Value};
 use std::{sync::Arc, time::Duration};
@@ -1587,4 +1591,43 @@ async fn in_band_provider_timeout_finishes_the_public_observer_as_timeout() {
         *observer.0.lock().unwrap(),
         Some((ApiOutcome::Timeout, Some(13)))
     );
+}
+
+#[tokio::test]
+async fn numeric_validation_context_metadata_survives_actual_http_and_sqlite_restart() {
+    for (status, numeric_code, metadata, expected) in [
+        (400, 400, "context_length_exceeded", "provider-context"),
+        (200, 400, "context_length_exceeded", "provider-context"),
+        (429, 429, "context_length_exceeded", "provider-rate-limit"),
+        (200, 429, "context_length_exceeded", "provider-rate-limit"),
+        (400, 400, "invalid_parameter", "provider-validation"),
+        (200, 400, "invalid_parameter", "provider-validation"),
+    ] {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("sessions.db");
+        let workflow = DesktopWorkflow::new(SessionService::open(&path).unwrap(), Arc::new(|| {}));
+        let body = json!({"error":{"code":numeric_code,"metadata":{"error_type":metadata},"message":"Bearer context_length_exceeded secret-sentinel"}}).to_string();
+        let (endpoint, request, server) = fixture_status(&body, Duration::ZERO, status).await;
+        let generation = workflow
+            .begin(RecognitionMode::TraditionalEnglish, None)
+            .unwrap();
+        let entry = workflow
+            .finish(generation, "saved original", configured(endpoint), vec![])
+            .await
+            .unwrap();
+        request.await.unwrap();
+        server.await.unwrap();
+        assert_eq!(
+            entry.error.as_deref(),
+            Some(expected),
+            "HTTP {status}, numeric code {numeric_code}, metadata {metadata}"
+        );
+        assert_eq!(entry.api_summary.call_count, Some(1));
+        assert_eq!(entry.result, None);
+        let id = entry.id;
+        drop(workflow);
+        let reopened = SessionService::open(&path).unwrap().get(&id).unwrap();
+        assert_eq!(reopened.error.as_deref(), Some(expected));
+        assert_eq!(reopened.transcript, "saved original");
+    }
 }
