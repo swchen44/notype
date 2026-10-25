@@ -86,3 +86,47 @@ if ($LASTEXITCODE -eq 0) { & "$env:TEMP/notype-diagnostic-control.exe" }
 既有 desktop-contracts Cargo manifest／Linux CI 註冊所有新 targets；本機 standalone reuse 不表示已跑該次 CI。前端 lint／build 在合入 parent 後通過；Vite chunk-size 和 baseline-browser-mapping 的既有提示不影響 verdict。變更前端／文件用 Prettier，Rust 用 rustfmt；`git diff --check` 無錯。
 
 **未執行／限制**：native Tauri／C++ compile、Clippy、bindings regeneration、原生 save dialog／退出、使用者 App／process／profile／mic／clipboard、真實 STT、公司 API、套件更新與實際交付。這些由 parent 依後續 source review／核准計畫分開驗證，不能用本檔 unit／browser cases 代替。原 0-byte log 原因與 Right Alt 短按後等待 READY 的真機原因均仍未確認，沒有宣稱已修好。
+
+## 補充審查 S5／S6：操作測試與 overlay API 文件
+
+2026-10-25，獨立來源審查在 `ebca453dc58b194c18c692861a0ff1e7a039aeb5`（與 integration `160ea647c3e4dfa9fa3cc5b8179b2c3a08a0a55d` 同 tree）確認原四項 findings 已修復，另列兩項 Standards findings；Spec 為 0。精確補充計畫 [P20/P21-review-v1](https://github.com/swchen44/notype/issues/20#issuecomment-6398809381) 先取得 [GPT-6-Astra APPROVED，0 項未解問題](https://github.com/swchen44/notype/issues/20#issuecomment-6398823972)，才開始本節測試／註解修改。本節不取代前面的 P20-v3 驗證紀錄。
+
+- **S5／P2 原 finding**：新增的 About Quit 和修改過的 log-level 操作缺少可執行的實際互動覆蓋；既有 support suite 雖掛載 selector，沒有操作其 dropdown，也未掛載 AboutSettings。
+- **S5 修正**：`tests/integration/about-settings.ui.mjs` 掛載正式 AboutSettings／LogLevelSelector，使用真實 React／i18next／Dropdown／useSettings／settingsStore／process plugin。僅替換公開 Tauri IPC transport，沒有替換內部 hook、初始化、refresh 或儲存方法。Quit 的成功只回覆合成 transport，不關閉任何 App。
+- **S6／P3 原 finding**：新 overlay 公開 policy／DTO 不符 CONTRIBUTING 的 doc-comment 規範，外部事件契約文件無法取代 API 註解。
+- **S6 修正**：補上 Presentation／helpers／variants、HideReason labels、CaptureId／OverlayTicket fields、OverlayLifecycle constructor／reserve／commit／ready／text、ready／hide DTO 與相關 show helpers 的文件。註解明確區分 capture identity 與 presentation revision；ready 必須 exact current capturing ticket，text 可延續至同 capture 的非 Hidden working 階段。Adapter 對 reserve 使用同一 registry lock，執行時重新取得並持有至 check／synchronous commit 完成。沒有修改任何產品判斷、event shape、binding 或 timing instrumentation。
+
+新增三個具名 rendered cases：
+
+1. `About Quit sends exit zero, reports translated rejection and allows retry`：實際按鈕送出 `plugin:process|exit`／`{code: 0}`；拒絕顯示翻譯後 status，沒有 raw Bearer／URL／私人路徑 sentinel，仍可再次按下重試。
+2. `log level waits for settings and save, then displays the refreshed server acknowledgement`：未載入 settings 時 disabled；選 Trace 送 `set_log_level`／`{level: "trace"}`；保存與後續 settings refresh 的兩段等待期間皆 disabled。Server 確認值刻意為 Warn，畫面透過正式 `get_app_settings` refresh 後顯示 Warn，不能以本地 optimistic Trace 冒充成功。
+3. `log level rejection is translated, preserves the acknowledged value and allows retry`：拒絕保留 Debug、解除 disabled、顯示翻譯後回饋且不漏原始錯誤；選 Info 重試後顯示已確認 Info，清除錯誤。每個 fixture 皆斷言沒有 browser pageerror／unhandled rejection。
+
+### 補充 named mutation RED → restore GREEN
+
+先確認既有正確行為通過，再依核准計畫對實際產品 source 做暫時 fault injection。每次先保存原始 bytes，顯示 `git diff -- <source>` 證明命中，在 PowerShell `try` 中執行下列精確測試，`finally` 使用 `WriteAllBytes` 還原原始 source；隨即執行同一測試確認 GREEN。沒有把錯 locator、timeout 或 zero tests 當作此輪 mutation 證據。
+
+```diff
+--- desktop/src/components/settings/about/AboutSettings.tsx
+-      await exit(0);
++      await exit(1);
+--- desktop/src/components/settings/debug/LogLevelSelector.tsx
+-      await invoke<void>("set_log_level", { level: value as LogLevel });
++      await invoke<void>("set_log_level", { level: "error" as LogLevel });
+```
+
+```powershell
+node --test --test-name-pattern='About Quit' tests/integration/about-settings.ui.mjs
+node --test --test-name-pattern='log level waits' tests/integration/about-settings.ui.mjs
+```
+
+第一個 mutation：**1 failed／0 passed**，公開 transport assertion 顯示 actual code 1／expected 0；還原後 **1 passed／0 failed**。第二個 mutation：**1 failed／0 passed**，actual level error／expected trace；還原後 **1 passed／0 failed**。最終這兩個產品 TSX 檔均無 diff。
+
+### 補充執行結果
+
+- `node --test tests/integration/about-settings.ui.mjs`：**3 passed／0 failed**。
+- `npm.cmd run test:ui:integration`：**22 passed／0 failed／0 skipped**（新增 3、diagnostics 7、model 5、保留 P21 overlay 7）。
+- 從 `desktop/` 執行 `npm.cmd run lint`、`npm.cmd run build`：通過；保留既有 Vite chunk-size／baseline-browser-mapping 提示，沒有新增依賴。
+- `node desktop/node_modules/prettier/bin/prettier.cjs --check tests/integration/about-settings.ui.mjs tests/README.md docs/verification/followup-review-fixes.md`、`rustfmt --edition 2021 --check desktop/src-tauri/src/overlay_lifecycle.rs desktop/src-tauri/src/overlay.rs`、`git diff --check`：通過。
+
+這一輪僅測試／API 註解／receipt；沒有 Cargo、native cache、App、原生退出或 logger/runtime 驗收、使用者 profile／mic／clipboard、歷史資料／付費 API／#22／#23 實作。P19 的另行核准 instrumentation 在其他 worktree；本次未修改 diagnostics/service。新增 tests 發現的範圍內沒有需改產品語義的缺陷。
