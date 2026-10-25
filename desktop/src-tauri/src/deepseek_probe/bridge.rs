@@ -18,12 +18,24 @@ use std::sync::{
 };
 
 #[derive(Clone)]
-enum Target {
+pub(super) enum Target {
     Live,
     #[cfg(test)]
     Fixture(String),
 }
 impl Target {
+    #[cfg(test)]
+    pub(super) fn fixture(endpoint: &str) -> Result<Self, Denied> {
+        let port = endpoint
+            .strip_prefix("http://127.0.0.1:")
+            .and_then(|value| value.strip_suffix("/chat/completions"))
+            .and_then(|value| value.parse::<u16>().ok())
+            .filter(|port| *port > 0);
+        if port.is_none() {
+            return Err(Denied::WireContract);
+        }
+        Ok(Self::Fixture(endpoint.into()))
+    }
     fn endpoint(&self) -> &str {
         match self {
             Self::Live => "https://api.deepseek.com/chat/completions",
@@ -85,23 +97,9 @@ impl<S: RoundStore + Send + 'static> BudgetProcessor<S> {
         slot: u8,
         endpoint: &str,
     ) -> Result<Arc<Self>, Denied> {
-        let port = endpoint
-            .strip_prefix("http://127.0.0.1:")
-            .and_then(|value| value.strip_suffix("/chat/completions"))
-            .and_then(|value| value.parse::<u16>().ok())
-            .filter(|port| *port > 0);
-        if port.is_none() {
-            return Err(Denied::WireContract);
-        }
-        Self::new(
-            inner,
-            round,
-            history,
-            slot,
-            Target::Fixture(endpoint.into()),
-        )
+        Self::new(inner, round, history, slot, Target::fixture(endpoint)?)
     }
-    fn new(
+    pub(super) fn new(
         inner: Arc<dyn TextProcessor>,
         round: Arc<Mutex<Round<S>>>,
         history: String,
@@ -207,6 +205,7 @@ fn receipt_valid(receipt: &ApiReceipt) -> bool {
         && output <= 512
         && input.checked_add(output) == Some(total)
         && !receipt.reasoning_nonempty
+        && !receipt.usage_invalid
         && receipt
             .usage
             .reasoning_output

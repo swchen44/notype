@@ -346,6 +346,9 @@ pub struct ApiReceipt {
     pub total_tokens: Option<u64>,
     /// Whether a reasoning field was nonempty or malformed; no reasoning text is retained.
     pub reasoning_nonempty: bool,
+    /// A reported usage field had an invalid type/range or conflicting breakdown.
+    /// Ordinary history still preserves each independently valid count.
+    pub usage_invalid: bool,
 }
 const MAX_USAGE: u64 = 9_007_199_254_740_991;
 impl ApiReceipt {
@@ -381,6 +384,12 @@ impl ApiReceipt {
                         })
                 })
             }),
+            usage_invalid: [
+                "/usage/prompt_tokens", "/usage/completion_tokens", "/usage/total_tokens",
+                "/usage/prompt_cache_hit_tokens", "/usage/prompt_cache_miss_tokens",
+                "/usage/prompt_tokens_details/cached_tokens", "/usage/completion_tokens_details/reasoning_tokens",
+            ].iter().any(|pointer| value.pointer(pointer).is_some_and(|field| !field.is_null() && field.as_u64().is_none_or(|count| count > MAX_USAGE)))
+                || matches!((token("/usage/prompt_cache_hit_tokens"), token("/usage/prompt_tokens_details/cached_tokens")), (Some(left),Some(right)) if left != right),
         }
         .sanitized()
     }
