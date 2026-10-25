@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "status": "unassembled",
+  "version": "0.0.0",
+  "pending": [
+    "final-native-application",
+    "shipping-model",
+    "cpu-baseline",
+    "notices",
+    "native-model-activation",
+    "local-cold-launch"
+  ]
+}
