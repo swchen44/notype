@@ -5,6 +5,94 @@ use std::sync::Arc;
 use workflow::{DesktopWorkflow, TextConfiguration};
 
 #[tokio::test]
+async fn blocking_readiness_feedback_leaves_cancel_restart_and_stop_available() {
+    use std::sync::{
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+        mpsc,
+    };
+    use std::time::Duration;
+    for restart in [false, true] {
+        let workflow = Arc::new(DesktopWorkflow::new(
+            SessionService::in_memory().unwrap(),
+            Arc::new(|| {}),
+        ));
+        let generation = workflow
+            .begin(RecognitionMode::TraditionalEnglish, None)
+            .unwrap();
+        let owner = workflow.token(generation);
+        let capture_ready = Arc::new(AtomicBool::new(true));
+        let muted = Arc::new(AtomicUsize::new(0));
+        let (started, waiting) = mpsc::channel();
+        let (release, gate) = mpsc::channel();
+        let feedback = {
+            let owner = owner.clone();
+            let capture_ready = capture_ready.clone();
+            let muted = muted.clone();
+            std::thread::spawn(move || {
+                owner.readiness_feedback(
+                    || capture_ready.load(Ordering::SeqCst),
+                    || {
+                        started.send(()).unwrap();
+                        gate.recv().unwrap();
+                    },
+                    || {
+                        muted.fetch_add(1, Ordering::SeqCst);
+                    },
+                )
+            })
+        };
+        waiting.recv_timeout(Duration::from_secs(2)).unwrap();
+        let (done, completed) = mpsc::channel();
+        let operation = {
+            let workflow = workflow.clone();
+            let capture_ready = capture_ready.clone();
+            std::thread::spawn(move || {
+                let next = if restart {
+                    workflow
+                        .cancel_active_with(|_| capture_ready.store(false, Ordering::SeqCst))
+                        .unwrap();
+                    Some(
+                        workflow
+                            .begin(RecognitionMode::TraditionalEnglish, None)
+                            .unwrap(),
+                    )
+                } else {
+                    // The native stop readiness handoff uses this same ownership gate.
+                    owner.run(|| capture_ready.store(false, Ordering::SeqCst));
+                    None
+                };
+                done.send(next).unwrap();
+            })
+        };
+        let before_sound_ended = completed.recv_timeout(Duration::from_secs(2));
+        release.send(()).unwrap(); // Always release/join, including RED, so no blocked thread leaks.
+        operation.join().unwrap();
+        feedback.join().unwrap();
+        assert!(
+            before_sound_ended.is_ok(),
+            "cancel/stop waited for the feedback sound"
+        );
+        assert!(!capture_ready.load(Ordering::SeqCst));
+        assert_eq!(
+            muted.load(Ordering::SeqCst),
+            0,
+            "late cue must not mute a stopped or new capture"
+        );
+        if let Some(next) = before_sound_ended.unwrap() {
+            assert_eq!(workflow.active_generation().unwrap(), Some(next));
+            let saved = workflow
+                .finish(next, "录音 B API", TextConfiguration::default(), vec![])
+                .await
+                .unwrap();
+            assert_eq!(
+                workflow.sessions().get(&saved.id).unwrap().transcript,
+                "錄音 B API"
+            );
+        }
+    }
+}
+
+#[tokio::test]
 async fn esc_then_new_recording_survives_old_stop_and_decoder_cleanup_and_saves_original() {
     use std::sync::{
         atomic::{AtomicUsize, Ordering},
@@ -97,6 +185,33 @@ async fn esc_then_new_recording_survives_old_stop_and_decoder_cleanup_and_saves_
             cleanup_b.load(Ordering::SeqCst),
             1,
             "B's own cleanup still runs exactly once"
+        );
+    }
+}
+
+#[tokio::test]
+async fn saved_original_converts_slash_prose_and_preserves_explicit_file_paths() {
+    for (mode, raw, expected) in [
+        (
+            RecognitionMode::TraditionalEnglish,
+            r"请启用/关闭功能，并保留 /tmp/头发/log.txt 和 src/头发.rs。还要启动/停止录音，使用 ./头发/日志 和 ../头发/日志，保留\\server\头发\log.txt。",
+            r"請啟用/關閉功能，並保留 /tmp/头发/log.txt 和 src/头发.rs。還要啟動/停止錄音，使用 ./头发/日志 和 ../头发/日志，保留\\server\头发\log.txt。",
+        ),
+        (
+            RecognitionMode::SimplifiedEnglish,
+            r"請啟用/關閉功能，並保留 /tmp/頭髮/log.txt 和 src/頭髮.rs。還要啟動/停止錄音，使用 ./頭髮/日誌 和 ../頭髮/日誌，保留\\server\頭髮\log.txt。",
+            r"请启用/关闭功能，并保留 /tmp/頭髮/log.txt 和 src/頭髮.rs。还要启动/停止录音，使用 ./頭髮/日誌 和 ../頭髮/日誌，保留\\server\頭髮\log.txt。",
+        ),
+    ] {
+        let workflow = DesktopWorkflow::new(SessionService::in_memory().unwrap(), Arc::new(|| {}));
+        let generation = workflow.begin(mode, None).unwrap();
+        let saved = workflow
+            .finish(generation, raw, TextConfiguration::default(), vec![])
+            .await
+            .unwrap();
+        assert_eq!(
+            workflow.sessions().get(&saved.id).unwrap().transcript,
+            expected
         );
     }
 }

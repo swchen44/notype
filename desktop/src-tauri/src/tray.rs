@@ -715,7 +715,3 @@ mod tests {
         assert_ne!(inputs(false), inputs(true));
     }
 }
-
-#[cfg(test)]
-#[path = "../../../tests/unittest/desktop_tray_copy.rs"]
-mod tray_copy_regressions;

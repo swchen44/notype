@@ -37,7 +37,7 @@ cargo test --locked --manifest-path tests/integration/desktop-contracts/Cargo.to
 
 實體快捷鍵另有 std-only `physical-gestures` target；`native-delivery` 在 Windows 驗證未知 token 與不符的 QA fixture 身分不能成為目前前景目標，在其他平台驗證 unavailable。CI 也執行這兩個 target。`desktop-shortcuts.runtime.mjs`、`desktop-input-scope.runtime.mjs` 與 `desktop-input.runtime.mjs` 是需明確 `NOTYPE_DESKTOP_EXE` 的獨立 Windows 原生驗證。scope 測試只開始後立即取消，不 finish 或交付；人工 input 測試每次捕捉都必須確認自有 fixture 真正取得前景，並提供 PID／建立身分／完整執行檔限制，缺少條件會失敗，不會假稱通過或 skip。命令、三次歷史人工結果及實際限制見 [guarded input receipt](../docs/verification/guarded-input.md)。
 
-修改過的 tray copy／語系回歸位於 `tests/unittest/desktop_tray_copy.rs` 與 `desktop_tray_locales.rs`，由真實 native lib 模組載入，使用 build.rs 生成的語系。從 `desktop/` 執行 `cargo test --release --manifest-path src-tauri/Cargo.toml --lib --features tauri/custom-protocol tray`；只跑合成資料的 library tests，不啟動 App 或使用剪貼簿。原生依賴／快取條件與完整 review 修正證據見 [receipt](../docs/verification/local-review-fixes.md)。
+修改過的 tray 語系回歸位於 `tests/unittest/desktop_tray_locales.rs`，由真實 native lib 模組載入，使用 build.rs 生成的語系。從 `desktop/` 執行 `cargo test --release --manifest-path src-tauri/Cargo.toml --lib --features tauri/custom-protocol tray`；只跑合成資料的 library tests，不啟動 App 或使用剪貼簿。原稿、處理結果與失敗後原稿選擇由 `tests/unittest/core_session.rs` 的公開 session 介面驗證；不直接測試 tray 私有文字選擇函式。原生依賴／快取條件與完整 review 修正證據見 [receipt](../docs/verification/local-review-fixes.md)。
 
 - 每個產品行為隨實作加入可執行測試，先驗證失敗，再確認修正通過；驗證公開行為，不鎖死內部呼叫順序或複製實作。
 - unit tests 與 integration tests 應有可分開執行的命令。框架與命令在 Windows 實作選定 stack 後，於本檔及對應套件設定中補上。

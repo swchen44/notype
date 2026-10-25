@@ -656,6 +656,9 @@ impl TranscriptionCoordinator {
         }
     }
 
+    /// Queue cancellation for the owner of the recording that was cancelled.
+    /// Ownership is rechecked when consumed; a stale notification cannot reset
+    /// the coordinator after a successor recording has begun.
     pub fn notify_cancel(
         &self,
         recording_was_active: bool,
@@ -673,6 +676,8 @@ impl TranscriptionCoordinator {
         }
     }
 
+    /// Queue completion using the completed recording's owner, not the current one.
+    /// The consumer rechecks ownership and ignores late predecessor notifications.
     pub fn notify_processing_finished(&self, owner: crate::workflow::GenerationToken) {
         if self.tx.send(Command::ProcessingFinished(owner)).is_err() {
             warn!("Transcription coordinator channel closed");

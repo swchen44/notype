@@ -49,6 +49,27 @@ impl GenerationToken {
         let owner = self.workflow.lifecycle.lock().ok()?;
         (*owner == self.generation).then(operation)
     }
+    /// Play the readiness cue, then mute only if this capture is still ready.
+    /// `is_ready` and `apply_mute` are short platform operations and must not reenter
+    /// ownership. Feedback may block; cancellation must remain available during it.
+    pub fn readiness_feedback(
+        &self,
+        is_ready: impl Fn() -> bool,
+        play_feedback: impl FnOnce(),
+        apply_mute: impl FnOnce(),
+    ) {
+        if self.run(&is_ready) != Some(true) {
+            return;
+        }
+        // Playback is deliberately outside ownership: custom WAV files can be
+        // arbitrarily long. A late cue must not block Esc or stop capture.
+        play_feedback();
+        self.run(|| {
+            if is_ready() {
+                apply_mute();
+            }
+        });
+    }
     /// Atomically cancel this generation; a late decoder cannot cancel its successor.
     pub fn cancel(&self) -> Result<(), CoreError> {
         let owner = self
