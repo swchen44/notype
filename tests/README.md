@@ -66,6 +66,21 @@ cargo test --locked --manifest-path tests/integration/desktop-contracts/Cargo.to
 
 此 UI suite 沒有加入 `Shared core contracts` 的 portable CI；該 CI 只安裝根目錄套件，不能宣稱已驗證需要 desktop 依賴與瀏覽器的 UI。驗證紀錄見 [模型介面 receipt](../docs/verification/model-interface.md)。
 
+## Structured diagnostics control and model storage contracts
+
+[P20-v3](https://github.com/swchen44/notype/issues/20#issuecomment-6398232178) 的 [GPT-6-Astra 核准](https://github.com/swchen44/notype/issues/20#issuecomment-6398249625) 涵蓋以下 production seams：
+
+- `desktop-diagnostics`：既有報告白名單、bounded events 與私密 sentinel。
+- `diagnostic-privacy`：固定欄位 sanitizer，長值 cutoff 12／頭尾各 2 字元／中段 8 個星號；短值、Unicode、Bearer／JWT／URL／編碼／模糊來源全遮罩。只測合成資料；正式 report 白名單仍不接受憑證欄位。
+- `diagnostic-service`：初始未初始化即 OFF、既有 persisted OFF、保存 OFF 失敗仍停止收集，Clear 保留偏好狀態。
+- `diagnostics-export`：透過 production service 保存不可變預覽，後續事件不混入，失敗僅回固定 code。
+- `diagnostic-control`：實際專用 JSON 偏好檔與原子寫檔；default ON、損壞／讀取失敗 OFF、保存失敗與重啟、快速切換、Clear／匯出兩種屏障順序、目的檔 sentinel、實際 rename 失敗清理與公開 preview/export 隱私邊界。
+- `model-storage`：正式 Manager 使用的 `ModelPathAccess` 方法與真實自有檔案；display 不清 partial／不呼叫 reconciliation，activation 正向對照會清理或改 catalog，保留 selection。不是以無關 JSON 檔未變當成 Manager 證據。
+
+以上 targets 均註冊在 `tests/integration/desktop-contracts/Cargo.toml`，由 portable CI 執行，不載入 Tauri／音訊後端。可用 `rustc --edition=2021 -A dead_code --test <root-test-path> -o <task-owned-test.exe>` 分開執行；`diagnostic-control` 另需既有 serde_json 依賴（獨立 rustc 的確切唯讀 rlib 命令見 [receipt](../docs/verification/followup-review-fixes.md)）。不要把 root native target/cache 當作平行任務的測試輸出位置。
+
+`npm.cmd run test:ui:integration` 另以真實 React／i18next 操作 DiagnosticsSupport 與 ModelCard，僅替換公開 IPC/opener。涵蓋 checkbox 的初始 disabled、鍵盤操作、OFF unsaved／重試、取消／過期／保存失敗、Clear 後晚到回覆與舊狀態、opener 拒絕。UI suite 使用 `--test-concurrency=1`，避免共用 Vite optimizer 的測試檔互相重建依賴；overlay fixture 仍保留自己的 cache/port。沒有啟動原生 App 或操作使用者 profile。Native 綁定／編譯／實際收音仍另行驗證。
+
 ## Main window lifecycle contract
 
 `tests/unittest/desktop_window_lifecycle.rs` exercises the public `close_to_tray`

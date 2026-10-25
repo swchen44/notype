@@ -329,6 +329,24 @@ fn serialized_rapid_toggles_and_restart_agree_with_last_request() {
         };
         entered.wait();
         assert!(!service.status().effective_enabled);
+        let pending = service.status();
+        assert_eq!(pending.persistence, "pending");
+        service.clear();
+        let cleared = service.status();
+        assert_eq!(
+            (
+                cleared.persistence,
+                cleared.revision,
+                cleared.desired_enabled,
+                cleared.saved_preference
+            ),
+            (
+                pending.persistence,
+                pending.revision,
+                pending.desired_enabled,
+                pending.saved_preference
+            )
+        );
         let (started, ready) = mpsc::channel();
         let b = {
             let service = service.clone();

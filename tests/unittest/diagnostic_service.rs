@@ -71,3 +71,56 @@ fn uninitialized_and_persisted_off_drop_startup_and_failed_off_save_never_resume
     assert_eq!(service.status().persistence, "unsaved");
     assert!(!service.status().effective_enabled);
 }
+
+struct Unreadable;
+impl DiagnosticStorage for Unreadable {
+    fn load_preference(&self) -> Result<Option<bool>, &'static str> {
+        Err("fixed-load-error")
+    }
+    fn save_preference(&self, _: bool) -> Result<(), &'static str> {
+        Err("fixed-save-error")
+    }
+    fn write_report(&self, _: &Path, _: &str) -> Result<(), &'static str> {
+        Err("fixed-write-error")
+    }
+}
+
+#[test]
+fn clear_preserves_uninitialized_default_saved_and_load_failed_controls() {
+    let mut services = vec![DiagnosticService::new()];
+    for saved in [None, Some(false), Some(true)] {
+        let service = DiagnosticService::new();
+        service.initialize(Arc::new(Storage {
+            saved: Mutex::new(saved),
+            fail: Mutex::new(false),
+        }));
+        services.push(service);
+    }
+    let failed = DiagnosticService::new();
+    failed.initialize(Arc::new(Unreadable));
+    services.push(failed);
+    for service in services {
+        let before = service.status();
+        service.clear();
+        let after = service.status();
+        assert_eq!(after.epoch, before.epoch + 1);
+        assert_eq!(
+            (
+                after.initialized,
+                after.effective_enabled,
+                after.saved_preference,
+                after.persistence,
+                after.desired_enabled,
+                after.revision
+            ),
+            (
+                before.initialized,
+                before.effective_enabled,
+                before.saved_preference,
+                before.persistence,
+                before.desired_enabled,
+                before.revision
+            )
+        );
+    }
+}

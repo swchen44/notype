@@ -2,6 +2,8 @@
 
 實作範圍：About → 診斷與問題回報；production release 也註冊預覽與匯出命令。對應 [GitHub #20](https://github.com/swchen44/notype/issues/20)。本記錄使用合成資料，沒有讀取使用者原稿、API key、endpoint、錄音或原始 log 內容。
 
+本檔保留首輪 `a195dec` 的診斷調查與測試證據。後續開關／預設 ON／清除／匯出競態及遮罩以核准的 P20-v3 和 [follow-up review 修正紀錄](followup-review-fixes.md) 為準；目前匯出改由共用 service 管理，清除會撤銷舊預覽 ID。原始空 log 的原因仍未確認。
+
 ## 空 log 的判讀
 
 本次試用檔案的既有 metadata 為 0 bytes；可安全確認的設定子集為 debug mode 關閉、log level Debug、always-on microphone 關閉。這些資訊不足以重現或斷言原本的錯誤原因。
