@@ -71,3 +71,16 @@ fn public_report_explains_empty_log_and_rejects_private_freeform_metadata() {
     assert!(report.text().contains("version=unavailable"));
     assert!(report.id().len() <= 32);
 }
+
+#[test]
+fn report_declares_api_timing_meaning_and_shared_render_limits() {
+    let report = Diagnostics::new().report(context("0.1.0"));
+    assert!(report.text().contains("notype diagnostic report v2"));
+    assert!(report
+        .text()
+        .contains("report_limit_bytes=65536 report_limit_lines=512"));
+    assert!(report
+        .text()
+        .contains("DNS/TLS subphase timing is unobservable"));
+    assert!(report.text().contains("report_truncated=false"));
+}
