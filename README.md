@@ -6,7 +6,7 @@ notype 免安裝語音輸入 App 的研究、決策與實作追蹤；先交付 W
 
 **本輪先交付本機里程碑：錄音 → 繁／簡中英本機辨識 → 本機文字歷史 → 複製。** 使用者已確認其他 App 自動輸入後補；目前不在公司網路，公司 API／Proxy 與真正文字整理、翻譯、問答品質延後驗收，現在不需要 API key。
 
-#9 桌面、#10 核心、#11 文字流程、#17 三場景／提示詞已實作、審查並結案；[兩軸審查與修正](docs/verification/local-code-review.md) 保留實際 findings、RED→GREEN 與各 0 項剩餘問題的限定複核。正式 Windows Release、啟動 helper 與三個私有 tarball 已建置核對，正在進行實際離線安裝／啟動驗證。Qwen3-ASR 0.6B Q6_K 是本機 pilot，固定合成語音與階段時間見 [Qwen receipt](docs/verification/qwen3-quality.md)，人聲與完整 session p95 尚未通過。最新進度見 [HANDOFF](HANDOFF.md)／[TODO](TODO.md)，完整 #8 仍未結案。
+**本機試用包已備妥，操作見 [本機試用說明](docs/local-trial.md)。** 已實測三個 tarball 離線安裝、兩種中英辨識模式、正式 GUI／固定 runtime 載入、歷史重開及限定啟動器版本更新後資料保留。#9 桌面、#10 核心、#11 文字流程、#17 三場景／提示詞已實作、審查並結案；[兩軸審查與修正](docs/verification/local-code-review.md) 保留實際 findings、RED→GREEN 與各 0 項剩餘問題的限定複核。Qwen3-ASR 0.6B Q6_K 是本機 pilot，人聲品質與完整 session p95 尚未通過；[既有模型測量](docs/verification/qwen3-quality.md) 與本輪套件啟動分開記錄。完整 #8、#14 仍未結案，見 [HANDOFF](HANDOFF.md)／[TODO](TODO.md)。
 
 正式 App 採 Rust + Tauri 2 + React／TypeScript + SQLite，共用核心可獨立執行 `cargo test --locked --manifest-path crates/notype-core/Cargo.toml`。`sessions.db`、設定與模型位於 Tauri 提供的 notype 每使用者資料目錄，可用絕對 `NOTYPE_DATA_DIR` 隔離，位於 npm 版本目錄外；資料庫具擁有權保護。公司 API 已確認採 OpenAI 相容 Chat Completions，真實連線／認證仍待驗證。
 

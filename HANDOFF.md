@@ -10,11 +10,13 @@
 
 正式 Release 建置來源 `239d6f05cdf7883032889b8d25042a7a427d72d9`，App SHA256 `7a70d5abe3558c2b12d2c8a16c0ed583bf0a231d3cbe8ba14fa89300b74257ab`，host helper SHA256 `6cd855cb408ccee695d800ce70de8c94ddd76e4d38e510a50c68976aac5bd38d`。其後 `a2d2328` 只有平台 Rustfmt 換行；[Linux CI 40162614988](https://github.com/swchen44/notype/actions/runs/40162614988) 通過核心 27、桌面 34（debug）、平台 4、Node 23 unit +16 integration、fmt／clippy。Windows Release 桌面契約為 33 項（native token target 的條件編譯數量不同），另有 9 項核心 session 與 4 項平台檢查。繁簡各 570 keys、前端 lint/build 通過。
 
-三個實際私有 tarball 已產生於 `D:/git/notype-local-artifacts/`：`notype-0.1.0-local.1.tgz`、`notype-win32-x64-0.1.0-local.1.tgz`、`notype-model-0.1.0-qwen3-q6k.1.tgz`。實際內容清單／regular bytes／hash 檢查已完成；**離線安裝與正式包啟動仍在驗證**。首次 npm 試裝觸及 D 槽 1 GiB 下限而停止，保留失敗證據；正在以新的 C 槽 task-owned cache 重試。npm 取得本機 tarball metadata 會先解包暫存，必須計入約 1.49 GB 解包＋1.03 GB cache 的峰值；安裝成功及核對後先清除此暫存，再進行 690 MB 模型啟用，不降低 C≥2 GiB／D≥1 GiB 的界線。
+**本機試用包已備妥**，入口 `D:/git/notype-local-artifacts/Start-notype.cmd`，見 [試用說明](docs/local-trial.md)。三個實際私有 tarball 為 `notype-0.1.0-local.1.tgz`、`notype-win32-x64-0.1.0-local.1.tgz`、`notype-model-0.1.0-qwen3-q6k.1.tgz`。內容清單／regular bytes／hash、實際離線安裝、normal-medium CPU 兩模式與固定 WebView GUI／模組檢查均通過；同 facade `.1→.2` 的實際更新、第二次 60 秒 GUI 重開與資料庫原有 ID／時間／文字、模型 inode／mtime 保留亦通過。這個更新沒有換 native App／模型／schema，不能視為完整 #14 更新驗收。五次自有 fixture job（含修正前的 no-tray 可見視窗失敗）均已清到 0，使用者試用採全新資料目錄及預設快捷鍵，未自動替使用者錄音。
+
+首次 npm 試裝觸及 D 槽 1 GiB 下限而停止，失敗證據保留；以全新 C 槽 task-owned cache 重試後成功。npm 取得本機 tarball metadata 會先解包暫存，須計入約 1.49 GB 解包＋1.03 GB cache 的峰值；成功安裝及核對後已先清除此暫存，再啟用 690 MB 模型。重試觀察最低 C 2,661,081,088 bytes／D 2,749,550,592 bytes，未降低 C≥2 GiB／D≥1 GiB 界線。`npm --offline`／本機 CPU 證據不等於做過系統斷網或完整封包監測。
 
 Qwen 固定 6 cases／12 次推論與新版 converter 的 3 個 native 保存案例已完成，見 [Qwen](docs/verification/qwen3-quality.md)／[語言](docs/verification/languages.md)；首次 normalization 1176 ms、重用 0 ms 是階段測量，並非完整 session p95。人工原生 suite 的 1 次完整通過／2 次 Pending 斷言失敗與未知精確焦點差異保留於 [原生輸入 receipt](docs/verification/guarded-input.md)；舊 QA 入口已停用，新入口未啟用，不再要求使用者盲目重跑。整體規格仍未結案。
 
-**使用者最新確認的本輪交付**：先完成「錄音 → 繁／簡中英本機 STT → 本機歷史 → 複製」。其他 App 自動輸入下一階段再補。使用者目前不在公司網路，公司 API／Proxy 與三場景真實文字品質驗收延後，現在不需 key；不另選 provider 或假造生成結果。本機 pilot 使用 Qwen3-ASR 0.6B Q6_K，完整 artifact/hash／Apache-2.0 LICENSE／NOTICE 見 Qwen receipt。#14 的正式 Release／完整私有 tarball、離線安裝、冷啟動與升級資料保留正在完成；公開發布及五個 App／人聲／p95 仍未驗收。此里程碑已同步 #8，不代表刪除完整規格的後續驗收。
+**使用者最新確認的本輪交付**：先完成「錄音 → 繁／簡中英本機 STT → 本機歷史 → 複製」。其他 App 自動輸入下一階段再補。使用者目前不在公司網路，公司 API／Proxy 與三場景真實文字品質驗收延後，現在不需 key；不另選 provider 或假造生成結果。本機 pilot 使用 Qwen3-ASR 0.6B Q6_K，完整 artifact/hash／Apache-2.0 LICENSE／NOTICE 見 Qwen receipt。#14 本機實際包與限定 proof 已完成；完整 native 更新／中斷／鎖檔、公開發布、公司 Proxy、五個 App、人聲品質及 p95 仍未驗收。此里程碑已同步 #8，不代表刪除完整規格的後續驗收。
 
 2026-10-25 最新需求：口述、翻譯、隨便問三場景，提示詞獨立可編輯／保存／還原；使用者只要還原預設提示詞。開始鍵依序 Right Alt、Right Alt + Right Shift、Right Alt + Space；改為點按開始，錄音中以獨立可設定停止鍵結束（預設 Right Alt），Esc 取消，取代舊按住／放開。公司 API 格式已確認為 OpenAI 相容 Chat Completions。隨便問依意圖回答或代寫；**使用者已取消網域擷取，情境只保留 App 名稱，不讀頁面／輸入內容／標題或網址**。回譯可選且預設關閉，啟用時先顯示譯文及回譯，明確確認後才嘗試受保護交付。詳見 [設計紀錄](docs/research/11-scenario-prompt-design.md)。本輪產品選項已回答，不重問；新未定案行為仍須詢問。
 
@@ -44,8 +46,8 @@ Qwen 固定 6 cases／12 次推論與新版 converter 的 3 個 native 保存案
 ## 下一個 session 的工作
 
 1. **核對目前狀態。** 讀此 checkpoint、TODO、live #8／#12～#16 與 receipts，核對 remote／branch／HEAD／未提交變更。工具及原生 Release 已建置完成，依現有證據接續，不重做最初選型或要求 key。
-2. **完成 #14 的本機交付。** 續做實際三包離線安裝、完整性與 normal-user cold launch、兩模式真實 CPU 推論／fixed WebView／外部資料庫重開。只用自有暫存 profile，不自動錄麥克風或讀使用者原有設定。保留失敗證據；同 facade 版本更新的 proof 不等於 native binary／schema migration／中斷／鎖檔驗收。
-3. **提供可直接試用的入口。** 安裝位置採 `%LOCALAPPDATA%/notype/local-app`，使用者試用資料採 `%LOCALAPPDATA%/notype/local-trial`，都在建置快取外。使用者資料不能列入 QA/cache cleanup。由正常使用者從 Explorer 啟動，等自有測試程序全部結束後再交付；尚未完成實際安裝前不可聲稱 Starter 已可用。
+2. **接續實際試用回饋。** 本機三包安裝、兩模式 CPU、固定 runtime、歷史及限定 facade 更新已有實際證據，依使用者麥克風／實體快捷鍵回饋做必要的針對性驗證，不重跑整套選型／模型矩陣。保留失敗證據；完整 native binary／schema migration／中斷／鎖檔更新仍屬 #14 後續。
+3. **保留使用者資料。** 已安裝於 `%LOCALAPPDATA%/notype/local-app`，使用者試用資料為 `%LOCALAPPDATA%/notype/local-trial`，都在建置快取外。使用者資料不能列入 QA/cache cleanup；使用者可能正在操作 App，不可再啟動自有 GUI 測試或終止其程序。正常使用者從 Explorer／Win＋R 開啟 Starter；文字服務未設定時會保存原稿供複製。
 4. **按最新範圍接續驗收。** 先交付本機錄音／辨識／歷史／複製，再處理人聲與實體快捷鍵回饋。其他 App 自動輸入與公司 API／Proxy 延後；有新產品歧義才詢問，不重新訪談已確認選項。各項成果連回 issue／commit／receipt。
 
 使用者已確認目前不在公司網路，先完成本機版本。公司 API／Proxy 維持未驗收，現在不需要 key，也不另選公開 provider。
@@ -76,7 +78,8 @@ Windows 已有 Codex 與使用者所稱的 `grillme` skill。先查當地實際 
 再查 live #8、#12～#16 及對應 receipts。本期 Windows amd64，架構預留 macOS／Linux。
 產品選項已確認；有新歧義才問我，不能自行猜測，也不要重問已回答的問題。
 
-核對 repo 與現有產物後，接續尚未完成的 #14 實際安裝／啟動與本機交付。
+核對 repo 與現有產物後，接續本機試用回饋，必要時做針對性修正；
+三包實際安裝／啟動／兩模式推論與限定 facade 更新已有證據，不重做已完成工作。
 這輪先交付錄音→繁／簡中英本機 STT→本機歷史→複製；其他 App 自動輸入下一階段再補。
 我目前不在公司網路，公司 API／Proxy／真實文字品質延後，真正需要 key 時再通知我。
 沿用已固定的 Handy source、Qwen pilot、Release 與完整私有 tarball，不重做選型或安裝工具。

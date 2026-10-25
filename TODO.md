@@ -20,7 +20,7 @@
 
 正式程式及兩軸 review 修正已整合。Release 來源 `239d6f0`；`a2d2328` 只追加 Rustfmt 換行，其 [Linux CI](https://github.com/swchen44/notype/actions/runs/40162614988) 通過核心 27、桌面 34（debug）、平台 4、Node 23 unit +16 integration、fmt／clippy。Windows Release 桌面契約 33 項通過；繁簡各 570 keys、前端 lint/build 通過。[審查](docs/verification/local-code-review.md) 及 [修正](docs/verification/local-review-fixes.md) 保留原 findings、RED 與兩次限定複核的結果。Qwen 6 cases／12 次推論與 [人工原生 suite 的 1 pass／2 Pending failures](docs/verification/guarded-input.md) 依原 receipt 保留，未聲稱人聲、五個 App 或 p95 通過。
 
-使用者已確認本輪先交付錄音／繁簡中英本機辨識／本機歷史／複製；其他 App 自動輸入後補。目前不在公司網路，公司 API／Proxy／真實文字品質延後，不需要 key。正式 Release／helper 與三個完整私有 tarball 已建置核對；#14 正在重試離線安裝，首次因 npm metadata 解包暫存觸及 D 槽下限而停止，失敗證據保留。接續實際 cold launch／模型載入／資料庫重開及限定 facade 更新證據，完整 #8／#14／#16 仍未結案。
+使用者已確認本輪先交付錄音／繁簡中英本機辨識／本機歷史／複製；其他 App 自動輸入後補。目前不在公司網路，公司 API／Proxy／真實文字品質延後，不需要 key。正式 Release／helper 與三個完整私有 tarball 已建置核對；實際離線安裝、兩模式 CPU、固定 runtime GUI、資料庫重開及限定 facade 更新均已通過，[試用入口與說明](docs/local-trial.md) 已備妥。首次安裝的暫存空間失敗與 no-tray fixture 可見視窗失敗依實際結果保留；完整 #8／#14／#16 仍未結案。
 
 | Ticket | 狀態 | 原相依 | 可展示／驗收成果 |
 | --- | --- | --- | --- |
@@ -30,7 +30,7 @@
 | [#12 語言完整切片](https://github.com/swchen44/notype/issues/12) | open，功能已合入 | #11 | 繁簡介面／中英辨識／獨立偏好／固定音訊已有證據；人聲、整體品質／效能仍未通過 |
 | [#17 三場景與提示詞](https://github.com/swchen44/notype/issues/17) | closed | #11 | 三場景／獨立提示詞／快照／翻譯設定／預設關閉的回譯／精確版本確認；真實公司品質屬 #15 |
 | [#13 錄音與原生交付](https://github.com/swchen44/notype/issues/13) | open，功能已合入 | #11、#17 | 點按開始／獨立停止／Esc、原目標保護及 App 名稱；人工 fixture 結果保留，其他 App 自動輸入下階段 |
-| [#14 npm portable](https://github.com/swchen44/notype/issues/14) | open，實際包已封裝 | #12、#13、#17 | 正在做離線安裝／cold launch／資料保留；完整 native 更新／中斷／鎖檔及公開／Proxy 尚未驗收 |
+| [#14 npm portable](https://github.com/swchen44/notype/issues/14) | open，本機包與限定 proof 通過 | #12、#13、#17 | 實際 tarball／安裝／兩模式 CPU／GUI／歷史與 facade 更新已通過；完整 native 更新／中斷／鎖檔及公開／Proxy 尚未驗收 |
 | [#15 公司 API 驗收](https://github.com/swchen44/notype/issues/15) | needs-info，使用者延後 | #11、#17；公司環境 | 已知 Chat Completions 格式；真實 API／認證／政策與三場景品質待公司網路可用 |
 | [#16 目標環境驗收](https://github.com/swchen44/notype/issues/16) | ready-for-human，後續 | #14、#15；App／Proxy | 五個 App、公司 Proxy、人聲／p95、完整更新驗收 |
 
@@ -38,7 +38,7 @@ GitHub 已建立 #8 的原生 sub-issue 關係及 blocking edges。原 #2～#7 �
 
 ## 接續順序
 
-目前先完成 #14 的本機安裝／啟動並交付可用 Starter，資料位於建置快取及 npm 套件之外；再收實際麥克風／實體快捷鍵與繁簡介面回饋。公司與五個 App 依使用者最新範圍延後。以下 #2～#7 是原始主題驗收對應，不能當作從環境安裝／選型重新開始的指示。
+本機 Starter 與 [試用說明](docs/local-trial.md) 已交付入口，程式／試用資料位於建置快取外且互相分開；接續實際麥克風／實體快捷鍵與繁簡介面回饋。公司與五個 App 依使用者最新範圍延後。以下 #2～#7 是原始主題驗收對應，不能當作從環境安裝／選型重新開始的指示。
 
 | 順序 | Issue／狀態 | 下一個可核對的產物 |
 | --- | --- | --- |
