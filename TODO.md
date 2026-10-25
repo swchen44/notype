@@ -18,7 +18,9 @@
 
 整合分支：`implement/notype-mvp`，起點 `be6f0a5`。每個實作 ticket 使用獨立 branch／worktree 與已確認的 public seams 做 TDD，合入整合分支後再啟動被解鎖的工作；最後對起點到整合分支的完整 diff 做 Standards／Spec review。本輪不建立 PR，不把公司／目標環境尚未執行的驗收當作完成。
 
-目前 #9～#11、#12 功能／詞級字形修正與 #17 已合入整合分支，最新合併點 `2a1044e`；#13 快捷鍵／原目標交付正在實作，背景自動取得前景遭 Windows 拒絕，人工點擊前不宣稱原生插入通過。#12 新 native binary 補驗及 Qwen 完整 receipt 待合入。Issues 保持 open 直到 review／驗收完成。最新合併檢查通過 core 27、portable harness 21、Node 16、前端 lint/build 及繁簡各 559 keys；原生測試結果與限制分列於 [三場景 receipt](docs/verification/scenarios-prompts.md) 及 [語言 receipt](docs/verification/languages.md)，不把功能測試視為語音品質／效能通過。
+目前 #9～#13 功能、#17 與 #14 啟動器基礎已合入，最新合併點 `6d5fc99`。Core 27、桌面 Rust contracts 30、Node 20 unit +9 integration、前端 lint/build 及繁簡各 569 keys 通過。Qwen 6 cases／12 次推論與新 converter 的 native 補驗已合入；人工原生 suite 的 1 pass／2 Pending failures 與後續 QA 限制修正詳見 [原生輸入 receipt](docs/verification/guarded-input.md)，不視為五個 App／實體按鍵／人聲或 p95 通過。Issues 保持 open 直到各自 review／驗收完成。
+
+使用者已確認本輪先交付錄音／繁簡中英本機辨識／本機歷史／複製；瀏覽器、VS Code 等自動輸入後補。目前不在公司網路，公司 API／Proxy／真實文字品質延後，不需要 key。現在優先完成 #14 的正式 Release、完整私有本機 tarball、離線安裝／冷啟動、升級保留與本輪 code review；整體 #8／#16 仍待後續驗收。
 
 | Ticket | 阻擋來源 | 可展示／驗收成果 |
 | --- | --- | --- |

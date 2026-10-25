@@ -44,10 +44,11 @@
 | C21 | 翻譯是否回譯由使用者選擇，提供輔助核對 | 使用者明確回答「使用者可選擇是否回譯」；不能以回譯自我一致性聲稱語意正確 |
 | C22 | 回譯預設關閉，需要時開啟；啟用時先顯示譯文與回譯，確認後才嘗試受保護交付，不能略過原目標／去重 | 使用者分別回答「預設關閉，需要時開啟」及「先顯示譯文與回譯，確認後再交付」；後端確認綁定顯示結果版本，重試後舊確認失效 |
 | C23 | 本期取消網站網域擷取與逐網站整合，情境僅保留通用 App 名稱，未知時採一般文風 | 使用者明確補充「取得網域資訊就先不作了，因為之後會有不同應用程式，作不完」；取代 C20 的網站網域部分，手動翻譯領域仍適用 |
+| C24 | 本輪先交付錄音、繁／簡中英本機辨識、本機歷史與複製；其他 App 自動輸入後補，公司 API／Proxy 等回公司環境再驗收 | 使用者明確回答「先交付本機版，自動輸入其他 App 再補」，並確認目前不在公司網路。這是本輪里程碑，不刪除完整 #8／#16 的後續驗收，不要求現在提供 key |
 
 ## 2. 訪談收斂
 
-使用者已逐輪確認 Q1～Q15，最後以「全部採用建議」確認 Q11～Q15；其後以 C16～C23 擴充三場景、提示詞與可選回譯，更新操作方式並取消網站網域擷取。本輪選項已回答，不重問，也不猜測新的未定案行為。正式更新以 [規格 #8](https://github.com/swchen44/notype/issues/8) 為準；[Windows MVP 定稿](10-confirmed-windows-mvp.md) 保留原始背景。
+使用者已逐輪確認 Q1～Q15，最後以「全部採用建議」確認 Q11～Q15；其後以 C16～C24 擴充三場景、提示詞與可選回譯，更新操作方式、取消網站網域擷取並決定本輪先交付本機里程碑。本輪選項已回答，不重問，也不猜測新的未定案行為。正式更新以 [規格 #8](https://github.com/swchen44/notype/issues/8) 為準；[Windows MVP 定稿](10-confirmed-windows-mvp.md) 保留原始背景。
 
 模型選擇、公司 API 實際連線／認證、真實硬體／runtime 及 registry 技術條件是後續環境與實驗事項，不以偏好答案代替驗證。公司 API 格式已依 C15 確認，不重問。遇到新的需求變更，再更新決策或 ADR。
 
@@ -68,6 +69,6 @@ Windows amd64／無 installer
 
 ## 4. 環境未知與驗證邊界
 
-公司 API wire format／認證／CA、Windows CPU／RAM／GPU、既有 WebView2／開發工具、registry 取得方式與限制仍未觀察。接手 agent 先查環境與現有文件；查不到的項目記成所需輸入，不用偏好答案代替 evidence。
+公司實際 endpoint／model／認證／CA／Proxy／資料政策與 registry 取得限制仍待目標環境驗收；wire format 已依 C15 確認。Windows CPU、工具、模型及原生開發結果以 [驗證目錄](../verification/) 的逐次 receipts 為準，接手不因本文件早期未知欄位而重新安裝已驗證工具。查不到的項目記成所需輸入，不用偏好答案代替 evidence。
 
-Typeless 與 Handy 的 source／靜態 payload 結果不是公司 Windows acceptance。本輪沒有執行 installer、App、語音辨識、公司 API 或發布 npm／pip package。
+Typeless 與 Handy 的 source／靜態 payload 結果不是公司 Windows acceptance。早期研究未執行 App／辨識；其後的實際 Windows／本機 STT／私有套件開發分列於 receipts。尚未完成公司 API／Proxy、公開發布及完整五個 App／人聲／p95 驗收，產品仍不使用 installer。
