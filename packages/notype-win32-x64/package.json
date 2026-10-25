@@ -1,0 +1,21 @@
+{
+  "name": "notype-win32-x64",
+  "version": "0.0.0",
+  "private": true,
+  "os": [
+    "win32"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "description": "Application-specific notype Windows payload role; currently unassembled",
+  "files": [
+    "payload.json",
+    "app/",
+    "runtime/",
+    "resources/",
+    "notices/",
+    "provenance/",
+    "README.md"
+  ]
+}

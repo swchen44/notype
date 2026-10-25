@@ -1,0 +1,13 @@
+{
+  "name": "notype-model",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Separately pinned notype speech-model role; model selection remains pending",
+  "files": [
+    "payload.json",
+    "weights/",
+    "notices/",
+    "provenance/",
+    "README.md"
+  ]
+}
