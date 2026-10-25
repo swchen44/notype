@@ -417,7 +417,7 @@ impl DesktopWorkflow {
         let result = tokio::select! {
             biased;
             _ = cancellation.cancelled() => self.sessions.cancel(&entry.id),
-            result = self.sessions.process_with_stop(&entry.id,glossary,faithful_provider::scoped_processor(configuration.clone(),crate::diagnostics::service::global().api_scope(Some(&entry.id),None)),configuration.translation.back_translation,stopped_at) => result,
+            result = self.sessions.process_with_stop(&entry.id,glossary,faithful_provider::scoped_processor(configuration.clone(),crate::diagnostics::service::global().api_connection_scope(Some(&entry.id),configuration.connection_id.as_deref())),configuration.translation.back_translation,stopped_at) => result,
         };
         diagnose(
             Phase::TextProcessing,
@@ -519,7 +519,8 @@ impl DesktopWorkflow {
                 glossary,
                 faithful_provider::scoped_processor(
                     configuration.clone(),
-                    crate::diagnostics::service::global().api_scope(Some(id), None),
+                    crate::diagnostics::service::global()
+                        .api_connection_scope(Some(id), configuration.connection_id.as_deref()),
                 ),
                 configuration.translation.back_translation,
             )

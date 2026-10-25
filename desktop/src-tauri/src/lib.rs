@@ -31,6 +31,8 @@ mod overlay_lifecycle;
 #[cfg(test)]
 mod paste_tx;
 pub mod portable;
+mod provider_config;
+mod provider_models;
 mod secure_input;
 mod settings;
 mod shortcut;
@@ -841,7 +843,12 @@ pub fn run(cli_args: CliArgs) {
             commands::history::get_history_entries,
             commands::history::export_history_csv,
             commands::history::get_text_configuration,
-            commands::history::set_text_configuration,
+            commands::history::create_text_connection,
+            commands::history::save_text_connection,
+            commands::history::activate_text_connection,
+            commands::history::remove_text_connection,
+            commands::history::list_text_models,
+            commands::history::cancel_text_models,
             commands::history::save_scenario_prompt,
             commands::history::reset_scenario_prompt,
             commands::history::save_translation_settings,

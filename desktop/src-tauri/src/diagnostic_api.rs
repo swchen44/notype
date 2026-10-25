@@ -95,6 +95,8 @@ pub struct TraceIdentity {
 /// Typed event, capped before insertion into the shared 128-row ring.
 #[derive(Clone, Copy, Debug)]
 pub struct ApiEvent {
+    /// Projected list count only, never returned model identifiers.
+    pub model_list_count: Option<u32>,
     /// Safe identity allocated under the service admission lock.
     pub identity: TraceIdentity,
     /// Request metadata projection, without strings.
@@ -208,6 +210,8 @@ pub(crate) struct ApiRegistry {
     session_sequence: u32,
     call_sequence: u32,
     reassigned: bool,
+    connections: VecDeque<(String, u32)>,
+    connection_sequence: u32,
 }
 impl ApiRegistry {
     pub(crate) fn new() -> Self {
@@ -217,6 +221,8 @@ impl ApiRegistry {
             session_sequence: 0,
             call_sequence: 0,
             reassigned: false,
+            connections: VecDeque::new(),
+            connection_sequence: 0,
         }
     }
     fn reset(&mut self, token: CollectionToken) {
@@ -240,7 +246,7 @@ impl ApiRegistry {
                 }
                 let ordinal = self.session_sequence.checked_add(1)?;
                 self.session_sequence = ordinal;
-                if self.sessions.len() == 128 {
+                if self.sessions.len() + self.connections.len() >= 128 {
                     self.sessions.pop_front();
                     self.reassigned = true;
                 }
@@ -256,6 +262,32 @@ impl ApiRegistry {
             },
             correlation_reassigned: self.reassigned,
         }
+    }
+    pub(crate) fn scoped_connection(
+        &mut self,
+        token: CollectionToken,
+        source: Option<&str>,
+        connection: Option<&str>,
+    ) -> ScopeBinding {
+        self.reset(token);
+        let connection = connection.filter(|id| id.len() <= 64).and_then(|id| {
+            if let Some((_, ordinal)) = self.connections.iter().find(|(source, _)| source == id) {
+                return Some(*ordinal);
+            }
+            let ordinal = self.connection_sequence.checked_add(1)?;
+            self.connection_sequence = ordinal;
+            if self.connections.len() >= 20 {
+                self.connections.pop_front();
+                self.reassigned = true;
+            }
+            if self.connections.len() + self.sessions.len() >= 128 {
+                self.sessions.pop_front();
+                self.reassigned = true;
+            }
+            self.connections.push_back((id.into(), ordinal));
+            Some(ordinal)
+        });
+        self.scope(token, source, connection)
     }
     pub(crate) fn call(
         &mut self,
@@ -305,6 +337,7 @@ impl CallTrace {
     ) -> Self {
         let started = clock.now();
         let event = observer.begin(scope, revision).map(|identity| ApiEvent {
+            model_list_count: None,
             identity,
             options,
             span: ApiSpan::Prepared,

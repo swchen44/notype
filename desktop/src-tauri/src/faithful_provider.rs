@@ -72,6 +72,10 @@ impl RuntimeCredential {
 /// Locally persisted provider preferences, cloned into each recording's processing snapshot.
 /// Contains credentials and deliberately does not implement Debug.
 pub struct TextConfiguration {
+    /// Runtime source association only; absent from serialized views/reports.
+    #[serde(skip)]
+    #[specta(skip)]
+    pub connection_id: Option<String>,
     /// Runtime-only credential from the selected record/home resolver.
     #[serde(skip)]
     #[specta(skip)]
@@ -112,6 +116,7 @@ pub struct TextConfiguration {
 impl Default for TextConfiguration {
     fn default() -> Self {
         Self {
+            connection_id: None,
             runtime_credential: None,
             preparation_failure: None,
             request_parameters: None,
@@ -226,6 +231,12 @@ impl TextConfiguration {
             TextProviderProfile::DeepSeek => 393_216,
         };
         effort
+            && self
+                .temperature
+                .is_none_or(|value| value.is_finite() && (0.0..=2.0).contains(&value))
+            && self
+                .top_p
+                .is_none_or(|value| value.is_finite() && value > 0.0 && value <= 1.0)
             && self
                 .max_output_tokens
                 .is_none_or(|limit| (1..=maximum).contains(&limit))
@@ -428,7 +439,6 @@ struct ChatProcessor {
     provider_profile: TextProviderProfile,
     effort: Option<String>,
     max_output_tokens: Option<u32>,
-    probe_network: bool,
 }
 impl ChatProcessor {
     fn new(configuration: TextConfiguration) -> Result<Self, TextFailure> {
@@ -495,7 +505,6 @@ impl ChatProcessor {
             provider_profile: configuration.provider_profile,
             effort: configuration.effort,
             max_output_tokens: configuration.max_output_tokens,
-            probe_network,
         })
     }
 }
@@ -630,9 +639,8 @@ impl ChatProcessor {
         let profile = self.provider_profile;
         let effort = self.effort.clone();
         let max_output_tokens = self.max_output_tokens;
-        let probe_network = self.probe_network;
         let tracing = self.tracing.clone();
-        let request_parameters = self.request_parameters.clone();
+        let mut request_parameters = self.request_parameters.clone();
         let credential_source = self.credential_source.clone();
         let thinking_override = self.thinking_override;
         let temperature = self.temperature;
@@ -642,9 +650,7 @@ impl ChatProcessor {
                 return Err(TextFailure::Cancelled);
             }
             let mut body = json!({"model":model,"messages":messages});
-            if probe_network {
-                body["stream"] = json!(false);
-            }
+            body["stream"] = json!(false);
             let thinking = thinking_override.or_else(|| {
                 if profile == TextProviderProfile::DeepSeek {
                     effort.as_ref().map(|value| value != "none")
@@ -680,6 +686,13 @@ impl ChatProcessor {
                 body["max_tokens"] = json!(value);
             }
             let wire = serde_json::to_vec(&body).map_err(|_| TextFailure::ConfigurationRequired)?;
+            if let Some(parameters) = &mut request_parameters {
+                parameters.effective_thinking = thinking;
+                parameters.effective_effort = effort.clone();
+                parameters.wire_temperature = temperature.map(|value| value.to_string());
+                parameters.wire_top_p = top_p.map(|value| value.to_string());
+                parameters.max_output_tokens = max_output_tokens;
+            }
             let descriptor = ApiCallDescriptor {
                 parameters: request_parameters,
                 endpoint_class: if endpoint.as_str() == "https://api.deepseek.com/chat/completions"

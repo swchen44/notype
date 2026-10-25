@@ -586,6 +586,7 @@ fn resolve_record(
         max_output_tokens: draft.max_output_tokens,
     };
     let mut configuration = TextConfiguration {
+        connection_id: Some(draft.id.clone()),
         transport: TextTransport::OpenAiChat,
         endpoint: endpoint.into(),
         model: draft.model,

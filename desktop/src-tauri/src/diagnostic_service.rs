@@ -210,6 +210,27 @@ impl DiagnosticService {
         };
         Some(state.api_registry.scope(token, source, connection))
     }
+    /// Maps bounded workflow/connection IDs inside the private adapter under the
+    /// same ON/generation lock; neither source string enters the typed collector.
+    pub fn api_connection_scope(
+        &self,
+        source: Option<&str>,
+        connection: Option<&str>,
+    ) -> Option<super::api::ScopeBinding> {
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        if !state.status.initialized || !state.status.effective_enabled {
+            return None;
+        }
+        let token = CollectionToken {
+            epoch: state.status.epoch,
+            revision: state.status.revision,
+        };
+        Some(
+            state
+                .api_registry
+                .scoped_connection(token, source, connection),
+        )
+    }
     /// Reserves an ordinal only under effective ON and the matching origin token.
     pub fn begin_api(
         &self,

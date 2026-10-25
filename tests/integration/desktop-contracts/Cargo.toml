@@ -133,3 +133,7 @@ path = "../../unittest/provider_config.rs"
 [[test]]
 name = "provider-config-store"
 path = "../provider_config.rs"
+
+[[test]]
+name = "provider-models"
+path = "../provider_models.rs"
