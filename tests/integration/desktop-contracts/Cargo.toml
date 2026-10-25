@@ -6,6 +6,30 @@ publish = false
 
 [workspace]
 
+[[bin]]
+name = "notype-deepseek-probe"
+path = "../deepseek_probe_main.rs"
+
+[[bin]]
+name = "notype-probe-console-fixture"
+path = "../deepseek_probe_console_fixture.rs"
+
+[[test]]
+name = "deepseek-probe-bridge"
+path = "../deepseek_probe_bridge.rs"
+
+[[test]]
+name = "deepseek-probe-round"
+path = "../deepseek_probe_round.rs"
+
+[[test]]
+name = "deepseek-probe-console"
+path = "../../unittest/deepseek_probe_console.rs"
+
+[[test]]
+name = "deepseek-probe-native"
+path = "../deepseek_probe_native.rs"
+
 [[test]]
 name = "history-metrics-dto"
 path = "../history_metrics_dto.rs"
@@ -18,9 +42,21 @@ specta = { version = "=2.0.0-rc.22", features = ["derive"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 tokio = { version = "1", features = ["macros", "net", "io-util", "sync", "time", "rt-multi-thread"] }
 tempfile = "3"
+rusqlite = { version = "0.37", features = ["bundled"] }
 regex = "1"
 ferrous-opencc = "0.2.3"
 opencc-jieba-rs = { version = "=0.8.1", default-features = false }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "=0.61.2", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Com",
+    "Win32_System_Console",
+    "Win32_System_Threading",
+    "Win32_UI_Shell",
+] }
 
 [[test]]
 name = "desktop-workflow"

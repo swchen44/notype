@@ -1,7 +1,7 @@
 //! Explicit OpenAI-compatible chat transport, not a company API assertion.
 use notype_core::observations::{
-    ApiCallDescriptor, ApiCallGuard, ApiCallObserver, ApiOutcome, ApiProviderProfile, ApiPurpose,
-    ApiReceipt,
+    ApiCallDescriptor, ApiCallGuard, ApiCallObserver, ApiEndpointClass, ApiOutcome,
+    ApiProviderProfile, ApiPurpose, ApiReceipt,
 };
 use notype_core::{
     BackTranslationRequest, CancellationToken, GenerationFuture, Scenario, TextFailure, TextFuture,
@@ -277,6 +277,15 @@ pub fn processor(configuration: TextConfiguration) -> Arc<dyn TextProcessor> {
     }
 }
 
+/// Construct the same transport/parser with the standalone probe's direct-network policy.
+/// Endpoint admission remains the composed observer's job; this sends no request.
+pub fn probe_processor(configuration: TextConfiguration) -> Arc<dyn TextProcessor> {
+    match ChatProcessor::new_with_policy(configuration, true) {
+        Ok(processor) => Arc::new(processor),
+        Err(_) => Arc::new(NotConfigured),
+    }
+}
+
 impl TextConfiguration {
     /// Validate explicit transport/endpoint/model/auth configuration without making a request.
     pub fn is_ready(&self) -> bool {
@@ -295,9 +304,16 @@ struct ChatProcessor {
     provider_profile: TextProviderProfile,
     effort: Option<String>,
     max_output_tokens: Option<u32>,
+    probe_network: bool,
 }
 impl ChatProcessor {
     fn new(configuration: TextConfiguration) -> Result<Self, TextFailure> {
+        Self::new_with_policy(configuration, false)
+    }
+    fn new_with_policy(
+        configuration: TextConfiguration,
+        probe_network: bool,
+    ) -> Result<Self, TextFailure> {
         let invalid = TextFailure::ConfigurationRequired;
         if configuration.transport != TextTransport::OpenAiChat
             || !configuration.options_valid()
@@ -339,11 +355,13 @@ impl ChatProcessor {
             None
         };
         let deadline = Duration::from_millis(configuration.timeout_ms);
-        let client = reqwest::Client::builder()
+        let mut client = reqwest::Client::builder()
             .timeout(deadline)
-            .redirect(reqwest::redirect::Policy::none())
-            .build()
-            .map_err(|_| invalid)?;
+            .redirect(reqwest::redirect::Policy::none());
+        if probe_network {
+            client = client.no_proxy().connect_timeout(Duration::from_secs(5));
+        }
+        let client = client.build().map_err(|_| invalid)?;
         Ok(Self {
             client,
             endpoint,
@@ -355,6 +373,7 @@ impl ChatProcessor {
             provider_profile: configuration.provider_profile,
             effort: configuration.effort,
             max_output_tokens: configuration.max_output_tokens,
+            probe_network,
         })
     }
 }
@@ -485,11 +504,15 @@ impl ChatProcessor {
         let profile = self.provider_profile;
         let effort = self.effort.clone();
         let max_output_tokens = self.max_output_tokens;
+        let probe_network = self.probe_network;
         Box::pin(async move {
             if cancellation.is_cancelled() {
                 return Err(TextFailure::Cancelled);
             }
             let mut body = json!({"model":model,"messages":messages});
+            if probe_network {
+                body["stream"] = json!(false);
+            }
             let thinking = if profile == TextProviderProfile::DeepSeek {
                 effort.as_ref().map(|value| value != "none")
             } else {
@@ -506,6 +529,19 @@ impl ChatProcessor {
             }
             let wire = serde_json::to_vec(&body).map_err(|_| TextFailure::ConfigurationRequired)?;
             let descriptor = ApiCallDescriptor {
+                endpoint_class: if endpoint.as_str() == "https://api.deepseek.com/chat/completions"
+                {
+                    ApiEndpointClass::DeepSeekHttps
+                } else if endpoint.scheme() == "http"
+                    && endpoint.host_str().is_some_and(|host| {
+                        host.parse::<std::net::IpAddr>()
+                            .is_ok_and(|ip| ip.is_loopback())
+                    })
+                {
+                    ApiEndpointClass::Loopback
+                } else {
+                    ApiEndpointClass::Other
+                },
                 purpose,
                 profile: match profile {
                     TextProviderProfile::Generic => ApiProviderProfile::Generic,
@@ -517,6 +553,15 @@ impl ChatProcessor {
                 wire_bytes: wire.len() as u64,
                 thinking,
                 non_streaming: true,
+                message_count: body["messages"]
+                    .as_array()
+                    .map_or(0, |messages| messages.len() as u32),
+                plain_text_only: body["messages"].as_array().is_some_and(|messages| {
+                    messages.iter().all(|message| {
+                        message["content"].is_string()
+                            && matches!(message["role"].as_str(), Some("system" | "user"))
+                    })
+                }) && body.get("tools").is_none(),
             };
             let mut guard = observer
                 .map(|observer| ApiCallGuard::begin(observer, descriptor))

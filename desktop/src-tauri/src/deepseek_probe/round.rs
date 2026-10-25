@@ -234,11 +234,39 @@ impl<S: RoundStore> Round<S> {
         call_id: &str,
         wire: &WireFacts<'_>,
     ) -> Result<SendPermit, Denied> {
+        self.admit_validated(slot, history_id, call_id, validate_wire(wire))
+    }
+
+    /// Test-build-only admission for an explicitly owned loopback fixture.
+    /// Production helper builds contain neither this entry nor a target override.
+    #[cfg(test)]
+    pub fn admit_fixture(
+        &mut self,
+        slot: u8,
+        history_id: &str,
+        call_id: &str,
+        wire: &WireFacts<'_>,
+    ) -> Result<SendPermit, Denied> {
+        self.admit_validated(
+            slot,
+            history_id,
+            call_id,
+            super::policy::validate_fixture_wire(wire),
+        )
+    }
+
+    fn admit_validated(
+        &mut self,
+        slot: u8,
+        history_id: &str,
+        call_id: &str,
+        wire_validation: Result<(), Denied>,
+    ) -> Result<SendPermit, Denied> {
         self.require_write()?;
         if !self.state.armed {
             return Err(Denied::NotArmed);
         }
-        if let Err(reason) = validate_wire(wire) {
+        if let Err(reason) = wire_validation {
             self.halt()?;
             return Err(reason);
         }

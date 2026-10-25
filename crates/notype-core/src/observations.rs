@@ -205,11 +205,27 @@ pub enum ApiProviderProfile {
     Development,
 }
 
+/// Safe classification of the actual serialized request's destination.
+/// No URL, credential, path or organization address is retained.
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ApiEndpointClass {
+    /// Any destination outside the two explicitly recognized classes.
+    #[default]
+    Other,
+    /// Exact reviewed public HTTPS chat endpoint.
+    DeepSeekHttps,
+    /// Plain HTTP on a loopback IP, used only by owned test fixtures.
+    Loopback,
+}
+
 /// Safe request projection known only after the actual wire is serialized.
 /// It deliberately has no request text, endpoint, headers or credential field.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct ApiCallDescriptor {
+    /// Derived from the actual transport URL, never supplied as a provider preference.
+    pub endpoint_class: ApiEndpointClass,
     /// Scenario generation or independent reverse translation.
     pub purpose: ApiPurpose,
     /// Explicit generic/deepseek/development profile label.
@@ -226,10 +242,15 @@ pub struct ApiCallDescriptor {
     pub thinking: Option<bool>,
     /// Whether this actual request uses the non-streaming response protocol.
     pub non_streaming: bool,
+    /// Actual serialized message count, without message contents.
+    pub message_count: u32,
+    /// Every actual message is plain text, with no tools or attachments.
+    pub plain_text_only: bool,
 }
 impl Default for ApiCallDescriptor {
     fn default() -> Self {
         Self {
+            endpoint_class: Default::default(),
             purpose: Default::default(),
             profile: Default::default(),
             requested_model: None,
@@ -238,6 +259,8 @@ impl Default for ApiCallDescriptor {
             wire_bytes: 0,
             thinking: None,
             non_streaming: true,
+            message_count: 0,
+            plain_text_only: false,
         }
     }
 }
@@ -319,6 +342,13 @@ pub struct ApiReceipt {
     pub usage: TokenUsage,
     /// Actual amount/currency under a documented adapter contract only.
     pub actual_charge: Option<ActualCharge>,
+    /// Provider-reported prompt plus completion count, not a locally inferred total.
+    pub total_tokens: Option<u64>,
+    /// Whether a reasoning field was nonempty or malformed; no reasoning text is retained.
+    pub reasoning_nonempty: bool,
+    /// A reported usage field had an invalid type/range or conflicting breakdown.
+    /// Ordinary history still preserves each independently valid count.
+    pub usage_invalid: bool,
 }
 const MAX_USAGE: u64 = 9_007_199_254_740_991;
 impl ApiReceipt {
@@ -343,10 +373,28 @@ impl ApiReceipt {
                 reasoning_output: token("/usage/completion_tokens_details/reasoning_tokens"),
             },
             actual_charge: None,
+            total_tokens: token("/usage/total_tokens"),
+            reasoning_nonempty: value["choices"].as_array().is_some_and(|choices| {
+                choices.iter().any(|choice| {
+                    choice["message"]
+                        .get("reasoning_content")
+                        .is_some_and(|reasoning| {
+                            !reasoning.is_null()
+                                && reasoning.as_str().is_none_or(|text| !text.is_empty())
+                        })
+                })
+            }),
+            usage_invalid: [
+                "/usage/prompt_tokens", "/usage/completion_tokens", "/usage/total_tokens",
+                "/usage/prompt_cache_hit_tokens", "/usage/prompt_cache_miss_tokens",
+                "/usage/prompt_tokens_details/cached_tokens", "/usage/completion_tokens_details/reasoning_tokens",
+            ].iter().any(|pointer| value.pointer(pointer).is_some_and(|field| !field.is_null() && field.as_u64().is_none_or(|count| count > MAX_USAGE)))
+                || matches!((token("/usage/prompt_cache_hit_tokens"), token("/usage/prompt_tokens_details/cached_tokens")), (Some(left),Some(right)) if left != right),
         }
         .sanitized()
     }
     pub(crate) fn sanitized(mut self) -> Self {
+        self.total_tokens = self.total_tokens.filter(|value| *value <= MAX_USAGE);
         self.reported_model = self.reported_model.filter(|s| safe_label(s));
         self.reported_effort = self.reported_effort.filter(|s| valid_effort(s));
         for field in [

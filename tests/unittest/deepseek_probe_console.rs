@@ -18,6 +18,7 @@ struct FakeConsole {
     redirected: Cell<bool>,
     fail_disable: Cell<bool>,
     fail_restore: Cell<bool>,
+    interrupt_on_restore: Cell<bool>,
 }
 impl FakeConsole {
     fn new(events: Vec<InputEvent>) -> Self {
@@ -33,6 +34,7 @@ impl FakeConsole {
             redirected: Cell::new(false),
             fail_disable: Cell::new(false),
             fail_restore: Cell::new(false),
+            interrupt_on_restore: Cell::new(false),
         }
     }
 }
@@ -59,6 +61,9 @@ impl ConsolePort for FakeConsole {
         Ok(())
     }
     fn remove_interrupt_restore(&self) -> Result<(), ConsoleError> {
+        if self.interrupt_on_restore.get() {
+            self.interrupted.set(true);
+        }
         self.handler.set(false);
         Ok(())
     }
@@ -92,6 +97,18 @@ fn input_is_non_echoed_and_original_mode_is_restored_before_key_returns() {
     ]);
     let key = read_local_key(&fake).unwrap().into_string();
     assert_eq!(key, "xy"); // Nonsecret fixture, never a real credential.
+    assert_eq!(fake.mode.get(), fake.original);
+    assert!(!fake.handler.get());
+}
+
+#[test]
+fn interrupt_during_restore_after_enter_never_hands_off_key_material() {
+    let fake = FakeConsole::new(vec![InputEvent::Character('x'), InputEvent::Enter]);
+    fake.interrupt_on_restore.set(true);
+    assert!(matches!(
+        read_local_key(&fake),
+        Err(ConsoleError::Interrupted)
+    ));
     assert_eq!(fake.mode.get(), fake.original);
     assert!(!fake.handler.get());
 }

@@ -1083,11 +1083,13 @@ dependencies = [
  "opencc-jieba-rs",
  "regex",
  "reqwest",
+ "rusqlite",
  "serde",
  "serde_json",
  "specta",
  "tempfile",
  "tokio",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
