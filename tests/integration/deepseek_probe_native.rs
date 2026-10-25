@@ -48,15 +48,53 @@ fn hidden_owned_console_restores_modes_for_success_abort_fault_unwind_and_real_s
         value
     }
     struct Child(windows_sys::Win32::Foundation::HANDLE);
+    impl Child {
+        fn finish(mut self, timeout: u32) -> Result<u32, &'static str> {
+            // SAFETY: this exact returned process handle is owned by the guard.
+            let ready = unsafe { WaitForSingleObject(self.0, timeout) } == WAIT_OBJECT_0;
+            if !ready {
+                // SAFETY: terminate only this fixture's handle and verify its
+                // exit; a failed cleanup is never reported as a passed fixture.
+                let killed = unsafe { TerminateProcess(self.0, 97) } != 0;
+                let settled = unsafe { WaitForSingleObject(self.0, 2000) } == WAIT_OBJECT_0;
+                if !killed || !settled {
+                    return Err("probe-owned-child-cleanup-failed");
+                }
+            }
+            let mut exit = 0;
+            // SAFETY: the now-terminated process and writable exit-code output
+            // remain valid until this guard closes the handle below.
+            let observed = unsafe { GetExitCodeProcess(self.0, &mut exit) } != 0;
+            if unsafe { CloseHandle(self.0) } == 0 {
+                return Err("probe-owned-handle-close-failed");
+            }
+            self.0 = std::ptr::null_mut();
+            if !ready {
+                return Err("probe-owned-child-timeout");
+            }
+            if !observed {
+                return Err("probe-owned-exit-unavailable");
+            }
+            Ok(exit)
+        }
+    }
     impl Drop for Child {
         fn drop(&mut self) {
+            if self.0.is_null() {
+                return;
+            }
             // SAFETY: owns this exact CreateProcessW handle, not a reusable PID.
             unsafe {
                 if WaitForSingleObject(self.0, 0) != WAIT_OBJECT_0 {
-                    TerminateProcess(self.0, 97);
-                    WaitForSingleObject(self.0, 2000);
+                    let killed = TerminateProcess(self.0, 97) != 0;
+                    let settled = WaitForSingleObject(self.0, 2000) == WAIT_OBJECT_0;
+                    if !killed || !settled {
+                        eprintln!("probe-owned-child-cleanup-failed");
+                    }
                 }
-                CloseHandle(self.0);
+                if CloseHandle(self.0) == 0 {
+                    eprintln!("probe-owned-handle-close-failed");
+                }
             }
         }
     }
@@ -120,18 +158,14 @@ fn hidden_owned_console_restores_modes_for_success_abort_fault_unwind_and_real_s
         );
         let child = Child(process.hProcess);
         // SAFETY: thread handle is owned and not otherwise needed.
-        unsafe {
-            CloseHandle(process.hThread);
-        }
-        // SAFETY: child process handle remains owned until the Drop guard.
-        assert_eq!(
-            unsafe { WaitForSingleObject(child.0, 5000) },
-            WAIT_OBJECT_0,
-            "fixture timeout {case}"
+        assert_ne!(
+            unsafe { CloseHandle(process.hThread) },
+            0,
+            "thread-handle cleanup {case}"
         );
-        let mut exit = 0;
-        // SAFETY: process handle is valid and the exit-code out-pointer is live.
-        assert_ne!(unsafe { GetExitCodeProcess(child.0, &mut exit) }, 0);
+        let exit = child
+            .finish(5000)
+            .unwrap_or_else(|code| panic!("{code}: {case}"));
         assert_eq!(exit, 0, "fixture {case}");
         let evidence = std::fs::read_to_string(receipt).unwrap();
         assert!(evidence.contains("mode_restored=true"));
