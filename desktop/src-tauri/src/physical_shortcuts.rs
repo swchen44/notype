@@ -94,6 +94,7 @@ mod platform {
         mpsc::{sync_channel, SyncSender},
         Mutex, OnceLock,
     };
+    use std::time::Instant;
     static STATE: OnceLock<Mutex<HookState>> = OnceLock::new();
     static PHASE: AtomicU8 = AtomicU8::new(0);
     static SUSPENDED: AtomicBool = AtomicBool::new(false);
@@ -101,7 +102,7 @@ mod platform {
     static INPUT_LOST: AtomicBool = AtomicBool::new(false);
     struct HookState {
         router: GestureRouter,
-        sender: SyncSender<Intent>,
+        sender: SyncSender<(Intent, Instant)>,
     }
     #[repr(C)]
     struct KeyEvent {
@@ -240,7 +241,7 @@ mod platform {
         if let Some(intent) = decision.intent {
             if !suspended {
                 PHASE.store(2, Ordering::SeqCst);
-                if state.sender.try_send(intent).is_err() {
+                if state.sender.try_send((intent, Instant::now())).is_err() {
                     state.router.reset();
                 }
             }
@@ -294,8 +295,15 @@ mod platform {
         }
         let app = app.clone();
         std::thread::spawn(move || {
-            while let Ok(intent) = receiver.recv() {
+            while let Ok((intent, accepted)) = receiver.recv() {
                 use crate::actions::ACTION_MAP;
+                use crate::diagnostics::{record, Outcome, Phase as DiagnosticPhase};
+                record(DiagnosticPhase::ShortcutAccepted, Outcome::Ok, None);
+                record(
+                    DiagnosticPhase::ShortcutDispatch,
+                    Outcome::Started,
+                    Some(accepted.elapsed().as_millis() as u64),
+                );
                 match intent {
                     Intent::Dictation | Intent::Translation | Intent::Ask => {
                         let id = match intent {

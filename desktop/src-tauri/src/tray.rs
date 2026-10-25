@@ -601,8 +601,48 @@ fn last_transcript_text(entry: &SessionEntry) -> &str {
     }
 }
 
-pub fn set_tray_visibility(app: &AppHandle, visible: bool) {
+/// Confirm the native return path before hiding the main window.
+/// Settings alone do not prove that the OS accepted the tray icon.
+pub fn ensure_tray_visible(app: &AppHandle) -> Result<(), String> {
+    let no_tray = app
+        .try_state::<crate::cli::CliArgs>()
+        .is_some_and(|args| args.no_tray);
+    if no_tray || !settings::get_settings(app).show_tray_icon {
+        return Err("tray-disabled".into());
+    }
+    if app.try_state::<TrayIcon>().is_none() {
+        let tray = crate::create_tray_icon(app).map_err(|_| "tray-unavailable")?;
+        app.manage(tray);
+        update_tray_menu(app);
+    }
     let tray = app.state::<TrayIcon>();
+    #[cfg(target_os = "windows")]
+    {
+        // Build/set_visible can return Ok even when Shell_NotifyIcon(NIM_ADD)
+        // failed. Updating the tooltip uses NIM_MODIFY and propagates its BOOL.
+        // This accepts icons in the shell overflow, where rect() does not
+        // reliably confirm registration. Preserve the Windows version tooltip.
+        if tray.set_tooltip(Some(tray_tooltip())).is_ok() {
+            return Ok(());
+        }
+        tray.set_visible(false).map_err(|_| "tray-unavailable")?;
+        tray.set_visible(true).map_err(|_| "tray-unavailable")?;
+        tray.set_tooltip(Some(tray_tooltip()))
+            .map_err(|_| "tray-unavailable".into())
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        // Linux does not expose tray rectangles; retain its supported native API.
+        tray.set_visible(true)
+            .map_err(|_| "tray-unavailable".into())
+    }
+}
+
+pub fn set_tray_visibility(app: &AppHandle, visible: bool) {
+    let Some(tray) = app.try_state::<TrayIcon>() else {
+        warn!("Cannot change visibility: native tray is unavailable");
+        return;
+    };
     if let Err(e) = tray.set_visible(visible) {
         error!("Failed to set tray visibility: {}", e);
     } else {

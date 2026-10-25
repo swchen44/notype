@@ -64,3 +64,18 @@ cargo test --locked --manifest-path tests/integration/desktop-contracts/Cargo.to
 需要已準備好的 `desktop/node_modules`。整合測試在 Windows 預設使用已安裝的 Edge；可用 `NOTYPE_TEST_BROWSER` 指定瀏覽器路徑，其他平台需 Playwright Chromium。缺少必要依賴或瀏覽器會失敗，不會 skip。畫面檢查產物寫入忽略追蹤的 `.local/model-explorer-*.png`；內容是明確命名的合成 metadata fixture，不能視為真實 STT 或目前 App 狀態。
 
 此 UI suite 沒有加入 `Shared core contracts` 的 portable CI；該 CI 只安裝根目錄套件，不能宣稱已驗證需要 desktop 依賴與瀏覽器的 UI。驗證紀錄見 [模型介面 receipt](../docs/verification/model-interface.md)。
+
+## Main window lifecycle contract
+
+`tests/unittest/desktop_window_lifecycle.rs` exercises the public `close_to_tray`
+platform-policy seam used by the actual native close handler. It verifies that a
+failed native tray recovery keeps the window visible, and that successful tray
+confirmation precedes hiding. Native tray registration, shell overflow, restore
+clicks and explicit Quit still require the separately reported Windows fixture.
+
+```powershell
+cargo test --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test window-lifecycle
+```
+
+The same std-only contract can run without a native Cargo build/cache:
+`rustc --edition=2021 --test tests/unittest/desktop_window_lifecycle.rs -o <task-owned-test.exe>`.

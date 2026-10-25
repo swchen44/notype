@@ -35,6 +35,7 @@ mod transcription_coordinator;
 mod tray;
 mod tray_i18n;
 mod utils;
+mod window_lifecycle;
 pub mod workflow;
 
 pub use cli::CliArgs;
@@ -193,80 +194,7 @@ fn should_force_show_permissions_window(app: &AppHandle) -> bool {
     false
 }
 
-fn initialize_core_logic(app_handle: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
-    // Note: Enigo (keyboard/mouse simulation) is NOT initialized here.
-    // The frontend is responsible for calling the `initialize_enigo` command
-    // after onboarding completes. This avoids triggering permission dialogs
-    // on macOS before the user is ready.
-
-    // Initialize the managers. The audio recorder receives the streaming router
-    // explicitly, so always-on microphone startup can wire live-preview frames
-    // even before Tauri state is populated.
-    let model_manager =
-        Arc::new(ModelManager::new(app_handle).expect("Failed to initialize model manager"));
-    let transcription_manager = Arc::new(
-        TranscriptionManager::new(app_handle, model_manager.clone())
-            .expect("Failed to initialize transcription manager"),
-    );
-    let recording_manager = Arc::new(
-        AudioRecordingManager::new(app_handle, transcription_manager.stream_router())
-            .expect("Failed to initialize recording manager"),
-    );
-    let data_root = portable::app_data_dir(app_handle)?;
-    let sessions = notype_core::SessionService::open(data_root.join("sessions.db"))?;
-    let legacy = data_root.join("history.db");
-    let import_error = if legacy.exists() {
-        sessions
-            .import_handy_history(&legacy)
-            .err()
-            .map(|error| error.to_string())
-    } else {
-        None
-    };
-    app_handle.manage(commands::history::LegacyImportNotice(import_error));
-    let event_app = app_handle.clone();
-    let native_input = native_input::NativeInput::default();
-    let workflow = Arc::new(
-        workflow::DesktopWorkflow::new(
-            sessions,
-            Arc::new(move || {
-                let _ = event_app.emit("session-history-changed", ());
-            }),
-        )
-        .with_delivery(Arc::new(native_input.clone())),
-    );
-    app_handle.manage(native_input);
-
-    // Initialize the transcribe-cpp native backend (logging + backend module
-    // registration) once, before any whisper model is loaded.
-    managers::transcription::init_transcribe_backend();
-
-    // Apply accelerator preferences before any model loads
-    managers::transcription::apply_accelerator_settings(app_handle);
-
-    // Add managers to Tauri's managed state
-    app_handle.manage(recording_manager.clone());
-    app_handle.manage(model_manager.clone());
-    app_handle.manage(transcription_manager.clone());
-    app_handle.manage(workflow);
-    app_handle.manage(tray::TrayState::new());
-
-    // Note: Shortcuts are NOT initialized here.
-    // The frontend is responsible for calling the `initialize_shortcuts` command
-    // after permissions are confirmed (on macOS) or after onboarding completes.
-    // This matches the pattern used for Enigo initialization.
-
-    // Set up signal handlers for toggling transcription. On Linux, SIGUSR1 is
-    // deliberately not handled — it belongs to WebKitGTK's garbage collector
-    // (#1660) — see signal_handle.rs.
-    #[cfg(unix)]
-    signal_handle::setup_signal_handler(app_handle.clone());
-
-    // The macOS activation policy for a start-hidden launch is applied before
-    // the event loop runs (see `apply_startup_activation_policy`), not here:
-    // by the time `setup` runs the app has already launched as a Regular
-    // (Dock) app, and demoting it at runtime is unreliable (#1787).
-
+fn create_tray_icon(app_handle: &AppHandle) -> tauri::Result<tauri::tray::TrayIcon> {
     // Get the current theme to set the appropriate initial icon
     let initial_theme = tray::get_current_theme(app_handle);
 
@@ -274,15 +202,10 @@ fn initialize_core_logic(app_handle: &AppHandle) -> Result<(), Box<dyn std::erro
     let initial_icon_path = tray::get_icon_path(initial_theme, tray::TrayIconState::Idle, false);
 
     let mut tray_builder = TrayIconBuilder::new()
-        .icon(
-            Image::from_path(
-                app_handle
-                    .path()
-                    .resolve(initial_icon_path, tauri::path::BaseDirectory::Resource)
-                    .unwrap(),
-            )
-            .unwrap(),
-        )
+        .icon(Image::from_path(app_handle.path().resolve(
+            initial_icon_path,
+            tauri::path::BaseDirectory::Resource,
+        )?)?)
         .tooltip(tray::tray_tooltip())
         .icon_as_template(true);
 
@@ -375,9 +298,97 @@ fn initialize_core_logic(app_handle: &AppHandle) -> Result<(), Box<dyn std::erro
             }
             _ => {}
         })
-        .build(app_handle)
-        .unwrap();
-    app_handle.manage(tray);
+        .build(app_handle)?;
+    Ok(tray)
+}
+
+struct NativeMainWindow<'a>(&'a tauri::Window);
+impl window_lifecycle::MainWindow for NativeMainWindow<'_> {
+    fn ensure_tray_visible(&self) -> Result<(), String> {
+        tray::ensure_tray_visible(self.0.app_handle())
+    }
+    fn hide(&self) -> Result<(), String> {
+        self.0.hide().map_err(|error| error.to_string())
+    }
+}
+
+fn initialize_core_logic(app_handle: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
+    // Note: Enigo (keyboard/mouse simulation) is NOT initialized here.
+    // The frontend is responsible for calling the `initialize_enigo` command
+    // after onboarding completes. This avoids triggering permission dialogs
+    // on macOS before the user is ready.
+
+    // Initialize the managers. The audio recorder receives the streaming router
+    // explicitly, so always-on microphone startup can wire live-preview frames
+    // even before Tauri state is populated.
+    let model_manager =
+        Arc::new(ModelManager::new(app_handle).expect("Failed to initialize model manager"));
+    let transcription_manager = Arc::new(
+        TranscriptionManager::new(app_handle, model_manager.clone())
+            .expect("Failed to initialize transcription manager"),
+    );
+    let recording_manager = Arc::new(
+        AudioRecordingManager::new(app_handle, transcription_manager.stream_router())
+            .expect("Failed to initialize recording manager"),
+    );
+    let data_root = portable::app_data_dir(app_handle)?;
+    let sessions = notype_core::SessionService::open(data_root.join("sessions.db"))?;
+    let legacy = data_root.join("history.db");
+    let import_error = if legacy.exists() {
+        sessions
+            .import_handy_history(&legacy)
+            .err()
+            .map(|error| error.to_string())
+    } else {
+        None
+    };
+    app_handle.manage(commands::history::LegacyImportNotice(import_error));
+    let event_app = app_handle.clone();
+    let native_input = native_input::NativeInput::default();
+    let workflow = Arc::new(
+        workflow::DesktopWorkflow::new(
+            sessions,
+            Arc::new(move || {
+                let _ = event_app.emit("session-history-changed", ());
+            }),
+        )
+        .with_delivery(Arc::new(native_input.clone())),
+    );
+    app_handle.manage(native_input);
+
+    // Initialize the transcribe-cpp native backend (logging + backend module
+    // registration) once, before any whisper model is loaded.
+    managers::transcription::init_transcribe_backend();
+
+    // Apply accelerator preferences before any model loads
+    managers::transcription::apply_accelerator_settings(app_handle);
+
+    // Add managers to Tauri's managed state
+    app_handle.manage(recording_manager.clone());
+    app_handle.manage(model_manager.clone());
+    app_handle.manage(transcription_manager.clone());
+    app_handle.manage(workflow);
+    app_handle.manage(tray::TrayState::new());
+
+    // Note: Shortcuts are NOT initialized here.
+    // The frontend is responsible for calling the `initialize_shortcuts` command
+    // after permissions are confirmed (on macOS) or after onboarding completes.
+    // This matches the pattern used for Enigo initialization.
+
+    // Set up signal handlers for toggling transcription. On Linux, SIGUSR1 is
+    // deliberately not handled — it belongs to WebKitGTK's garbage collector
+    // (#1660) — see signal_handle.rs.
+    #[cfg(unix)]
+    signal_handle::setup_signal_handler(app_handle.clone());
+
+    // The macOS activation policy for a start-hidden launch is applied before
+    // the event loop runs (see `apply_startup_activation_policy`), not here:
+    // by the time `setup` runs the app has already launched as a Regular
+    // (Dock) app, and demoting it at runtime is unreliable (#1787).
+
+    if let Err(error) = create_tray_icon(app_handle).map(|tray| app_handle.manage(tray)) {
+        log::error!("Failed to initialize tray: {error}");
+    }
 
     // Initialize tray menu with idle state
     tray::update_tray_menu(app_handle);
@@ -1159,7 +1170,7 @@ pub fn run(cli_args: CliArgs) {
             // If start_hidden but tray is disabled, we must show the window
             // anyway. Without a tray icon, the dock is the only way back in.
             // Keep in sync with `apply_startup_activation_policy` (macOS).
-            let tray_available = settings.show_tray_icon && !cli_args.no_tray;
+            let tray_available = tray::ensure_tray_visible(&app_handle).is_ok();
             if should_force_show || !should_hide || !tray_available {
                 show_main_window(&app_handle);
             }
@@ -1169,7 +1180,12 @@ pub fn run(cli_args: CliArgs) {
         .on_window_event(|window, event| match event {
             tauri::WindowEvent::CloseRequested { api, .. } => {
                 api.prevent_close();
-                let _res = window.hide();
+                if let Err(error) = window_lifecycle::close_to_tray(&NativeMainWindow(window)) {
+                    log::warn!("Keeping main window visible: {error}");
+                    show_main_window(window.app_handle());
+                    let _ = window.app_handle().emit("tray-unavailable", ());
+                    return;
+                }
 
                 #[cfg(target_os = "macos")]
                 {

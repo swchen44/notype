@@ -1,5 +1,6 @@
 use crate::audio_feedback::{play_feedback_sound, play_feedback_sound_blocking, SoundType};
 use crate::audio_toolkit::{is_microphone_access_denied, is_no_input_device_error, VadPolicy};
+use crate::diagnostics::{record, Outcome, Phase};
 use crate::managers::audio::AudioRecordingManager;
 use crate::managers::model::ModelManager;
 use crate::managers::transcription::StreamWorkKind;
@@ -70,6 +71,7 @@ fn should_use_streaming_overlay(style: OverlayStyle, is_streaming: bool) -> bool
 impl ShortcutAction for TranscribeAction {
     fn start(&self, app: &AppHandle, binding_id: &str, _shortcut_str: &str) {
         let start_time = Instant::now();
+        record(Phase::RecordingStart, Outcome::Started, None);
         debug!("TranscribeAction::start called for binding: {}", binding_id);
 
         // Load model in the background
@@ -96,6 +98,11 @@ impl ShortcutAction for TranscribeAction {
                 .get_model_path(&selected_model)
             {
                 warn!("Not starting recording: no model can transcribe it ({})", e);
+                record(
+                    Phase::RecordingStart,
+                    Outcome::Unavailable,
+                    Some(start_time.elapsed().as_millis() as u64),
+                );
                 return;
             }
         }
@@ -109,6 +116,11 @@ impl ShortcutAction for TranscribeAction {
             Ok(generation) => generation,
             Err(code) => {
                 let _ = app.emit("session-error", code);
+                record(
+                    Phase::RecordingStart,
+                    Outcome::Failed,
+                    Some(start_time.elapsed().as_millis() as u64),
+                );
                 return;
             }
         };
@@ -178,10 +190,20 @@ impl ShortcutAction for TranscribeAction {
         let mut recording_error: Option<String> = None;
         let recording_start_time = Instant::now();
         let Some(started) = owner.run(|| rm.try_start_recording(&binding_id, vad_policy)) else {
+            record(
+                Phase::RecordingStart,
+                Outcome::Cancelled,
+                Some(start_time.elapsed().as_millis() as u64),
+            );
             return;
         };
         match started {
             Ok(readiness) => {
+                record(
+                    Phase::RecordingStart,
+                    Outcome::Ok,
+                    Some(start_time.elapsed().as_millis() as u64),
+                );
                 debug!(
                     "Recording request accepted in {:?}; waiting for first microphone samples",
                     recording_start_time.elapsed()
@@ -190,9 +212,15 @@ impl ShortcutAction for TranscribeAction {
                 let app_clone = app.clone();
                 let rm_clone = Arc::clone(&rm);
                 let ready_owner = owner.clone();
+                record(Phase::MicrophoneReady, Outcome::Started, None);
                 std::thread::spawn(move || {
                     if !readiness.wait() {
                         debug!("Microphone readiness wait ended without receiving samples");
+                        record(
+                            Phase::MicrophoneReady,
+                            Outcome::Cancelled,
+                            Some(start_time.elapsed().as_millis() as u64),
+                        );
                         return;
                     }
 
@@ -213,11 +241,23 @@ impl ShortcutAction for TranscribeAction {
 
                     if !rm_clone.is_recording_readiness_current(generation) {
                         debug!("Microphone became ready for an inactive recording");
+                        record(
+                            Phase::MicrophoneReady,
+                            Outcome::Cancelled,
+                            Some(start_time.elapsed().as_millis() as u64),
+                        );
                         return;
                     }
 
                     debug!("Microphone is receiving samples; recording is ready");
-                    ready_owner.run(|| utils::emit_recording_ready(&app_clone));
+                    ready_owner.run(|| {
+                        record(
+                            Phase::MicrophoneReady,
+                            Outcome::Ok,
+                            Some(start_time.elapsed().as_millis() as u64),
+                        );
+                        utils::emit_recording_ready(&app_clone);
+                    });
 
                     // The start chime is a readiness cue, so it must follow the
                     // first real input callback rather than Stream::play() or a
@@ -232,6 +272,11 @@ impl ShortcutAction for TranscribeAction {
             }
             Err(e) => {
                 debug!("Failed to start recording: {}", e);
+                record(
+                    Phase::RecordingStart,
+                    Outcome::Failed,
+                    Some(start_time.elapsed().as_millis() as u64),
+                );
                 recording_error = Some(e);
             }
         }
@@ -306,6 +351,8 @@ impl ShortcutAction for TranscribeAction {
             }
         });
         let binding_id = binding_id.to_string();
+        let stopped_at = Instant::now();
+        record(Phase::RecordingStopped, Outcome::Started, None);
         // Esc remains registered through STT and HTTP, until FinishGuard drops.
         tauri::async_runtime::spawn(async move {
             let cleanup_app = ah.clone();
@@ -325,10 +372,20 @@ impl ShortcutAction for TranscribeAction {
                 }),
             };
             let Some(samples) = rm.stop_recording(&binding_id, cancel_generation, &owner) else {
+                record(
+                    Phase::RecordingStopped,
+                    Outcome::Cancelled,
+                    Some(stopped_at.elapsed().as_millis() as u64),
+                );
                 owner.run(|| tm.cancel_stream());
                 let _ = owner.cancel();
                 return;
             };
+            record(
+                Phase::RecordingStopped,
+                Outcome::Ok,
+                Some(stopped_at.elapsed().as_millis() as u64),
+            );
             if rm.was_cancelled_since(cancel_generation) {
                 owner.run(|| tm.cancel_stream());
                 let _ = owner.cancel();

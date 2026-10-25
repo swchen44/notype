@@ -201,6 +201,7 @@
     }
   },
   "tray": {
+    "unavailable": "The system tray is unavailable. The window will stay open so you can return to notype.",
     "settings": "Settings...",
     "checkUpdates": "Check for Updates...",
     "copyLastTranscript": "Copy Last Transcript",
