@@ -160,7 +160,9 @@ The actual reusable helper modules have no App/network/user-key entry point.
 - `tests/unittest/deepseek_probe_console.rs`: actual input/RAII algorithm through
   a fake console system port; no real terminal mode or credential operations.
 - `tests/integration/deepseek_probe_round.rs`: actual SQLite FULL reservation
-  store, owned files/OS lock and child-process termination/reopen. No HTTP.
+  store, owned files/OS lock and child-process termination/reopen; logical
+  corruption rejection, actual transition/crash-prefix positive controls and
+  compare-commit preserving invalid/current evidence. No HTTP.
 
 The first three run with `rustc --edition=2021 -A dead_code --test <root-test.rs>
 -o <task-owned-test.exe>` and the resulting executable; they are in portable CI.
