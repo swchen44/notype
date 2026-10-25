@@ -891,33 +891,49 @@ async getTextConfiguration() : Promise<Result<TextConfiguration, string>> {
     else return { status: "error", error: e  as any };
 }
 },
-async setTextConfiguration(configuration: TextConfiguration) : Promise<Result<null, string>> {
+async createTextConnection(expectedRevision: number, displayName: string, kind: ConnectionKind, dialect: ProviderDialect): Promise<Result<ConnectionSettingsView, string>> {
+    try { return { status: "ok", data: await TAURI_INVOKE("create_text_connection", { expectedRevision, displayName, kind, dialect }) }; }
+    catch (e) { if (e instanceof Error) throw e; return { status: "error", error: e as string }; }
+},
+async saveTextConnection(expectedRevision: number, connection: ConnectionDraft, keyAction: KeyAction): Promise<Result<ConnectionSettingsView, string>> {
+    try { return { status: "ok", data: await TAURI_INVOKE("save_text_connection", { expectedRevision, connection, keyAction }) }; }
+    catch (e) { if (e instanceof Error) throw e; return { status: "error", error: e as string }; }
+},
+async activateTextConnection(expectedRevision: number, id: string | null): Promise<Result<ConnectionSettingsView, string>> {
+    try { return { status: "ok", data: await TAURI_INVOKE("activate_text_connection", { expectedRevision, id }) }; }
+    catch (e) { if (e instanceof Error) throw e; return { status: "error", error: e as string }; }
+},
+async removeTextConnection(expectedRevision: number, id: string): Promise<Result<ConnectionSettingsView, string>> {
+    try { return { status: "ok", data: await TAURI_INVOKE("remove_text_connection", { expectedRevision, id }) }; }
+    catch (e) { if (e instanceof Error) throw e; return { status: "error", error: e as string }; }
+},
+async listTextModels(request: ModelListRequest): Promise<Result<ModelListResult, string>> {
+    try { return { status: "ok", data: await TAURI_INVOKE("list_text_models", { request }) }; }
+    catch (e) { if (e instanceof Error) throw e; return { status: "error", error: e as string }; }
+},
+async cancelTextModels(requestId: string): Promise<Result<null, string>> {
+    try { return { status: "ok", data: await TAURI_INVOKE("cancel_text_models", { requestId }) }; }
+    catch (e) { if (e instanceof Error) throw e; return { status: "error", error: e as string }; }
+},
+async saveScenarioPrompt(scenario: SceneId, prompt: string, expectedRevision: number) : Promise<Result<TextConfiguration, string>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("set_text_configuration", { configuration }) };
+    return { status: "ok", data: await TAURI_INVOKE("save_scenario_prompt", { scenario, prompt, expectedRevision }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
 },
-async saveScenarioPrompt(scenario: SceneId, prompt: string) : Promise<Result<TextConfiguration, string>> {
+async resetScenarioPrompt(scenario: SceneId, expectedRevision: number) : Promise<Result<TextConfiguration, string>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("save_scenario_prompt", { scenario, prompt }) };
+    return { status: "ok", data: await TAURI_INVOKE("reset_scenario_prompt", { scenario, expectedRevision }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
 },
-async resetScenarioPrompt(scenario: SceneId) : Promise<Result<TextConfiguration, string>> {
+async saveTranslationSettings(translation: TranslationSettings, expectedRevision: number) : Promise<Result<TextConfiguration, string>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("reset_scenario_prompt", { scenario }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async saveTranslationSettings(translation: TranslationSettings) : Promise<Result<TextConfiguration, string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("save_translation_settings", { translation }) };
+    return { status: "ok", data: await TAURI_INVOKE("save_translation_settings", { translation, expectedRevision }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -1271,7 +1287,7 @@ export type StreamTextEvent = { capture_id: string; committed: string; tentative
  */
 export type StreamWorkKind = "transcribing" | "polishing"
 export type TextAuthentication = "unspecified" | "none" | "bearer"
-export type TextConfiguration = { transport: TextTransport; endpoint: string; model: string; authentication: TextAuthentication; api_key: string; timeout_ms: number; provider_profile: TextProviderProfile; effort: string | null; max_output_tokens: number | null; prompts: ScenarioPrompts; translation: TranslationSettings }
+export type TextConfiguration = ConnectionSettingsView
 export type TextTransport = "disabled" | "open_ai_chat"
 /**
  * UI appearance mode. `System` follows the OS `prefers-color-scheme`; `Light`
@@ -1363,9 +1379,66 @@ export type HistoryCurrencyAmountDto = { currency: string; amount: string };
 /** Actual fees by currency, with no conversion or estimates. */
 export type HistoryFeeDto = { status: HistoryMetricStatus; totals: HistoryCurrencyAmountDto[]; known_subtotals: HistoryCurrencyAmountDto[]; reported_calls: number };
 /** Requested and explicitly reported model/effort remain associated. */
-export type HistoryModelEffortDto = { requested_model: string | null; reported_model: string | null; requested_effort: string | null; reported_effort: string | null };
+export type HistoryModelEffortDto = { parameters: HistoryRequestParametersDto | null; requested_model: string | null; reported_model: string | null; requested_effort: string | null; reported_effort: string | null };
 /** All-call history summary, including retries and back-translation. */
 export type HistoryApiSummaryDto = { call_count: number | null; observed_call_count: number; input: HistoryUsageDto; output: HistoryUsageDto; fees: HistoryFeeDto; requested_models: string[]; reported_models: string[]; model_efforts: HistoryModelEffortDto[] };
 /** Native acknowledgement of the explicit all-history save. */
 export type HistoryCsvExportStatus = "saved" | "cancelled";
 export type HistoryCsvExportResult = { status: HistoryCsvExportStatus; rows: number | null };
+
+export type ConnectionKind = "provider" | "custom" | "local";
+export type ProviderDialect = "generic" | "deepseek" | "openrouter" | "gemini" | "ollama_openai";
+export type AddressMode = "base_url" | "full_chat_endpoint";
+export type ThinkingPreference = "off" | "on";
+export type KeyAction = { action: "keep" } | { action: "clear" } | { action: "replace"; value: string };
+export type CapabilityDeclaration = {
+  kind: "non_reasoning" | "optional" | "mandatory";
+  minimum_effort: string | null;
+  supported_efforts: string[];
+  temperature_supported: boolean;
+  top_p_supported: boolean;
+};
+export type ConnectionDraft = {
+  id: string; display_name: string; kind: ConnectionKind; dialect: ProviderDialect;
+  address_mode: AddressMode; api_address: string; models_endpoint: string | null;
+  model: string; authentication: "none" | "bearer"; timeout_ms: number;
+  thinking_preference: ThinkingPreference; effort: string | null;
+  capability_declaration: CapabilityDeclaration | null;
+  temperature: number | null; top_p: number | null; max_output_tokens: number | null;
+};
+export type RequestResolutionView = {
+  supported_efforts: string[];
+  capability: "non_reasoning" | "optional" | "mandatory" | "unknown";
+  provenance: "documented" | "provider_metadata" | "user_declared" | "unknown";
+  effective_thinking: boolean | null; effective_effort: string | null;
+  reason: "non_reasoning" | "disabled" | "enabled" | "mandatory_minimum" | "unresolved";
+  temperature_wire: number | null; top_p_wire: number | null;
+  temperature_resolution: "omitted" | "sent" | "ignored_by_provider" | "unsupported";
+  top_p_resolution: "omitted" | "sent" | "ignored_by_provider" | "unsupported";
+  documented_top_p: number | null;
+};
+export type CredentialSource = "app" | "home_env" | "none" | "unresolved";
+export type ConnectionView = ConnectionDraft & {
+  app_key_present: boolean; credential_present: boolean | null;
+  credential_source: CredentialSource;
+  effective_endpoint: string | null; resolution: RequestResolutionView | null;
+  configuration_error: string | null;
+};
+export type ConnectionSettingsView = {
+  schema_version: 2; revision: number; connections: ConnectionView[];
+  active_connection_id: string | null;
+  prompts: ScenarioPrompts; translation: TranslationSettings;
+};
+export type ModelListRequest = {
+  request_id: string; expected_revision: number;
+  connection: ConnectionDraft; key_action: KeyAction;
+};
+export type ModelListResult = {
+  request_id: string; configuration_revision: number; connection_id: string;
+  status: "ok" | "unsupported" | "cancelled" | "error" | "throttled" | "stale";
+  models: { id: string }[]; error_code: string | null;
+  retry_after_seconds: number | null; credential_source: CredentialSource;
+  cache_hit: boolean;
+};
+
+export type HistoryRequestParametersDto = { requested_thinking: boolean; preference_effort: string | null; effective_thinking: boolean | null; effective_effort: string | null; capability_provenance: string; resolution_reason: string; configured_temperature: string | null; wire_temperature: string | null; temperature_resolution: string; configured_top_p: string | null; wire_top_p: string | null; top_p_resolution: string; documented_top_p: string | null; max_output_tokens: number | null; }

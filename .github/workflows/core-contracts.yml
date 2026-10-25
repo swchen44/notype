@@ -45,12 +45,68 @@ on:
       - package-lock.json
       - packages/**
   workflow_dispatch:
+    inputs:
+      scope:
+        description: Development check scope; final acceptance requires all
+        type: choice
+        options: [all, frontend]
+        default: all
 
 permissions:
   contents: read
 
 jobs:
+  provider-ui:
+    name: Provider settings rendered contracts on Linux
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22.15.0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.2.22
+      - run: npm ci --ignore-scripts
+      - name: Install existing locked frontend dependencies
+        working-directory: desktop
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Select and verify an actual browser
+        run: |
+          if command -v google-chrome >/dev/null 2>&1; then
+            browser="$(command -v google-chrome)"
+            "$browser" --version
+            echo "NOTYPE_TEST_BROWSER=$browser" >> "$GITHUB_ENV"
+          else
+            node desktop/node_modules/playwright/cli.js install --with-deps chromium
+          fi
+      - name: Exercise provider connection rendered contracts when present
+        run: |
+          if test -f tests/integration/provider-connections.ui.mjs; then
+            node --test tests/integration/provider-connections.ui.mjs
+          else
+            echo "Provider UI implementation is not composed in this backend checkpoint."
+          fi
+      - name: Exercise request option history when composed
+        run: |
+          if test -f tests/integration/provider-request-options.ui.mjs; then
+            node --test tests/integration/provider-request-options.ui.mjs
+          fi
+      - name: Exercise settings presenter units when composed
+        run: |
+          if test -f tests/unittest/provider-form.ui.mjs; then
+            node --test tests/unittest/provider-form.ui.mjs
+          fi
+      - name: Lint and build composed provider UI
+        working-directory: desktop
+        run: |
+          if test -f ../tests/integration/provider-connections.ui.mjs; then
+            bun run lint
+            bun run build
+          fi
   portable-core:
+    if: github.event_name != 'workflow_dispatch' || inputs.scope != 'frontend'
     name: Core, desktop workflow and diagnostic contracts on Linux
     runs-on: ubuntu-latest
     timeout-minutes: 15
