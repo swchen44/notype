@@ -80,3 +80,23 @@ cargo test --locked --manifest-path tests/integration/desktop-contracts/Cargo.to
 
 The same std-only contract can run without a native Cargo build/cache:
 `rustc --edition=2021 --test tests/unittest/desktop_window_lifecycle.rs -o <task-owned-test.exe>`.
+
+## Recording overlay contract (#21)
+
+Approved plan: [P21-v3](https://github.com/swchen44/notype/issues/21#issuecomment-6398232459),
+[GPT-6-Astra APPROVED / zero unresolved](https://github.com/swchen44/notype/issues/21#issuecomment-6398249848).
+
+- Unit: `tests/unittest/desktop_overlay_lifecycle.rs` runs the production overlay
+  request policy through its public reserve/commit/ready/text boundary, with
+  queued work executed after successor or terminal reservations. It is a std-only
+  `overlay-lifecycle` target in the existing desktop-contracts harness; it can also
+  run with `rustc --edition=2021 --test tests/unittest/desktop_overlay_lifecycle.rs -o <task-owned-test.exe>`.
+- Rendered integration: `node --test tests/integration/recording-overlay.ui.mjs`
+  mounts the actual React component via Vite in a new headless browser, replacing
+  only Tauri event/settings transport and the frontend clock/scheduler. It covers
+  digit-only display elapsed, ready ordering, stale events, terminal phases,
+  settings completion and listener/timer cleanup. The fixture uses its own local
+  port and ignored Vite cache so other UI tasks can run independently.
+- The existing `test:ui:integration` script also discovers this test. Native App,
+  mic readiness latency, Windows geometry/permissions and audio duration are not
+  established by this suite. See [event contract](../docs/desktop-overlay-events.md).

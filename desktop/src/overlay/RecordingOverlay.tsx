@@ -1,6 +1,5 @@
 import { listen } from "@tauri-apps/api/event";
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
 import "./RecordingOverlay.css";
 import { commands, events } from "@/bindings";
 import type {
@@ -9,17 +8,37 @@ import type {
   StreamTextEvent,
   StreamWorkKind,
 } from "@/bindings";
-import i18n, { syncLanguageFromSettings } from "@/i18n";
+import i18n, { getSupportedLanguage } from "@/i18n";
 import { getLanguageDirection } from "@/lib/utils/rtl";
 
-type OverlayState = "recording" | "streaming" | "transcribing" | "processing";
+import type {
+  OverlayState,
+  OverlayIdentity as Identity,
+  ShowOverlayEvent as ShowEvent,
+  RecordingReadyEvent as ReadyEvent,
+  HideOverlayEvent as HideEvent,
+} from "./contracts";
 
 // Number of reactive bars in the waveform (the simple, smoothed style shared by
 // every overlay form). Mic levels arrive as 16 FFT buckets; we take the first N.
 const WAVE_BARS = 9;
 
+type Capture = Identity & {
+  captureRevision: string;
+  closed: boolean;
+  hidden: boolean;
+  origin: number | null;
+};
+const validId = (value: unknown): value is string =>
+  typeof value === "string" && /^[1-9][0-9]{0,19}$/.test(value);
+const newer = (left: string, right: string) => BigInt(left) > BigInt(right);
+
 const RecordingOverlay: React.FC = () => {
-  const { t } = useTranslation();
+  const [language, setLanguage] = useState(i18n.language);
+  const t = i18n.getFixedT(language);
+  const capture = useRef<Capture | null>(null);
+  const pendingReady = useRef<ReadyEvent | null>(null);
+  const [captureId, setCaptureId] = useState("");
   const [isVisible, setIsVisible] = useState(false);
   const [state, setState] = useState<OverlayState>("recording");
   // `Stream::play()` returning does not mean hardware callbacks are flowing.
@@ -28,6 +47,7 @@ const RecordingOverlay: React.FC = () => {
   const [captureReady, setCaptureReady] = useState(false);
   const [levels, setLevels] = useState<number[]>(Array(WAVE_BARS).fill(0));
   const [streamText, setStreamText] = useState<StreamTextEvent>({
+    capture_id: "",
     committed: "",
     tentative: "",
   });
@@ -50,96 +70,243 @@ const RecordingOverlay: React.FC = () => {
   // until they scroll back down.
   const capRef = useRef<HTMLDivElement>(null);
   const pinnedRef = useRef(true);
-  const direction = getLanguageDirection(i18n.language);
+  const direction = getLanguageDirection(language);
 
   useEffect(() => {
-    const setupEventListeners = async () => {
-      const unlistenShow = await listen("show-overlay", async (event) => {
-        const overlayState = event.payload as OverlayState;
-        // Reset synchronously before settings I/O. A fast microphone can emit
-        // recording-ready while the awaits below are in flight; resetting after
-        // them would overwrite that event and leave the overlay stuck arming.
-        if (overlayState === "recording" || overlayState === "streaming") {
+    let disposed = false;
+    const unlisteners = new Set<() => void>();
+    const dispose = (unlisten: () => void) => {
+      try {
+        void Promise.resolve(unlisten()).catch(() => {});
+      } catch {
+        /* A failing transport must not prevent cleanup of its peers. */
+      }
+    };
+    const register = (registration: Promise<() => void>) => {
+      void registration
+        .then((unlisten) => {
+          if (disposed) dispose(unlisten);
+          else unlisteners.add(unlisten);
+        })
+        .catch(() => {
+          /* A rejected registration cannot become a leaked listener. */
+        });
+    };
+    const stopClock = () => {
+      const current = capture.current;
+      if (current) {
+        current.closed = true;
+        current.origin = null;
+      }
+      pendingReady.current = null;
+      setCaptureReady(false);
+      setElapsed(0);
+    };
+    const acceptReady = (payload: ReadyEvent) => {
+      if (!validId(payload?.captureId) || !validId(payload?.captureRevision))
+        return;
+      const current = capture.current;
+      if (!current || newer(payload.captureId, current.captureId)) {
+        if (
+          !pendingReady.current ||
+          !newer(pendingReady.current.captureId, payload.captureId)
+        )
+          pendingReady.current = payload;
+        return;
+      }
+      if (
+        payload.captureId !== current.captureId ||
+        payload.captureRevision !== current.captureRevision ||
+        current.closed ||
+        current.hidden ||
+        current.origin !== null
+      )
+        return;
+      current.origin = performance.now();
+      setElapsed(0);
+      setCaptureReady(true);
+    };
+    register(
+      listen<ShowEvent>("show-overlay", (event) => {
+        if (disposed) return;
+        const payload = event.payload;
+        if (
+          !validId(payload?.captureId) ||
+          !validId(payload?.revision) ||
+          !["recording", "streaming", "transcribing", "processing"].includes(
+            payload.state,
+          )
+        )
+          return;
+        const previous = capture.current;
+        if (
+          previous &&
+          (newer(previous.captureId, payload.captureId) ||
+            (payload.captureId === previous.captureId &&
+              (previous.hidden || newer(previous.revision, payload.revision))))
+        )
+          return;
+        const capturing =
+          payload.state === "recording" || payload.state === "streaming";
+        const fresh = !previous || previous.captureId !== payload.captureId;
+        if (!fresh && previous.closed && capturing) return;
+        if (fresh) {
+          capture.current = {
+            captureId: payload.captureId,
+            revision: payload.revision,
+            captureRevision: payload.revision,
+            closed: !capturing,
+            hidden: false,
+            origin: null,
+          };
+          setCaptureId(payload.captureId);
           setCaptureReady(false);
+          setElapsed(0);
           smoothedLevelsRef.current = Array(16).fill(0);
           setLevels(Array(WAVE_BARS).fill(0));
-          setStreamText({ committed: "", tentative: "" });
-        }
-
-        await syncLanguageFromSettings();
-        // The Live panel flows downward from a top overlay and upward from a
-        // bottom one; read the placement so the layout can flip to match.
-        try {
-          const settings = await commands.getAppSettings();
-          if (settings.status === "ok") {
-            setPosition(
-              settings.data.overlay_position === "top" ? "top" : "bottom",
-            );
-          }
-        } catch {
-          // Keep the previous/default placement if settings can't be read.
-        }
-        setState(overlayState);
-        if (overlayState === "streaming") {
+          setStreamText({
+            capture_id: payload.captureId,
+            committed: "",
+            tentative: "",
+          });
           setPhase("listening");
           setWorkKind("transcribing");
-          setElapsed(0);
-          setSession((s) => s + 1); // remount the card fresh for this session
+          setSession((value) => value + 1);
+        } else {
+          capture.current!.revision = payload.revision;
         }
+        if (!capturing) stopClock();
+        setState(payload.state);
         setIsVisible(true);
-      });
-
-      const unlistenHide = await listen("hide-overlay", () => {
+        const early = pendingReady.current;
+        if (early?.captureId === payload.captureId) {
+          pendingReady.current = null;
+          acceptReady(early);
+        } else if (early && newer(payload.captureId, early.captureId))
+          pendingReady.current = null;
+        // Presentation becomes active before nonessential settings I/O. Its result
+        // belongs to this exact request and can never resurrect a hidden capture.
+        void commands
+          .getAppSettings()
+          .then((settings) => {
+            const current = capture.current;
+            if (
+              disposed ||
+              !current ||
+              current.hidden ||
+              current.captureId !== payload.captureId ||
+              current.revision !== payload.revision
+            )
+              return;
+            if (settings.status === "ok") {
+              setPosition(
+                settings.data.overlay_position === "top" ? "top" : "bottom",
+              );
+              setLanguage(
+                getSupportedLanguage(settings.data.app_language) ?? "zh-TW",
+              );
+            }
+          })
+          .catch(() => {
+            /* Preserve the last known presentation on settings failure. */
+          });
+      }),
+    );
+    register(
+      listen<HideEvent>("hide-overlay", (event) => {
+        if (disposed) return;
+        const payload = event.payload;
+        if (!validId(payload?.captureId) || !validId(payload?.revision)) return;
+        const current = capture.current;
+        if (
+          current &&
+          (newer(current.captureId, payload.captureId) ||
+            (current.captureId === payload.captureId &&
+              newer(current.revision, payload.revision)))
+        )
+          return;
+        capture.current = {
+          captureId: payload.captureId,
+          revision: payload.revision,
+          captureRevision: "",
+          closed: true,
+          hidden: true,
+          origin: null,
+        };
+        stopClock();
         setIsVisible(false);
-        setCaptureReady(false);
-      });
-
-      const unlistenReady = await listen("recording-ready", () => {
-        setElapsed(0);
-        setCaptureReady(true);
-      });
-
-      const unlistenLevel = await listen<number[]>("mic-level", (event) => {
-        const newLevels = event.payload as number[];
-        // Exponential smoothing across the 16 buckets, then take the first N
-        // bars for the shared waveform.
-        const smoothed = smoothedLevelsRef.current.map((prev, i) => {
-          const target = newLevels[i] || 0;
-          return prev * 0.7 + target * 0.3;
-        });
+      }),
+    );
+    register(
+      listen<ReadyEvent>("recording-ready", (event) => {
+        if (!disposed) acceptReady(event.payload);
+      }),
+    );
+    register(
+      listen<number[]>("mic-level", (event) => {
+        if (disposed || !capture.current || capture.current.closed) return;
+        const smoothed = smoothedLevelsRef.current.map(
+          (prev, index) => prev * 0.7 + (event.payload[index] || 0) * 0.3,
+        );
         smoothedLevelsRef.current = smoothed;
         setLevels(smoothed.slice(0, WAVE_BARS));
-      });
-
-      const unlistenStream = await events.streamTextEvent.listen((event) => {
-        setStreamText(event.payload);
-      });
-
-      const unlistenPhase = await events.streamPhaseEvent.listen((event) => {
+      }),
+    );
+    register(
+      events.streamTextEvent.listen((event) => {
+        const current = capture.current;
+        if (
+          !disposed &&
+          current &&
+          !current.hidden &&
+          event.payload.capture_id === current.captureId
+        )
+          setStreamText(event.payload);
+      }),
+    );
+    register(
+      events.streamPhaseEvent.listen((event) => {
+        if (disposed) return;
         const payload: StreamPhaseEvent = event.payload;
+        const current = capture.current;
+        if (
+          !current ||
+          current.hidden ||
+          payload.capture_id !== current.captureId ||
+          !validId(payload.revision) ||
+          newer(current.revision, payload.revision)
+        )
+          return;
+        if (payload.phase !== "working" || current.hidden) return;
+        current.revision = payload.revision;
+        stopClock();
         setPhase(payload.phase);
         if (payload.kind) setWorkKind(payload.kind);
-      });
-
-      return () => {
-        unlistenShow();
-        unlistenHide();
-        unlistenReady();
-        unlistenLevel();
-        unlistenStream();
-        unlistenPhase();
-      };
+      }),
+    );
+    return () => {
+      disposed = true;
+      for (const unlisten of unlisteners) dispose(unlisten);
+      unlisteners.clear();
+      capture.current = null;
+      pendingReady.current = null;
     };
-
-    setupEventListeners();
   }, []);
 
-  // Elapsed capture timer starts only once microphone samples are flowing.
+  // Display elapsed starts at the first accepted ready event in this webview.
+  // It is not an audio sample duration and uses no backend clock arithmetic.
   useEffect(() => {
-    if (state !== "streaming" || !isVisible || !captureReady) return;
-    const id = setInterval(() => setElapsed((e) => e + 1), 1000);
+    if (!isVisible || !captureReady || capture.current?.closed) return;
+    const update = () => {
+      const origin = capture.current?.origin;
+      if (origin !== null && origin !== undefined)
+        setElapsed(
+          Math.max(0, Math.floor((performance.now() - origin) / 1000)),
+        );
+    };
+    const id = setInterval(update, 250);
     return () => clearInterval(id);
-  }, [state, isVisible, captureReady]);
+  }, [state, phase, isVisible, captureReady, captureId]);
 
   // Stick to the bottom as text streams in — but only while pinned, so a user who
   // has scrolled up to read history isn't yanked back down by the next chunk.
@@ -167,7 +334,7 @@ const RecordingOverlay: React.FC = () => {
   };
 
   const fmtTime = (s: number) =>
-    `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+    `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 
   // ---- Shared building blocks (one visual language for every overlay form) ----
   const waveform = (
@@ -203,13 +370,22 @@ const RecordingOverlay: React.FC = () => {
   // dot (left) | waveform (center) | timer + cancel (right) — same structure for
   // pill & panel, so the Live morph is a pure width change.
   const listeningRow = (showTimer: boolean, showCancel: boolean) => (
-    <div className="sbase">
+    <div className="sbase capture-row">
       <div className="sbase-l">
         <span className={`sdot ${captureReady ? "ready" : "arming"}`} />
       </div>
       {waveform}
       <div className="sbase-r">
-        {showTimer && <span className="stimer">{fmtTime(elapsed)}</span>}
+        {showTimer && captureReady && (
+          <span
+            className="stimer"
+            role="timer"
+            aria-live="off"
+            aria-label={t("overlay.elapsed")}
+          >
+            {fmtTime(elapsed)}
+          </span>
+        )}
         {showCancel && cancelBtn}
       </div>
     </div>
@@ -273,7 +449,7 @@ const RecordingOverlay: React.FC = () => {
                   : t("overlay.transcribing"),
                 true,
               )
-            : listeningRow(open, true)}
+            : listeningRow(true, true)}
         </div>
       </div>
     );
@@ -296,7 +472,7 @@ const RecordingOverlay: React.FC = () => {
       <div
         className={`scard compact ${working && isVisible ? "cworking" : ""}`}
       >
-        {working ? workingRow(workLabel, true) : listeningRow(false, true)}
+        {working ? workingRow(workLabel, true) : listeningRow(true, true)}
       </div>
     </div>
   );

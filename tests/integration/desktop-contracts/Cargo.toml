@@ -53,3 +53,7 @@ incremental = false
 [[test]]
 name = "window-lifecycle"
 path = "../../unittest/desktop_window_lifecycle.rs"
+
+[[test]]
+name = "overlay-lifecycle"
+path = "../../unittest/desktop_overlay_lifecycle.rs"
