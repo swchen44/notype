@@ -187,6 +187,36 @@
       "back-translation-failed": "Back-translation unavailable. The primary translation is retained for copying or retry.",
       "back-translation-timeout": "Back-translation unavailable. The primary translation is retained for copying or retry."
     },
+    "connections": {
+      "title": "AI connections",
+      "description": "Save separate provider, custom or local API connections, then explicitly activate one. Each connection keeps its own model and options.",
+      "add": "Add connection",
+      "name": "Connection name",
+      "kind": "Connection type",
+      "dialect": "API format",
+      "create": "Create connection",
+      "empty": "No saved connections.",
+      "list": "Saved connections",
+      "active": "Active connection",
+      "activate": "Activate",
+      "remove": "Remove",
+      "noActive": "No active connection. Originals remain recoverable.",
+      "saved": "Connection settings saved.",
+      "failed": "Unable to update connections. Please try again.",
+      "conflict": "Settings changed elsewhere. Reload before saving.",
+      "kinds": {
+        "provider": "Provider",
+        "custom": "Custom API",
+        "local": "Local API endpoint"
+      },
+      "dialects": {
+        "generic": "Generic OpenAI-compatible",
+        "deepseek": "DeepSeek",
+        "openrouter": "OpenRouter",
+        "gemini": "Gemini OpenAI-compatible",
+        "ollama_openai": "Ollama OpenAI-compatible"
+      }
+    },
     "text": {
       "title": "Text editing",
       "description": "Settings stay on this computer. The company has confirmed a compatible Chat Completions format; the actual endpoint, model, authentication and connection remain to be configured and verified. Incomplete settings send no requests and preserve the original.",

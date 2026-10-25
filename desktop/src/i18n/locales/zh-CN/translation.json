@@ -140,6 +140,36 @@
       "back-translation-failed": "回译尚未完成；主翻译仍保留，可复制或重试。",
       "back-translation-timeout": "回译尚未完成；主翻译仍保留，可复制或重试。"
     },
+    "connections": {
+      "title": "AI 连接",
+      "description": "分别保存 Provider、自定义或本机 API 连接，再明确选择一条启用。每条连接分别保存模型与参数。",
+      "add": "新增连接",
+      "name": "连接名称",
+      "kind": "连接类型",
+      "dialect": "API 格式",
+      "create": "创建连接",
+      "empty": "尚未保存连接。",
+      "list": "已保存的连接",
+      "active": "使用中的连接",
+      "activate": "启用",
+      "remove": "移除",
+      "noActive": "目前没有启用连接。原稿仍可恢复。",
+      "saved": "连接设置已保存。",
+      "failed": "无法更新连接，请重试。",
+      "conflict": "设置已由其他操作更改，请重新加载后再保存。",
+      "kinds": {
+        "provider": "Provider",
+        "custom": "自定义 API",
+        "local": "本机 API 端点"
+      },
+      "dialects": {
+        "generic": "通用 OpenAI 兼容",
+        "deepseek": "DeepSeek",
+        "openrouter": "OpenRouter",
+        "gemini": "Gemini OpenAI 兼容",
+        "ollama_openai": "Ollama OpenAI 兼容"
+      }
+    },
     "text": {
       "title": "文字整理",
       "description": "设置只保存在本机。公司已确认使用兼容的 Chat Completions 格式；实际端点、模型、认证及连接仍待设置与验证。未完成设置时不会发送请求，原稿仍会保存。",

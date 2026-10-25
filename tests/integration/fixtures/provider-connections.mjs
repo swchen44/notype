@@ -46,8 +46,7 @@ export async function providerConnectionsFixture(t, language = "en") {
           };
         if (cmd === "get_app_settings" || cmd === "get_default_settings")
           return { custom_words: [], app_language: language };
-        if (cmd === "check_custom_sounds")
-          return { start: false, stop: false };
+        if (cmd === "check_custom_sounds") return { start: false, stop: false };
         if (cmd === "is_update_checks_locked") return false;
         throw new Error(`Unexpected fixture IPC: ${cmd}`);
       },

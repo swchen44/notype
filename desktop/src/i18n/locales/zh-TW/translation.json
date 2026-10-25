@@ -187,6 +187,36 @@
       "back-translation-failed": "回譯尚未完成；主翻譯仍保留，可複製或重試。",
       "back-translation-timeout": "回譯尚未完成；主翻譯仍保留，可複製或重試。"
     },
+    "connections": {
+      "title": "AI 連線",
+      "description": "分別保存 Provider、自訂或本機 API 連線，再明確選擇一筆啟用。每筆連線各自保存模型與參數。",
+      "add": "新增連線",
+      "name": "連線名稱",
+      "kind": "連線類型",
+      "dialect": "API 格式",
+      "create": "建立連線",
+      "empty": "尚未保存連線。",
+      "list": "已保存的連線",
+      "active": "使用中的連線",
+      "activate": "啟用",
+      "remove": "移除",
+      "noActive": "目前沒有啟用連線。原稿仍可恢復。",
+      "saved": "連線設定已保存。",
+      "failed": "無法更新連線，請重試。",
+      "conflict": "設定已由其他操作變更，請重新載入後再保存。",
+      "kinds": {
+        "provider": "Provider",
+        "custom": "自訂 API",
+        "local": "本機 API 端點"
+      },
+      "dialects": {
+        "generic": "通用 OpenAI 相容",
+        "deepseek": "DeepSeek",
+        "openrouter": "OpenRouter",
+        "gemini": "Gemini OpenAI 相容",
+        "ollama_openai": "Ollama OpenAI 相容"
+      }
+    },
     "text": {
       "title": "文字整理",
       "description": "設定只保存在本機。公司已確認使用相容的 Chat Completions 格式；實際端點、模型、認證及連線仍待設定與驗證。未完成設定時不會送出請求，原稿仍會保存。",

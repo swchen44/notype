@@ -89,7 +89,13 @@ export function ScenarioSettings({
         <Button
           disabled={busy || !prompt.trim()}
           onClick={() =>
-            void run(() => commands.saveScenarioPrompt(scene, prompt))
+            void run(() =>
+              commands.saveScenarioPrompt(
+                scene,
+                prompt,
+                configuration.revision,
+              ),
+            )
           }
         >
           {t("notype.scenarios.savePrompt")}
@@ -98,7 +104,10 @@ export function ScenarioSettings({
           variant="secondary"
           disabled={busy}
           onClick={() =>
-            void run(() => commands.resetScenarioPrompt(scene), true)
+            void run(
+              () => commands.resetScenarioPrompt(scene, configuration.revision),
+              true,
+            )
           }
         >
           {t("notype.scenarios.resetPrompt")}
@@ -220,7 +229,12 @@ export function ScenarioSettings({
           <Button
             disabled={busy || !translation.target_language.trim()}
             onClick={() =>
-              void run(() => commands.saveTranslationSettings(translation))
+              void run(() =>
+                commands.saveTranslationSettings(
+                  translation,
+                  configuration.revision,
+                ),
+              )
             }
           >
             {t("notype.scenarios.saveTranslation")}
