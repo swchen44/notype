@@ -11,17 +11,17 @@ interface AutostartToggleProps {
 export const AutostartToggle: React.FC<AutostartToggleProps> = React.memo(
   ({ descriptionMode = "tooltip", grouped = false }) => {
     const { t } = useTranslation();
-    const { getSetting, updateSetting, isUpdating } = useSettings();
+    const { getSetting } = useSettings();
 
     const autostartEnabled = getSetting("autostart_enabled") ?? false;
 
     return (
       <ToggleSwitch
         checked={autostartEnabled}
-        onChange={(enabled) => updateSetting("autostart_enabled", enabled)}
-        isUpdating={isUpdating("autostart_enabled")}
+        onChange={() => {}}
+        disabled
         label={t("settings.advanced.autostart.label")}
-        description={t("settings.advanced.autostart.description")}
+        description={t("settings.advanced.autostart.unavailable")}
         descriptionMode={descriptionMode}
         grouped={grouped}
       />

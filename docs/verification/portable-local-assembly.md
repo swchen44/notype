@@ -14,6 +14,8 @@ The independent `notype-platform` adapter and standalone baseline probe use Rust
 
 Release entry-point source independently validates the regular-byte application/runtime inventory, its token and data placement before Tauri/history/tray setup; directly invoked invalid packages fail with a clear native diagnostic. This glue is pending the true Release compilation/owned cold-launch proof. GUI startup prewarms the existing script converter in a background thread; the earlier headless CLI path retains cold timing behavior. No new latency/p95 result is claimed.
 
+The local package explicitly reports startup registration unavailable: a direct login invocation would bypass facade model activation and lose a shell-only data override. The visible toggle is disabled with a localized explanation; the command refuses before changing settings, and startup skips plugin enable/disable. Existing preferences/OS entries are retained, with no HKCU writes or login acceptance test in this task. A stable verified login-launcher integration remains future work.
+
 Pinned transcribe.cpp derives default dynamic-backend lookup from its own DLL location. However `ggml-backend-reg.cpp:600` additionally honors GGML_BACKEND_PATH even with an explicit scan directory; both launcher and native release guard remove that override. Actual loaded module paths from the final payload still need observation.
 
 ## Actual checks before release build

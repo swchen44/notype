@@ -428,6 +428,7 @@
       },
       "autostart": {
         "label": "Launch on Startup",
+        "unavailable": "Startup registration is unavailable in this local package. Existing preferences are retained.",
         "description": "Automatically start notype when you log in to your computer."
       },
       "showTrayIcon": {

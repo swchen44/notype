@@ -428,6 +428,7 @@
       },
       "autostart": {
         "label": "开机启动",
+        "unavailable": "本地软件包暂不支持开机启动注册；现有偏好设置会保留。",
         "description": "登录计算机时自动启动 notype。"
       },
       "showTrayIcon": {
