@@ -1,0 +1,146 @@
+{
+  "purpose": "Actual #12 lexical backend compiler/runtime proof after #13 one native no-bundle build; no full model benchmark rerun",
+  "exeSha256": "633f5821671edd4e13a634ed21acecda18a11cc763769bbccb9f2c189be34b93",
+  "build": "Native CPU debug no-bundle, rlib-only; #13 source66b500b plus approved rlib-only build delta, contains merged c7775a2 lexical backend and CLI stage timers",
+  "modelSha256": "3b051f108f03c0c91bbe1a3b2c1ee15e3ed51e4caec2a48751b01f2a21441cc3",
+  "fixedWavSha256": "39dec0a99dff6bec753bf4a699673dbed7dac8d1a32482ec08051a25dec90433",
+  "timing": {
+    "purpose": "Actual new lexical normalizer native proof; exactly one fixed WAV/two repeats, no fullmodel matrix rerun",
+    "exeSha256": "633f5821671edd4e13a634ed21acecda18a11cc763769bbccb9f2c189be34b93",
+    "wallMs": 9902,
+    "observed": {
+      "audio_secs": 13.992625,
+      "best_ms": 3389,
+      "bound_backend": "CPU",
+      "cpu_threads": 4,
+      "load_ms": 891,
+      "model": "handy-computer/Qwen3-ASR-0.6B-gguf/Qwen3-ASR-0.6B-Q6_K.gguf",
+      "normalization_ms": [
+        1176,
+        0
+      ],
+      "raw_text": "今天，请保留四十二笔测试资料，不要删除。The API is not ready。等验证完成后再送出两笔请求。Keep the test data。",
+      "recognition_mode": "traditional_english",
+      "recognition_ms": [
+        3327,
+        3389
+      ],
+      "requested_device": "index 0",
+      "rtf": 4.128835939805253,
+      "text": "今天，請保留四十二筆測試資料，不要刪除。The API is not ready。等驗證完成後再送出兩筆請求。Keep the test data。",
+      "transcribe_ms": [
+        4503,
+        3389
+      ]
+    },
+    "normalizationFirstCallMs": 1176,
+    "normalizationReuseMs": 0,
+    "bindingsBeforeSha256": "e482abded56d06229e0c8fd20584364ae25c4d2810e4cc56462eb1a47a59492a",
+    "bindingsRestoredSha256": "e482abded56d06229e0c8fd20584364ae25c4d2810e4cc56462eb1a47a59492a",
+    "noMicrophoneOrLlm": true,
+    "fullSessionP95Acceptance": "not-established"
+  },
+  "publicSessionProof": {
+    "purpose": "Actual new native Tauri public-session lexical/inverse/save proof; no microphone/LLM/delivery",
+    "exeSha256": "633f5821671edd4e13a634ed21acecda18a11cc763769bbccb9f2c189be34b93",
+    "entries": [
+      {
+        "mode": "traditional_english",
+        "raw": "保留发展，不要留发；头发和发展。",
+        "expected": "保留發展，不要留髮；頭髮和發展。",
+        "entry": {
+          "id": "f6b00239-d3e1-4b9d-ae0a-b1a1d0d663c1",
+          "transcript": "保留發展，不要留髮；頭髮和發展。",
+          "result": null,
+          "created_at": "2026-10-25T02:02:52.937Z",
+          "updated_at": "2026-10-25T02:02:52.942Z",
+          "status": "failed",
+          "error": "configuration-required",
+          "recognition_mode": "traditional_english",
+          "selection": "polished",
+          "scenario": "dictation",
+          "translation_target": null,
+          "source_language": null,
+          "back_translation": null,
+          "review_required": false,
+          "review_confirmed": false,
+          "revision": 1
+        }
+      },
+      {
+        "mode": "traditional_english",
+        "raw": "请打开https://example.com/头发，然后保留发展。",
+        "expected": "請打開https://example.com/头发，然後保留發展。",
+        "entry": {
+          "id": "32f1260f-a0af-430b-8eb8-eb80637b586c",
+          "transcript": "請打開https://example.com/头发，然後保留發展。",
+          "result": null,
+          "created_at": "2026-10-25T02:02:52.956Z",
+          "updated_at": "2026-10-25T02:02:52.957Z",
+          "status": "failed",
+          "error": "configuration-required",
+          "recognition_mode": "traditional_english",
+          "selection": "polished",
+          "scenario": "dictation",
+          "translation_target": null,
+          "source_language": null,
+          "back_translation": null,
+          "review_required": false,
+          "review_confirmed": false,
+          "revision": 1
+        }
+      },
+      {
+        "mode": "simplified_english",
+        "raw": "保留發展，頭髮與發展。",
+        "expected": "保留发展，头发与发展。",
+        "entry": {
+          "id": "d4d30c2c-a396-456d-9fa7-0c700b36232b",
+          "transcript": "保留发展，头发与发展。",
+          "result": null,
+          "created_at": "2026-10-25T02:02:52.971Z",
+          "updated_at": "2026-10-25T02:02:52.973Z",
+          "status": "failed",
+          "error": "configuration-required",
+          "recognition_mode": "simplified_english",
+          "selection": "polished",
+          "scenario": "dictation",
+          "translation_target": null,
+          "source_language": null,
+          "back_translation": null,
+          "review_required": false,
+          "review_confirmed": false,
+          "revision": 1
+        }
+      }
+    ],
+    "savedCount": 3,
+    "passed": true
+  },
+  "normalUserHelper": {
+    "child": {
+      "elevated": false,
+      "integrityMedium": true,
+      "integrityBelowHigh": true,
+      "uiAccess": false
+    },
+    "sameUser": true,
+    "sameSession": true,
+    "jobKillOnClose": true,
+    "fixedRuntimeVersion": "156.0.4314.42",
+    "complete": {
+      "remainingOwnedProcesses": 0,
+      "visibleOwnedWindow": false,
+      "autorunValueStillAbsent": true,
+      "mainExitCode": 0
+    },
+    "observedBrowserImagePaths": [
+      "C:\\Users\\swche\\AppData\\Local\\notype-study\\build-cache\\webview2-fixed-prep\\extracted\\Microsoft.WebView2.FixedVersionRuntime.156.0.4314.42.x64\\msedgewebview2.exe"
+    ]
+  },
+  "bindingsRestoration": {
+    "before": "e482abded56d06229e0c8fd20584364ae25c4d2810e4cc56462eb1a47a59492a",
+    "restored": "e482abded56d06229e0c8fd20584364ae25c4d2810e4cc56462eb1a47a59492a"
+  },
+  "acceptanceLimits": "No microphone, company LLM, native text delivery or population p95 acceptance. First-normalization1176ms versus reuse0ms is rounded-to-millisecond phase time, not zero work; model load and all other session stages are separate. Runtime slot released and all owned processes stopped."
+}
