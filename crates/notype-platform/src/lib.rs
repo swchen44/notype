@@ -302,9 +302,13 @@ pub fn validate_external_data_directory(root: &Path, data: &Path) -> Result<(), 
     };
     let package = fs::canonicalize(root).map_err(|_| PreflightError("runtime-package-missing"))?;
     let mut package_roots = vec![package.clone()];
-    let mut containers = vec![package.parent().ok_or(PreflightError("runtime-package-missing"))?];
+    let mut containers = vec![package
+        .parent()
+        .ok_or(PreflightError("runtime-package-missing"))?];
     containers.extend(package.ancestors().filter(|ancestor| {
-        ancestor.file_name().is_some_and(|name| name == "node_modules")
+        ancestor
+            .file_name()
+            .is_some_and(|name| name == "node_modules")
     }));
     for container in containers {
         for role in ["notype", "notype-model", "notype-win32-x64"] {
