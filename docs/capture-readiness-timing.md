@@ -17,6 +17,15 @@ CaptureProcessor delegates its captured-chunk processing closure to the shared
 handoff; no VAD/resampling algorithm is duplicated. The real-time CPAL callback
 is unchanged and never takes a diagnostic lock.
 
+`ReadyRequest` remains unstamped during startup and the native recorder-lock
+wait. After that guard is acquired, `AudioRecorder::start_observed` calls the
+shared `ReadyRequest::send` handoff immediately around `Cmd::Start` channel send.
+It stamps the trace clock once and gives that same instant to the command and
+its `SentReadyRequest` consumer payload. Consequently command-queue excludes
+pre-send lock contention; action/readiness cumulative origins remain action entry.
+Action-cumulative still ends when open/request returns, rather than consumer
+receipt, so only later readiness cumulative spans include consumer queue time.
+
 `AcceptedAttempt` reserves a nonzero app-run u32 ordinal through a lock-free
 counter at accepted start intent; exhaustion returns unavailable forever, never
 wraps/reuses. The worker captures dequeue before existing logging/action work.
@@ -41,23 +50,23 @@ accepts only a nonnegative integer u64 and the collector applies the same cap.
 `elapsed_ms` remains relative to collector initialization/reset at event insertion.
 It is not a physical key timestamp or frontend receipt time.
 
-| Typed span | Origin ? endpoint / meaning |
-|---|---|
-| dispatch-queue | accepted intent Instant ? actual worker dequeue; unavailable for direct action starts |
-| action-cumulative | action trace entry ? open/request return or early failure |
-| stream-open | native ensure-stream entry ? return; opened / reused / reopened are finite disposition outcomes |
-| command-queue | capture command send ? consumer handling before begin_recording reset; includes consumer scheduling/logging |
-| consumer-first-chunk-cumulative | action entry ? first nonempty captured chunk entering the processing wrapper, after ring consumption |
-| chunk-processing | wrapper entry ? actual visualizer/resampler/VAD/audio_cb processing closure completion |
-| processed-ready-cumulative | action entry ? processed first-chunk observation before readiness send |
-| waiter-scheduling | processed-ready observation ? dedicated waiter return; includes observation/send/scheduler overhead |
-| ready-queue-cumulative | action entry ? ready main-thread submission; reveals otherwise unmeasured post-wait/debug delay without mixing clock origins |
-| main-queue | submission ? validated main-thread emission-adapter entry; includes callback preparation, not one-way IPC |
-| frontend-round-trip-upper-bound | backend emission attempt ? received ACK arrives back; includes native submission, delivery, frontend and return IPC |
-| frontend-commit-local | same overlay webview's ready receipt ? React layout-effect commit; not paint |
-| frontend-settings-local | same overlay webview's show receipt ? current settings Promise resolution |
-| model-job | job actually spawned by this attempt: worker entry ? load return; already loaded is reused/no duration; preexisting shared load is unassociated |
-| cue-call-including-playback | blocking feedback function entry ? return, including its setup and entire playback; not audible-onset time |
+| Typed span                      | Origin ? endpoint / meaning                                                                                                                     |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| dispatch-queue                  | accepted intent Instant ? actual worker dequeue; unavailable for direct action starts                                                           |
+| action-cumulative               | action trace entry ? open/request return or early failure                                                                                       |
+| stream-open                     | native ensure-stream entry ? return; opened / reused / reopened are finite disposition outcomes                                                 |
+| command-queue                   | capture command send ? consumer handling before begin_recording reset; includes consumer scheduling/logging                                     |
+| consumer-first-chunk-cumulative | action entry ? first nonempty captured chunk entering the processing wrapper, after ring consumption                                            |
+| chunk-processing                | wrapper entry ? actual visualizer/resampler/VAD/audio_cb processing closure completion                                                          |
+| processed-ready-cumulative      | action entry ? processed first-chunk observation before readiness send                                                                          |
+| waiter-scheduling               | processed-ready observation ? dedicated waiter return; includes observation/send/scheduler overhead                                             |
+| ready-queue-cumulative          | action entry ? ready main-thread submission; reveals otherwise unmeasured post-wait/debug delay without mixing clock origins                    |
+| main-queue                      | submission ? validated main-thread emission-adapter entry; includes callback preparation, not one-way IPC                                       |
+| frontend-round-trip-upper-bound | backend emission attempt ? received ACK arrives back; includes native submission, delivery, frontend and return IPC                             |
+| frontend-commit-local           | same overlay webview's ready receipt ? React layout-effect commit; not paint                                                                    |
+| frontend-settings-local         | same overlay webview's show receipt ? current settings Promise resolution                                                                       |
+| model-job                       | job actually spawned by this attempt: worker entry ? load return; already loaded is reused/no duration; preexisting shared load is unassociated |
+| cue-call-including-playback     | blocking feedback function entry ? return, including its setup and entire playback; not audible-onset time                                      |
 
 Cumulative and local spans overlap and must not be added as sequential stages.
 No frontend absolute performance clock is sent or subtracted from Rust Instant.
@@ -78,6 +87,11 @@ deduplication. Stale/duplicate/disabled observations return false, without
 changing the overlay or exposing an error popup. Owner IDs stay only in memory.
 The received ACK reports a backend round-trip upper bound; local commit/settings
 durations originate only in that same frontend webview.
+
+The native `OverlayLifecycle::observe` gate rejects wrong capture/revision and
+working/hidden/successor envelopes before its closure enters the ACK registry.
+Settings has no emitted-ready revision in that inner registry and therefore also
+depends on this outer gate; a rejected envelope must not consume its dedup bit.
 
 The real React component sends received once on first accepted ready, committed
 once after the corresponding layout commit, and settings only after current

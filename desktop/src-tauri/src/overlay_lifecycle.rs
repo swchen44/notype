@@ -166,7 +166,12 @@ impl OverlayLifecycle {
         }
         self.commit(ticket, operation)
     }
-    /// Validates a read-only observation against the original capture envelope.
+    /// Validates a read-only observation against the exact current capturing envelope.
+    ///
+    /// Rejects wrong capture/revision, working/hidden stages and superseded ACKs
+    /// without running their closure. Settings observations also rely on this
+    /// outer revision gate before entering correlation/deduplication. Hold the
+    /// adapter's registry lock through this check and observation closure.
     pub fn observe<T>(
         &self,
         capture: CaptureId,

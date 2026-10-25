@@ -313,6 +313,8 @@ pub trait RecorderPort {
     /// Delegates the existing open/reuse/reopen operation unchanged.
     fn ensure_stream(&mut self) -> Result<StreamDisposition, Self::Error>;
     /// Sends the existing recording request and its owned one-shot readiness.
+    /// Acquire native guards first, then use `ReadyRequest::send` immediately
+    /// around channel send; pre-send resource waits are not command-queue time.
     fn request_capture(
         &mut self,
         policy: Self::Policy,
@@ -345,7 +347,6 @@ pub fn start_recording<P: RecorderPort>(
     );
     let (sender, receiver) = mpsc::channel();
     let request = ReadyRequest {
-        sent_at: trace.now(),
         trace: trace.clone(),
         sender,
     };
@@ -353,17 +354,38 @@ pub fn start_recording<P: RecorderPort>(
     trace.cumulative(CaptureSpan::ActionCumulative, CaptureOutcome::Ok);
     Ok(ReadyWaiter { receiver, trace })
 }
-/// Owned one-shot command payload; created by the real startup service.
+/// Unsent one-shot readiness request; it has no command-queue timestamp yet.
+/// Native adapters retain this while acquiring their existing recorder guard.
 pub struct ReadyRequest {
-    sent_at: Instant,
     trace: CaptureTrace,
     sender: mpsc::Sender<ProcessedReady>,
 }
 impl ReadyRequest {
-    /// Command-send Instant in the trace's clock domain.
-    pub fn sent_at(&self) -> Instant {
-        self.sent_at
+    /// Stamps and transfers readiness at the actual command-send boundary.
+    ///
+    /// Call after acquiring the recorder guard, immediately around channel send.
+    /// Both the command and consumer payload receive this same backend-clock
+    /// instant. This method never acquires native locks or changes capture state.
+    pub fn send<T>(self, send: impl FnOnce(Instant, ReadySignal) -> T) -> T {
+        let sent_at = self.trace.now();
+        send(
+            sent_at,
+            ReadySignal::Observed(SentReadyRequest {
+                sent_at,
+                trace: self.trace,
+                sender: self.sender,
+            }),
+        )
     }
+}
+/// Sent readiness payload with the actual channel-send origin, never port entry.
+/// Only `ReadyRequest::send` constructs it; consumer processing owns completion.
+pub struct SentReadyRequest {
+    sent_at: Instant,
+    trace: CaptureTrace,
+    sender: mpsc::Sender<ProcessedReady>,
+}
+impl SentReadyRequest {
     /// Consumer-thread observation; never invoked by the real-time audio callback.
     pub fn command_received(&self) {
         self.trace.record(
@@ -383,7 +405,7 @@ pub enum ReadySignal {
     /// Standalone recorder/CLI compatibility with its original unit signal.
     Legacy(mpsc::Sender<()>),
     /// Production capture carries processed timestamps and correlation.
-    Observed(ReadyRequest),
+    Observed(SentReadyRequest),
 }
 impl ReadySignal {
     /// Consumer-thread observation; never invoked by the real-time audio callback.

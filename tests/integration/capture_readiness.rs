@@ -4,9 +4,12 @@ mod capture_observations;
 mod capture_startup;
 #[path = "../../desktop/src-tauri/src/diagnostics.rs"]
 mod diagnostics;
+#[path = "../../desktop/src-tauri/src/overlay_lifecycle.rs"]
+mod overlay_lifecycle;
 use capture_observations::{CaptureObservations, FrontendObservation};
 use capture_startup::*;
 use diagnostics::service::{DiagnosticService, DiagnosticStorage};
+use overlay_lifecycle::{CaptureId, OverlayLifecycle, Presentation};
 use std::{
     path::Path,
     sync::{
@@ -95,8 +98,10 @@ impl RecorderPort for Recorder {
         Ok(StreamDisposition::Reused)
     }
     fn request_capture(&mut self, _: (), ready: ReadyRequest) -> Result<(), ()> {
-        ready.command_received();
-        self.signal = Some(ReadySignal::Observed(ready));
+        ready.send(|_, signal| {
+            signal.command_received();
+            self.signal = Some(signal);
+        });
         Ok(())
     }
 }
@@ -267,4 +272,39 @@ fn originating_model_job_keeps_its_ordinal_after_a_later_capture_observes_shared
         .lines()
         .any(|line| line.contains("attempt=41 span=model-job")));
     assert!(text.contains("attempt=unassociated span=model-job"));
+}
+
+#[test]
+fn settings_observation_uses_actual_overlay_revision_gate_before_registry_deduplication() {
+    let (service, clock) = setup();
+    let registry = CaptureObservations::new();
+    let mut lifecycle = OverlayLifecycle::new();
+    let current = lifecycle
+        .reserve(CaptureId(4), Presentation::Recording)
+        .unwrap();
+    registry.bind(4, trace(&service, &clock, 42));
+    let mut callbacks = 0;
+    // Settings intentionally has no emitted-ready revision in the inner registry.
+    // Exercise the same outer policy method used by the native ACK adapter.
+    assert_eq!(
+        lifecycle.observe(current.capture, current.revision + 1, || {
+            callbacks += 1;
+            registry.frontend(4, current.revision + 1, FrontendObservation::Settings, 999)
+        }),
+        None
+    );
+    assert_eq!(callbacks, 0, "stale settings ACK never enters the registry");
+    assert!(!report(&service).contains("span=frontend-settings-local"));
+    assert_eq!(
+        lifecycle.observe(current.capture, current.revision, || {
+            callbacks += 1;
+            registry.frontend(4, current.revision, FrontendObservation::Settings, 500)
+        }),
+        Some(true)
+    );
+    assert_eq!(callbacks, 1, "a rejected ACK did not consume the dedup bit");
+    assert!(report(&service)
+        .lines()
+        .any(|line| line.contains("span=frontend-settings-local ")
+            && line.contains("duration_ms=500 ")));
 }
