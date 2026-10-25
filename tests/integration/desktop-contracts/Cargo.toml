@@ -125,3 +125,7 @@ path = "../capture_readiness.rs"
 [[test]]
 name = "diagnostic-api"
 path = "../../unittest/diagnostic_api.rs"
+
+[[test]]
+name = "provider-config"
+path = "../../unittest/provider_config.rs"
