@@ -1,10 +1,16 @@
 # Windows 11 開發接手
 
-更新日期：2026-10-25。Repository：[swchen44/notype](https://github.com/swchen44/notype)，private。
+更新日期：2026-10-26。Repository：[swchen44/notype](https://github.com/swchen44/notype)，private。
 
 使用者已決定在自己的 **Windows 11** 開發，MVP 只交付 **Windows amd64／x64**；架構預留 **macOS／Linux**，見 [ADR 0003](docs/adr/0003-shared-core-platform-adapters.md)。目前尚未交付 macOS／Linux App。Q1～Q15 為原始決策，後續三場景與點按操作更新以 #8／decision log 為準，不重問已確認項目。
 
 ## 目前 checkpoint
+
+2026-10-26 接續快照：整合分支已推送 `1dfedead8be5dc0db04fcab3bd349f77083da271`，使用者安裝包仍為舊版。P19 限定來源複核 Spec 0／Standards 0，CI 40206394843 通過。#23 離線預算／單輪重啟保護及審查修正已合入，28 tests 與 missing_docs 通過，限定獨立來源複核兩軸皆 0；尚無 key 或付費呼叫。#22 backend 收尾中，#24 UI 已完成於 `55980bc`（integration 36／unit 1 通過），待來源審查與完整 backend 一起整合；不能把 checkpoint 視為整個 #22 完成。
+
+[P23-live-v1](https://github.com/swchen44/notype/issues/23#issuecomment-6399600403) 已獲 [Astra 核准](https://github.com/swchen44/notype/issues/23#issuecomment-6399640205)，whole #22 合入後才啟動 production bridge／原生 console／binary 切片。[P14-build-v2](https://github.com/swchen44/notype/issues/14#issuecomment-6399567273) 與 [delivery-v2](https://github.com/swchen44/notype/issues/14#issuecomment-6399567585) 分別 [核准](https://github.com/swchen44/notype/issues/14#issuecomment-6399589852)／[核准](https://github.com/swchen44/notype/issues/14#issuecomment-6399590175)。舊版相容不做，使用全新版本化程式／資料目錄；目前不刪使用者程式或資料。舊段落的草擬／待複核狀態由本快照取代。
+
+資源 gate：唯一 Cargo target `D:/git/notype-build`、release／offline locked／jobs1／incremental0；#22 worker 尚持有獨占 lease。Native App 建置起始 C、D 均須 ≥2 GiB，執行中 C≥2 GiB／D≥1 GiB 並保留 32 MiB guard。最近 D 約 1.63 GB，已請使用者釋放至少 1 GB，尚未收到回覆；不降低下限、不自行刪個人檔案。額外 storage cleanup 計畫僅草稿，未核准、未執行。先繼續可獨立的來源與審查工作。
 
 2026-10-25 本機回饋與 P19 review fixes 已合入並推送 `89d239c441bf8f4482b8a3fd9a5f9b7c3b0a1b80`；使用者實際包仍是舊版。P20/P21 基線雙軸複核 Spec 0／Standards 0；P19 的計時起點及 observe 測試缺口已依核准計畫修正，待最終獨立複核。修正 std 18／overlay UI 8／lint/build 通過，先前完整 UI 22 通過。原生建置、bindings、實機與本輪大型交付尚未執行；右 Alt 真機等待仍未定位。
 
