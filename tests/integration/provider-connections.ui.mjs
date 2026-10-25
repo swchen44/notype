@@ -46,3 +46,53 @@ test("editing a saved connection preserves manual model input until explicit sav
     null,
   );
 });
+
+test("API options preserve zero temperature and send an explicit key replacement without returning stored secrets", async (t) => {
+  const connection = {
+    ...savedConnection,
+    authentication: "bearer",
+    app_key_present: true,
+    credential_present: true,
+    credential_source: "app",
+    api_key: "legacy-secret-must-not-render",
+  };
+  const page = await providerConnectionsFixture(t, "en", [connection]);
+  await page
+    .getByRole("button", { name: "Edit Company writing", exact: true })
+    .click();
+  await page
+    .getByLabel("App key action", { exact: true })
+    .selectOption("replace");
+  await page
+    .getByLabel("Replacement API key", { exact: true })
+    .fill("synthetic-new-key");
+  await page.getByLabel("Temperature", { exact: true }).fill("0");
+  await page.getByLabel("Top p", { exact: true }).fill("0.5");
+  await page
+    .getByLabel("Maximum output tokens (blank uses API default)", {
+      exact: true,
+    })
+    .fill("512");
+  await page
+    .getByRole("button", { name: "Save connection", exact: true })
+    .click();
+  await page.waitForFunction(() =>
+    window.calls.some((call) => call.cmd === "save_text_connection"),
+  );
+  const payload = await page.evaluate(
+    () => window.calls.find((call) => call.cmd === "save_text_connection").args,
+  );
+  assert.deepEqual(payload.keyAction, {
+    action: "replace",
+    value: "synthetic-new-key",
+  });
+  assert.equal(payload.connection.temperature, 0);
+  assert.equal(payload.connection.top_p, 0.5);
+  assert.equal(payload.connection.max_output_tokens, 512);
+  assert.equal("api_key" in payload.connection, false);
+  await page.getByText("Connection settings saved.", { exact: true }).waitFor();
+  assert.doesNotMatch(
+    await page.locator("body").innerText(),
+    /legacy-secret|synthetic-new-key/,
+  );
+});
