@@ -25,6 +25,18 @@ pub enum TextAuthentication {
     Bearer,
 }
 
+/// Explicit option vocabulary. Generic never silently receives DeepSeek keys.
+#[derive(Clone, Copy, Default, Serialize, Deserialize, specta::Type, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TextProviderProfile {
+    /// Provider-default compatible fields; support is server-specific.
+    #[default]
+    Generic,
+    /// Documented DeepSeek thinking/effort/output-limit controls.
+    #[serde(rename = "deepseek")]
+    DeepSeek,
+}
+
 // Deliberately no Debug: configuration contains a locally stored credential.
 #[derive(Clone, Serialize, Deserialize, specta::Type)]
 #[serde(default)]
@@ -37,6 +49,12 @@ pub struct TextConfiguration {
     pub authentication: TextAuthentication,
     pub api_key: String,
     pub timeout_ms: u64,
+    /// Explicit option profile, independent of endpoint text/credential.
+    pub provider_profile: TextProviderProfile,
+    /// Omitted/provider-default or explicit bounded provider-supported effort.
+    pub effort: Option<String>,
+    /// Optional request output limit; None preserves provider default.
+    pub max_output_tokens: Option<u32>,
     pub prompts: ScenarioPrompts,
     pub translation: TranslationSettings,
 }
@@ -49,6 +67,9 @@ impl Default for TextConfiguration {
             authentication: TextAuthentication::Unspecified,
             api_key: String::new(),
             timeout_ms: 30_000,
+            provider_profile: TextProviderProfile::Generic,
+            effort: None,
+            max_output_tokens: None,
             prompts: ScenarioPrompts::default(),
             translation: TranslationSettings::default(),
         }
@@ -100,6 +121,24 @@ impl Default for TranslationSettings {
     }
 }
 impl TextConfiguration {
+    /// Validate explicit option spellings/bounds without a request or settings I/O.
+    pub fn options_valid(&self) -> bool {
+        let effort = self
+            .effort
+            .as_deref()
+            .is_none_or(|value| match self.provider_profile {
+                TextProviderProfile::Generic => notype_core::observations::valid_effort(value),
+                TextProviderProfile::DeepSeek => matches!(value, "none" | "low" | "high" | "max"),
+            });
+        let maximum = match self.provider_profile {
+            TextProviderProfile::Generic => 1_000_000,
+            TextProviderProfile::DeepSeek => 393_216,
+        };
+        effort
+            && self
+                .max_output_tokens
+                .is_none_or(|limit| (1..=maximum).contains(&limit))
+    }
     /// Return only the selected scenario's saved prompt.
     pub fn prompt(&self, scenario: Scenario) -> &str {
         match scenario {
@@ -231,11 +270,15 @@ struct ChatProcessor {
     deadline: Duration,
     prompts: ScenarioPrompts,
     translation: TranslationSettings,
+    provider_profile: TextProviderProfile,
+    effort: Option<String>,
+    max_output_tokens: Option<u32>,
 }
 impl ChatProcessor {
     fn new(configuration: TextConfiguration) -> Result<Self, TextFailure> {
         let invalid = TextFailure::ConfigurationRequired;
         if configuration.transport != TextTransport::OpenAiChat
+            || !configuration.options_valid()
             || configuration.authentication == TextAuthentication::Unspecified
             || configuration.model.trim().is_empty()
             || configuration.timeout_ms == 0
@@ -287,6 +330,9 @@ impl ChatProcessor {
             deadline,
             prompts: configuration.prompts,
             translation: configuration.translation,
+            provider_profile: configuration.provider_profile,
+            effort: configuration.effort,
+            max_output_tokens: configuration.max_output_tokens,
         })
     }
 }
@@ -407,11 +453,23 @@ impl ChatProcessor {
         let model = self.model.clone();
         let authorization = self.authorization.clone();
         let deadline = self.deadline;
+        let provider_profile = self.provider_profile;
+        let effort = self.effort.clone();
+        let max_output_tokens = self.max_output_tokens;
         Box::pin(async move {
             let operation = async move {
-                let mut request = client
-                    .post(endpoint)
-                    .json(&json!({"model":model,"messages":messages}));
+                let mut body = json!({"model":model,"messages":messages});
+                if let Some(value) = effort {
+                    if provider_profile == TextProviderProfile::DeepSeek {
+                        body["thinking"] =
+                            json!({"type":if value=="none" {"disabled"}else{"enabled"}});
+                    }
+                    body["reasoning_effort"] = Value::String(value);
+                }
+                if let Some(value) = max_output_tokens {
+                    body["max_tokens"] = json!(value);
+                }
+                let mut request = client.post(endpoint).json(&body);
                 if let Some(authorization) = authorization {
                     request = request.header(reqwest::header::AUTHORIZATION, authorization);
                 }

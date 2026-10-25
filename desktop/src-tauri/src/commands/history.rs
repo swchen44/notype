@@ -10,6 +10,12 @@ use tauri::{AppHandle, Manager, State};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_store::StoreExt;
 
+#[path = "history_metrics.rs"]
+mod history_metrics;
+pub use history_metrics::{
+    HistoryApiSummaryDto, HistoryCsvExportResult, HistoryCsvExportStatus, HistoryObservationsDto,
+};
+
 #[derive(Serialize, Type)]
 #[serde(rename_all = "kebab-case")]
 pub enum SessionPhase {
@@ -40,6 +46,10 @@ pub struct SessionDto {
     pub review_required: bool,
     pub review_confirmed: bool,
     pub revision: i64,
+    /// Safe durable recording/model/count/time observations.
+    pub observations: HistoryObservationsDto,
+    /// All actual API calls, including retry/back-translation and unknown fees.
+    pub api_summary: HistoryApiSummaryDto,
 }
 #[derive(Clone, Copy, Default, Serialize, Deserialize, Type)]
 #[serde(rename_all = "snake_case")]
@@ -93,6 +103,8 @@ impl From<SessionEntry> for SessionDto {
             review_required: entry.review_required,
             review_confirmed: entry.review_confirmed,
             revision: entry.revision,
+            observations: entry.observations.into(),
+            api_summary: entry.api_summary.into(),
             recognition_mode: entry.recognition_mode.map(|mode| {
                 match mode {
                     RecognitionMode::TraditionalEnglish => "traditional_english",
@@ -144,6 +156,9 @@ pub fn set_text_configuration(
     app: AppHandle,
     mut configuration: TextConfiguration,
 ) -> Result<(), String> {
+    if !configuration.options_valid() {
+        return Err("configuration-invalid-options".into());
+    }
     let _lock = CONFIGURATION_WRITE
         .lock()
         .map_err(|_| "configuration-storage-failed")?;
@@ -152,6 +167,92 @@ pub fn set_text_configuration(
     configuration.prompts = current.prompts;
     configuration.translation = current.translation;
     persist_configuration(&app, configuration)
+}
+
+/// Explicit all-history save. Native selection/space probing occur outside the
+/// store writer lock; only the completed snapshot file replaces a destination.
+#[tauri::command]
+#[specta::specta]
+pub async fn export_history_csv(
+    app: AppHandle,
+    workflow: State<'_, Arc<DesktopWorkflow>>,
+) -> Result<HistoryCsvExportResult, String> {
+    use tauri_plugin_dialog::DialogExt;
+    let selected = app
+        .dialog()
+        .file()
+        .set_file_name("notype-history.csv")
+        .add_filter("CSV", &["csv"])
+        .blocking_save_file();
+    let Some(selected) = selected else {
+        return Ok(HistoryCsvExportResult {
+            status: HistoryCsvExportStatus::Cancelled,
+            rows: None,
+        });
+    };
+    let destination = selected
+        .into_path()
+        .map_err(|_| "history-csv-invalid-destination".to_owned())?;
+    let sessions = workflow.sessions().clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        sessions.export_csv(
+            &destination,
+            &NativeCsvSpace,
+            &notype_core::CancellationToken::new(),
+        )
+    })
+    .await
+    .map_err(|_| "history-csv-write-failed".to_owned())?;
+    match result {
+        Ok(exported) => Ok(HistoryCsvExportResult {
+            status: HistoryCsvExportStatus::Saved,
+            rows: Some(exported.rows),
+        }),
+        Err(notype_core::csv::CsvExportError::Cancelled) => Ok(HistoryCsvExportResult {
+            status: HistoryCsvExportStatus::Cancelled,
+            rows: None,
+        }),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
+struct NativeCsvSpace;
+impl notype_core::csv::CsvSpaceProbe for NativeCsvSpace {
+    fn available_bytes(
+        &self,
+        directory: &std::path::Path,
+    ) -> Result<u64, notype_core::csv::CsvExportError> {
+        #[cfg(windows)]
+        {
+            use std::os::windows::ffi::OsStrExt;
+            #[link(name = "kernel32")]
+            unsafe extern "system" {
+                fn GetDiskFreeSpaceExW(
+                    directory: *const u16,
+                    available: *mut u64,
+                    total: *mut u64,
+                    free: *mut u64,
+                ) -> i32;
+            }
+            let wide: Vec<u16> = directory.as_os_str().encode_wide().chain(Some(0)).collect();
+            let mut available = 0;
+            // Existing chosen directory; only this process's available quota is read.
+            if unsafe {
+                GetDiskFreeSpaceExW(
+                    wide.as_ptr(),
+                    &mut available,
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                )
+            } != 0
+            {
+                return Ok(available);
+            }
+        }
+        #[cfg(not(windows))]
+        let _ = directory;
+        Err(notype_core::csv::CsvExportError::SpaceUnavailable)
+    }
 }
 static CONFIGURATION_WRITE: Mutex<()> = Mutex::new(());
 fn persist_configuration(app: &AppHandle, configuration: TextConfiguration) -> Result<(), String> {

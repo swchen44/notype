@@ -13,8 +13,8 @@ use std::sync::{
 #[path = "faithful_provider.rs"]
 mod faithful_provider;
 pub use faithful_provider::{
-    ScenarioPrompts, TextAuthentication, TextConfiguration, TextTransport, TranslationSettings,
-    TranslationTerm,
+    ScenarioPrompts, TextAuthentication, TextConfiguration, TextProviderProfile, TextTransport,
+    TranslationSettings, TranslationTerm,
 };
 #[path = "recognition.rs"]
 pub mod recognition;

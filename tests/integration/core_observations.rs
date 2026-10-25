@@ -1,3 +1,4 @@
+use notype_core::csv::{CsvExportError, CsvSpaceProbe};
 use notype_core::observations::{
     ActualCharge, ApiCallDescriptor, ApiCallGuard, ApiCallObserver, ApiOutcome, ApiPurpose,
     ApiReceipt, TokenUsage,
@@ -161,4 +162,98 @@ fn nonempty_unversioned_database_requires_reset_without_modifying_its_data() {
         Err(notype_core::CoreError::ResetRequired)
     ));
     assert_eq!(std::fs::read(&path).unwrap(), before);
+}
+
+struct PlentySpace;
+impl CsvSpaceProbe for PlentySpace {
+    fn available_bytes(&self, _: &std::path::Path) -> Result<u64, CsvExportError> {
+        Ok(u64::MAX)
+    }
+}
+fn read_csv(path: &std::path::Path) -> serde_json::Value {
+    let executable = std::env::var_os("NOTYPE_TEST_PYTHON")
+        .unwrap_or_else(|| if cfg!(windows) { "python" } else { "python3" }.into());
+    let mut command = std::process::Command::new(executable);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x08000000);
+    }
+    let output=command.args(["-X","utf8","-c","import csv,json,sys; f=open(sys.argv[1],encoding='utf-8-sig',newline=''); print(json.dumps(list(csv.DictReader(f)),ensure_ascii=False))"]).arg(path).output().unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    serde_json::from_slice(&output.stdout).unwrap()
+}
+#[tokio::test]
+async fn one_utf8_csv_row_joins_exact_texts_and_every_api_total_by_history_id() {
+    let directory = tempfile::tempdir().unwrap();
+    let service = SessionService::open(directory.path().join("sessions.db")).unwrap();
+    let original = "=SUM(A1:A2)\r\n第一行,\"API\"";
+    let entry = service
+        .create_observed(
+            original,
+            SessionOptions::default(),
+            SessionObservations {
+                recording: Some(RecordingObservation::new(24_000, 48_000, Some(0)).unwrap()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    service
+        .process(
+            &entry.id,
+            vec![],
+            Arc::new(Metered {
+                model: "model-a",
+                input: 120,
+                output: 30,
+                amount: "0.001",
+            }),
+        )
+        .await
+        .unwrap();
+    service
+        .process(
+            &entry.id,
+            vec![],
+            Arc::new(Metered {
+                model: "model-b",
+                input: 20,
+                output: 10,
+                amount: "0.002",
+            }),
+        )
+        .await
+        .unwrap();
+    let destination = directory.path().join("research.csv");
+    let exported = service
+        .export_csv(&destination, &PlentySpace, &CancellationToken::new())
+        .unwrap();
+    assert_eq!(exported.rows, 1);
+    assert!(std::fs::read(&destination)
+        .unwrap()
+        .starts_with(&[0xef, 0xbb, 0xbf]));
+    let rows = read_csv(&destination);
+    assert_eq!(rows.as_array().unwrap().len(), 1);
+    let row = &rows[0];
+    assert_eq!(row["history_id"], entry.id);
+    assert_eq!(row["original_text"], original);
+    assert_eq!(row["result_text"], "整理 API。");
+    assert_eq!(row["original_count"], "7");
+    assert_eq!(row["result_count"], "3");
+    assert_eq!(row["recording_audio_seconds"], "0.500");
+    assert_eq!(row["input_tokens"], "140");
+    assert_eq!(row["output_tokens"], "40");
+    let amounts: serde_json::Value =
+        serde_json::from_str(row["actual_fee_totals_by_currency"].as_str().unwrap()).unwrap();
+    assert_eq!(
+        amounts,
+        serde_json::json!([{"currency":"USD","amount":"0.003"}])
+    );
+    let models: serde_json::Value =
+        serde_json::from_str(row["api_requested_models"].as_str().unwrap()).unwrap();
+    assert_eq!(models, serde_json::json!(["model-a", "model-b"]));
 }

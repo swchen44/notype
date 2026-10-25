@@ -13,6 +13,7 @@ pub use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 mod http;
 pub use http::HttpTextProcessor;
+pub mod csv;
 mod observation_store;
 pub mod observations;
 
@@ -252,6 +253,7 @@ pub struct SessionService {
     connection: Arc<Mutex<Connection>>,
     active: Arc<Mutex<HashMap<String, (i64, CancellationToken)>>>,
     _owner: Option<Arc<File>>,
+    database_path: Option<Arc<std::path::PathBuf>>,
 }
 
 fn now() -> String {
@@ -318,7 +320,9 @@ impl SessionService {
             TryLockError::Error(_) => CoreError::Storage,
         })?;
         let connection = Connection::open(&resolved)?;
-        Self::from_connection(connection, Some(Arc::new(owner)))
+        let mut service = Self::from_connection(connection, Some(Arc::new(owner)))?;
+        service.database_path = Some(Arc::new(resolved));
+        Ok(service)
     }
 
     pub fn in_memory() -> Result<Self, CoreError> {
@@ -401,6 +405,7 @@ impl SessionService {
             connection: Arc::new(Mutex::new(connection)),
             active: Arc::new(Mutex::new(HashMap::new())),
             _owner: owner,
+            database_path: None,
         })
     }
 

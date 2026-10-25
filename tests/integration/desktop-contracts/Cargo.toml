@@ -6,6 +6,10 @@ publish = false
 
 [workspace]
 
+[[test]]
+name = "history-metrics-dto"
+path = "../history_metrics_dto.rs"
+
 [dependencies]
 notype-core = { path = "../../../crates/notype-core" }
 serde = { version = "1", features = ["derive"] }

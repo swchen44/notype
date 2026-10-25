@@ -1,7 +1,10 @@
+#[allow(dead_code)]
 #[path = "../../desktop/src-tauri/src/capture_startup.rs"]
 mod capture_startup;
+#[allow(dead_code)]
 #[path = "../../desktop/src-tauri/src/diagnostics.rs"]
 mod diagnostics;
+#[allow(dead_code, unused_imports)]
 #[path = "../../desktop/src-tauri/src/workflow.rs"]
 mod workflow;
 use notype_core::{RecognitionMode, SessionOptions, SessionService, SessionStatus};
@@ -12,7 +15,34 @@ use tokio::{
     net::TcpListener,
     sync::oneshot,
 };
+use workflow::TextProviderProfile;
 use workflow::{DesktopWorkflow, TextAuthentication, TextConfiguration, TextTransport};
+
+#[test]
+fn explicit_effort_and_output_limits_are_profile_validated_without_network() {
+    let mut configuration = configured("http://127.0.0.1:1/chat/completions".into());
+    assert!(configuration.options_valid());
+    configuration.provider_profile = TextProviderProfile::DeepSeek;
+    configuration.effort = Some("none".into());
+    configuration.max_output_tokens = Some(512);
+    assert!(configuration.is_ready());
+    assert_eq!(
+        serde_json::to_value(configuration.provider_profile).unwrap(),
+        "deepseek"
+    );
+    configuration.effort = Some("medium".into());
+    assert!(!configuration.is_ready());
+    configuration.provider_profile = TextProviderProfile::Generic;
+    assert!(configuration.is_ready());
+    configuration.effort = Some("custom_effort-2".into());
+    configuration.max_output_tokens = Some(1_000_000);
+    assert!(configuration.is_ready());
+    configuration.max_output_tokens = Some(1_000_001);
+    assert!(!configuration.is_ready());
+    configuration.max_output_tokens = Some(1);
+    configuration.effort = Some("UPPER".into());
+    assert!(!configuration.options_valid());
+}
 
 async fn fixture(
     body: &str,
@@ -76,6 +106,29 @@ fn configured(endpoint: String) -> TextConfiguration {
         timeout_ms: 2000,
         ..TextConfiguration::default()
     }
+}
+
+#[tokio::test]
+async fn deepseek_non_thinking_effort_and_token_limit_reach_the_actual_http_wire() {
+    let (endpoint,request,server)=fixture(r#"{"choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"整理 API。"}}]}"#,Duration::ZERO).await;
+    let mut configuration = configured(endpoint);
+    configuration.provider_profile = TextProviderProfile::DeepSeek;
+    configuration.effort = Some("none".into());
+    configuration.max_output_tokens = Some(512);
+    let workflow = DesktopWorkflow::new(SessionService::in_memory().unwrap(), Arc::new(|| {}));
+    let generation = workflow
+        .begin(RecognitionMode::TraditionalEnglish, None)
+        .unwrap();
+    let result = workflow
+        .finish(generation, "原稿 API", configuration, vec![])
+        .await
+        .unwrap();
+    assert_eq!(result.result.as_deref(), Some("整理 API。"));
+    let request = request.await.unwrap();
+    assert_eq!(request["reasoning_effort"], "none");
+    assert_eq!(request["thinking"]["type"], "disabled");
+    assert_eq!(request["max_tokens"], 512);
+    server.await.unwrap();
 }
 
 #[tokio::test]
