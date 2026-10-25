@@ -189,6 +189,59 @@ test("model-list authentication errors are actionable while manual input stays a
   );
 });
 
+test("a rejected model-list invocation can be explicitly retried", async (t) => {
+  const page = await providerConnectionsFixture(t, "en", [savedConnection]);
+  await page
+    .getByRole("button", { name: "Edit Company writing", exact: true })
+    .click();
+  await page.evaluate(() => (window.modelMode = "invoke-error"));
+  await page
+    .getByRole("button", { name: "View model ID list", exact: true })
+    .click();
+  await page.getByRole("alert").waitFor();
+  await page.evaluate(() => (window.modelMode = "ok"));
+  await page
+    .getByRole("button", { name: "View model ID list", exact: true })
+    .click();
+  await page
+    .getByRole("list", { name: "Model ID list", exact: true })
+    .waitFor();
+  assert.doesNotMatch(
+    await page.locator("body").innerText(),
+    /upstream-secret/,
+  );
+});
+
+test("explicit model-list cancellation fences a late reply and permits a new query", async (t) => {
+  const page = await providerConnectionsFixture(t, "en", [savedConnection]);
+  await page
+    .getByRole("button", { name: "Edit Company writing", exact: true })
+    .click();
+  await page.evaluate(() => (window.modelMode = "pending"));
+  await page
+    .getByRole("button", { name: "View model ID list", exact: true })
+    .click();
+  await page.waitForFunction(() => typeof window.releaseModels === "function");
+  await page.getByRole("button", { name: "Cancel query", exact: true }).click();
+  await page.evaluate(() => window.releaseModels());
+  await page
+    .getByText("Model-list query cancelled.", { exact: true })
+    .waitFor();
+  assert.equal(
+    await page
+      .getByRole("list", { name: "Model ID list", exact: true })
+      .count(),
+    0,
+  );
+  await page.evaluate(() => (window.modelMode = "ok"));
+  await page
+    .getByRole("button", { name: "View model ID list", exact: true })
+    .click();
+  await page
+    .getByRole("list", { name: "Model ID list", exact: true })
+    .waitFor();
+});
+
 test("new local connections have a blank model and are not implicitly activated", async (t) => {
   const page = await providerConnectionsFixture(t);
   await page

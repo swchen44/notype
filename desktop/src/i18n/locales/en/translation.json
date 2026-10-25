@@ -145,6 +145,11 @@
       "delivery-unknown": "Delivery uncertain"
     },
     "errors": {
+      "configuration-credentials-unavailable": "A connection credential could not be resolved. Check the App key or eligible home .env variable. The original is saved.",
+      "configuration-capability-required": "Declare or resolve the model's supported options before processing. The original is saved.",
+      "configuration-route-invalid": "Check the selected connection's address and API format. The original is saved.",
+      "configuration-invalid-options": "Check the model's supported thinking and sampling options. The original is saved.",
+      "configuration-storage-failed": "Connection settings could not be read safely. Reload the settings; the original is saved.",
       "provider-permission": "Permission denied. Check access to the selected model. The original is saved.",
       "back-provider-permission": "Back-translation: Permission denied. Check access to the selected model. The primary translation is retained; review is incomplete.",
       "provider-balance": "Insufficient balance. Check the service account. The original is saved.",
@@ -186,6 +191,46 @@
       "prompt-invalid": "Could not save. Check the prompt and translation fields.",
       "back-translation-failed": "Back-translation unavailable. The primary translation is retained for copying or retry.",
       "back-translation-timeout": "Back-translation unavailable. The primary translation is retained for copying or retry."
+    },
+    "requestOptions": {
+      "unavailable": "Request-option metadata is unknown.",
+      "omitted": "Omitted / API default",
+      "on": "On",
+      "off": "Off",
+      "explanation": "Preferences, sent fields and documented behavior are separate; internal model computation is not observed.",
+      "thinkingPreference": "Thinking preference: {{value}}",
+      "thinkingWire": "Thinking in request: {{value}}",
+      "effortPreference": "Effort preference: {{value}}",
+      "effortWire": "Effort in request: {{value}}",
+      "provenance": "Capability evidence: {{value}}",
+      "reason": "Thinking resolution: {{value}}",
+      "temperaturePreference": "Temperature preference: {{value}}",
+      "temperatureWire": "Temperature in request: {{value}}",
+      "temperatureResolution": "Temperature handling: {{value}}",
+      "topPPreference": "Top p preference: {{value}}",
+      "topPWire": "Top p in request: {{value}}",
+      "topPResolution": "Top p handling: {{value}}",
+      "documentedTopP": "Documented top p normalization: {{value}} (not reported by the response)",
+      "outputWire": "Maximum output tokens in request: {{value}}",
+      "sources": {
+        "documented": "Documented",
+        "provider_metadata": "Provider metadata",
+        "user_declared": "User-declared / unverified",
+        "unknown": "Unknown"
+      },
+      "reasons": {
+        "non_reasoning": "Not applicable / non-reasoning",
+        "disabled": "Disable requested",
+        "enabled": "Enable requested",
+        "mandatory_minimum": "Minimum supported thinking",
+        "unresolved": "Unresolved"
+      },
+      "sampling": {
+        "omitted": "Omitted",
+        "sent": "Configured value sent",
+        "ignored_by_provider": "Ignored by provider / omitted",
+        "unsupported": "Unsupported"
+      }
     },
     "connections": {
       "reload": "Reload connections",

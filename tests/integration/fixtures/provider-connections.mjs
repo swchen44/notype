@@ -122,6 +122,8 @@ export async function providerConnectionsFixture(
             return structuredClone(window.configuration);
           }
           if (cmd === "list_text_models") {
+            if (window.modelMode === "invoke-error")
+              throw "Bearer upstream-secret";
             const request = args.request;
             const response = {
               request_id: request.request_id,

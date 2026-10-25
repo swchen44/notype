@@ -98,6 +98,11 @@
       "delivery-unknown": "交付结果不明"
     },
     "errors": {
+      "configuration-credentials-unavailable": "无法解析连接密钥，请检查 App 密钥或符合条件的主目录 .env 变量。原稿已保存。",
+      "configuration-capability-required": "请先声明或确认模型支持的参数。原稿已保存。",
+      "configuration-route-invalid": "请检查所选连接的地址与 API 格式。原稿已保存。",
+      "configuration-invalid-options": "请检查模型支持的 thinking 与采样参数。原稿已保存。",
+      "configuration-storage-failed": "无法安全读取连接设置，请重新加载设置。原稿已保存。",
       "provider-permission": "权限不足，请检查所选模型的访问权限。原稿已保存。",
       "back-provider-permission": "回译：权限不足，请检查所选模型的访问权限。主翻译已保留，审阅尚未完成。",
       "provider-balance": "服务余额不足，请检查服务账户。原稿已保存。",
@@ -139,6 +144,46 @@
       "prompt-invalid": "无法保存，请检查提示词与翻译字段。",
       "back-translation-failed": "回译尚未完成；主翻译仍保留，可复制或重试。",
       "back-translation-timeout": "回译尚未完成；主翻译仍保留，可复制或重试。"
+    },
+    "requestOptions": {
+      "unavailable": "请求参数观测数据未知。",
+      "omitted": "未指定／API 默认",
+      "on": "开",
+      "off": "关",
+      "explanation": "用户偏好、发送字段与文档行为分别记录；未观测模型内部运算。",
+      "thinkingPreference": "Thinking 偏好：{{value}}",
+      "thinkingWire": "请求中的 thinking：{{value}}",
+      "effortPreference": "Effort 偏好：{{value}}",
+      "effortWire": "请求中的 effort：{{value}}",
+      "provenance": "模型能力依据：{{value}}",
+      "reason": "Thinking 解析：{{value}}",
+      "temperaturePreference": "Temperature 偏好：{{value}}",
+      "temperatureWire": "请求中的 temperature：{{value}}",
+      "temperatureResolution": "Temperature 处理：{{value}}",
+      "topPPreference": "Top p 偏好：{{value}}",
+      "topPWire": "请求中的 top p：{{value}}",
+      "topPResolution": "Top p 处理：{{value}}",
+      "documentedTopP": "文档的 top p 归一化参考：{{value}}（非响应报告值）",
+      "outputWire": "请求中的输出 token 上限：{{value}}",
+      "sources": {
+        "documented": "文档记载",
+        "provider_metadata": "Provider 数据",
+        "user_declared": "用户声明／未验证",
+        "unknown": "未知"
+      },
+      "reasons": {
+        "non_reasoning": "不适用／非推理",
+        "disabled": "请求关闭",
+        "enabled": "请求开启",
+        "mandatory_minimum": "最低支持 thinking",
+        "unresolved": "尚未解析"
+      },
+      "sampling": {
+        "omitted": "未发送",
+        "sent": "已发送设置值",
+        "ignored_by_provider": "Provider 忽略／已省略",
+        "unsupported": "不支持"
+      }
     },
     "connections": {
       "reload": "重新加载连接",

@@ -145,6 +145,11 @@
       "delivery-unknown": "交付結果不明"
     },
     "errors": {
+      "configuration-credentials-unavailable": "無法解析連線金鑰，請檢查 App 金鑰或符合條件的家目錄 .env 變數。原稿已保存。",
+      "configuration-capability-required": "請先宣告或確認模型支援的參數。原稿已保存。",
+      "configuration-route-invalid": "請檢查所選連線的位址與 API 格式。原稿已保存。",
+      "configuration-invalid-options": "請檢查模型支援的 thinking 與取樣參數。原稿已保存。",
+      "configuration-storage-failed": "無法安全讀取連線設定，請重新載入設定。原稿已保存。",
       "provider-permission": "權限不足，請檢查所選模型的存取權。原稿已保存。",
       "back-provider-permission": "回譯：權限不足，請檢查所選模型的存取權。主翻譯已保留，審閱尚未完成。",
       "provider-balance": "服務餘額不足，請檢查服務帳戶。原稿已保存。",
@@ -186,6 +191,46 @@
       "prompt-invalid": "無法儲存，請檢查提示詞與翻譯欄位。",
       "back-translation-failed": "回譯尚未完成；主翻譯仍保留，可複製或重試。",
       "back-translation-timeout": "回譯尚未完成；主翻譯仍保留，可複製或重試。"
+    },
+    "requestOptions": {
+      "unavailable": "請求參數觀測資料未知。",
+      "omitted": "未指定／API 預設",
+      "on": "開",
+      "off": "關",
+      "explanation": "使用者偏好、送出欄位與文件行為分開記錄；未觀測模型內部運算。",
+      "thinkingPreference": "Thinking 偏好：{{value}}",
+      "thinkingWire": "請求中的 thinking：{{value}}",
+      "effortPreference": "Effort 偏好：{{value}}",
+      "effortWire": "請求中的 effort：{{value}}",
+      "provenance": "模型能力依據：{{value}}",
+      "reason": "Thinking 解析：{{value}}",
+      "temperaturePreference": "Temperature 偏好：{{value}}",
+      "temperatureWire": "請求中的 temperature：{{value}}",
+      "temperatureResolution": "Temperature 處理：{{value}}",
+      "topPPreference": "Top p 偏好：{{value}}",
+      "topPWire": "請求中的 top p：{{value}}",
+      "topPResolution": "Top p 處理：{{value}}",
+      "documentedTopP": "文件的 top p 正規化參考：{{value}}（非回應回報值）",
+      "outputWire": "請求中的輸出 token 上限：{{value}}",
+      "sources": {
+        "documented": "文件記載",
+        "provider_metadata": "Provider 資料",
+        "user_declared": "使用者宣告／未驗證",
+        "unknown": "未知"
+      },
+      "reasons": {
+        "non_reasoning": "不適用／非推理",
+        "disabled": "要求關閉",
+        "enabled": "要求開啟",
+        "mandatory_minimum": "最低支援 thinking",
+        "unresolved": "尚未解析"
+      },
+      "sampling": {
+        "omitted": "未送出",
+        "sent": "已送出設定值",
+        "ignored_by_provider": "Provider 忽略／已省略",
+        "unsupported": "不支援"
+      }
     },
     "connections": {
       "reload": "重新載入連線",
