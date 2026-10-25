@@ -418,6 +418,11 @@ impl ApiReceipt {
 /// Formal transport accounting port. begin/mark_sent can refuse spending;
 /// response/finish retain a bounded receipt for the final store transaction.
 pub trait ApiCallObserver: Send + Sync {
+    /// Actual accepted revision, read-only and independent of admission/spending.
+    /// Custom/direct callers remain unassociated by default.
+    fn processing_revision(&self) -> Option<u64> {
+        None
+    }
     /// Durably prepare one call after its actual wire/options are known.
     fn begin(&self, descriptor: ApiCallDescriptor) -> Result<String, crate::TextFailure>;
     /// Final pre-send boundary: return an error before HTTP is polled.

@@ -14,9 +14,9 @@ use std::sync::{
 #[path = "faithful_provider.rs"]
 mod faithful_provider;
 pub use faithful_provider::{
-    probe_processor as probe_text_processor, processor as text_processor, ScenarioPrompts,
-    TextAuthentication, TextConfiguration, TextProviderProfile, TextTransport, TranslationSettings,
-    TranslationTerm,
+    probe_processor as probe_text_processor, processor as text_processor,
+    processor_with_trace as text_processor_with_trace, ScenarioPrompts, TextAuthentication,
+    TextConfiguration, TextProviderProfile, TextTransport, TranslationSettings, TranslationTerm,
 };
 #[path = "recognition.rs"]
 pub mod recognition;
@@ -416,7 +416,7 @@ impl DesktopWorkflow {
         let result = tokio::select! {
             biased;
             _ = cancellation.cancelled() => self.sessions.cancel(&entry.id),
-            result = self.sessions.process_with_stop(&entry.id,glossary,text_processor(configuration.clone()),configuration.translation.back_translation,stopped_at) => result,
+            result = self.sessions.process_with_stop(&entry.id,glossary,faithful_provider::scoped_processor(configuration.clone(),crate::diagnostics::service::global().api_scope(Some(&entry.id),None)),configuration.translation.back_translation,stopped_at) => result,
         };
         diagnose(
             Phase::TextProcessing,
@@ -516,7 +516,10 @@ impl DesktopWorkflow {
             .process_with_review(
                 id,
                 glossary,
-                text_processor(configuration.clone()),
+                faithful_provider::scoped_processor(
+                    configuration.clone(),
+                    crate::diagnostics::service::global().api_scope(Some(id), None),
+                ),
                 configuration.translation.back_translation,
             )
             .await?;

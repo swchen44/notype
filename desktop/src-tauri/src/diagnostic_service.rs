@@ -71,6 +71,7 @@ struct State {
     status: Status,
     events: Diagnostics,
     preview: Option<Report>,
+    api_registry: super::api::ApiRegistry,
 }
 /// Process-owned service. Starts uninitialized/effectively OFF. All I/O is
 /// outside state; export_commit → state is the only nested lock order.
@@ -101,6 +102,7 @@ impl DiagnosticService {
                 },
                 events: Diagnostics::new(),
                 preview: None,
+                api_registry: super::api::ApiRegistry::new(),
             }),
             export_commit: Mutex::new(()),
             preference_update: Mutex::new(()),
@@ -186,6 +188,57 @@ impl DiagnosticService {
             epoch: state.status.epoch,
             revision: state.status.revision,
         })
+    }
+    /// Generic collector generation, identical to the existing capture fence.
+    pub fn collection_token(&self) -> Option<CollectionToken> {
+        self.capture_token()
+    }
+    /// Maps a workflow-owned ID only in the private bounded adapter registry.
+    /// Effective ON, generation and allocation are checked under this one lock.
+    pub fn api_scope(
+        &self,
+        source: Option<&str>,
+        connection: Option<u32>,
+    ) -> Option<super::api::ScopeBinding> {
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        if !state.status.initialized || !state.status.effective_enabled {
+            return None;
+        }
+        let token = CollectionToken {
+            epoch: state.status.epoch,
+            revision: state.status.revision,
+        };
+        Some(state.api_registry.scope(token, source, connection))
+    }
+    /// Reserves an ordinal only under effective ON and the matching origin token.
+    pub fn begin_api(
+        &self,
+        scope: Option<super::api::ScopeBinding>,
+        revision: Option<u64>,
+    ) -> Option<super::api::TraceIdentity> {
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        if !state.status.initialized || !state.status.effective_enabled {
+            return None;
+        }
+        let token = CollectionToken {
+            epoch: state.status.epoch,
+            revision: state.status.revision,
+        };
+        if scope.is_some_and(|scope| scope.token != token) {
+            return None;
+        }
+        state.api_registry.call(token, scope, revision)
+    }
+    /// Atomically validates generation and inserts into the shared ring, with no I/O.
+    pub fn record_api(&self, event: super::api::ApiEvent) {
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        if state.status.initialized
+            && state.status.effective_enabled
+            && event.identity.binding.token.epoch == state.status.epoch
+            && event.identity.binding.token.revision == state.status.revision
+        {
+            state.events.record_api(event);
+        }
     }
     /// Epoch and effective preference are checked in the same collector lock
     /// as insertion. No capture/target identity or user content crosses here.

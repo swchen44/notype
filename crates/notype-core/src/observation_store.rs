@@ -108,6 +108,11 @@ impl StoreObserver {
     }
 }
 impl ApiCallObserver for StoreObserver {
+    fn processing_revision(&self) -> Option<u64> {
+        u64::try_from(self.revision)
+            .ok()
+            .filter(|revision| *revision > 0)
+    }
     fn begin(&self, descriptor: ApiCallDescriptor) -> Result<String, TextFailure> {
         if !descriptor.valid() {
             return Err(TextFailure::ConfigurationRequired);
