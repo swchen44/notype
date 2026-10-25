@@ -34,6 +34,9 @@ export const ModelsSettings: React.FC = () => {
   const { t } = useTranslation();
   const [switchingModelId, setSwitchingModelId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState<"catalog" | "accuracy" | "speed">(
+    "catalog",
+  );
   const [filterStreaming, setFilterStreaming] = useState(false);
   const [filterTranslation, setFilterTranslation] = useState(false);
   const [languageFilter, setLanguageFilter] = useState("all");
@@ -213,19 +216,35 @@ export const ModelsSettings: React.FC = () => {
       }
     }
 
-    // Sort: active model first, then non-custom, then custom at the bottom
-    downloaded.sort((a, b) => {
-      if (a.id === currentModel) return -1;
-      if (b.id === currentModel) return 1;
-      if (a.is_custom !== b.is_custom) return a.is_custom ? 1 : -1;
-      return 0;
-    });
-
+    const score = (model: ModelInfo) => {
+      const value =
+        sortBy === "accuracy" ? model.accuracy_score : model.speed_score;
+      return Number.isFinite(value) && value > 0 && value <= 1 ? value : -1;
+    };
+    const compare = (a: ModelInfo, b: ModelInfo) => score(b) - score(a);
+    if (sortBy !== "catalog") {
+      downloaded.sort(compare);
+      available.sort(compare);
+    } else {
+      // Sort: active model first, then non-custom, then custom at the bottom
+      downloaded.sort((a, b) => {
+        if (a.id === currentModel) return -1;
+        if (b.id === currentModel) return 1;
+        if (a.is_custom !== b.is_custom) return a.is_custom ? 1 : -1;
+        return 0;
+      });
+    }
     return {
       downloadedModels: downloaded,
       availableModels: available,
     };
-  }, [filteredModels, downloadingModels, extractingModels, currentModel]);
+  }, [
+    filteredModels,
+    downloadingModels,
+    extractingModels,
+    currentModel,
+    sortBy,
+  ]);
 
   if (loading) {
     return (
@@ -240,7 +259,7 @@ export const ModelsSettings: React.FC = () => {
   return (
     <div className="max-w-3xl w-full mx-auto space-y-4">
       <div className="mb-4">
-        <h1 className="text-xl font-semibold mb-2">
+        <h1 className="text-3xl font-normal mb-3">
           {t("settings.models.title")}
         </h1>
         <p className="text-sm text-text/60">
@@ -248,6 +267,32 @@ export const ModelsSettings: React.FC = () => {
         </p>
       </div>
 
+      <div
+        className="flex flex-wrap gap-2"
+        role="group"
+        aria-label={t("notype.modelExplorer.scores")}
+      >
+        {(["catalog", "accuracy", "speed"] as const).map((order) => (
+          <button
+            key={order}
+            type="button"
+            aria-pressed={sortBy === order}
+            onClick={() => setSortBy(order)}
+            className={`px-3 py-1.5 text-xs border rounded-md ${sortBy === order ? "border-logo-primary bg-logo-primary/10" : "border-mid-gray/30"}`}
+          >
+            {t(
+              order === "catalog"
+                ? "notype.modelExplorer.sortCatalog"
+                : order === "accuracy"
+                  ? "notype.modelExplorer.sortAccuracy"
+                  : "notype.modelExplorer.sortSpeed",
+            )}
+          </button>
+        ))}
+      </div>
+      <p className="text-xs text-text/70">
+        {t("notype.modelExplorer.scoreNote")}
+      </p>
       {/* Search bar — filter the catalog by name or description */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text/40 pointer-events-none" />
@@ -263,11 +308,11 @@ export const ModelsSettings: React.FC = () => {
       <div className="space-y-6">
         {/* Downloaded Models Section — header always visible so filter stays accessible */}
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-sm font-medium text-text/60">
               {t("settings.models.yourModels")}
             </h2>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {/* Rescan local sources for models added outside Handy */}
               <button
                 type="button"
@@ -415,6 +460,8 @@ export const ModelsSettings: React.FC = () => {
               onDownload={handleModelDownload}
               onDelete={handleModelDelete}
               onCancel={handleModelCancel}
+              downloadedBytes={downloadProgress[model.id]?.downloaded}
+              totalBytes={downloadProgress[model.id]?.total}
               downloadProgress={getDownloadProgress(model.id)}
               downloadSpeed={getDownloadSpeed(model.id)}
               showRecommended={false}
@@ -437,6 +484,8 @@ export const ModelsSettings: React.FC = () => {
                 onDownload={handleModelDownload}
                 onDelete={handleModelDelete}
                 onCancel={handleModelCancel}
+                downloadedBytes={downloadProgress[model.id]?.downloaded}
+                totalBytes={downloadProgress[model.id]?.total}
                 downloadProgress={getDownloadProgress(model.id)}
                 downloadSpeed={getDownloadSpeed(model.id)}
                 showRecommended={true}

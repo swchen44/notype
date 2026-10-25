@@ -1,33 +1,28 @@
-import type { TFunction } from "i18next";
+﻿import type { i18n } from "i18next";
 import type { ModelInfo } from "@/bindings";
 
-/**
- * Get the translated name for a model
- * @param model - The model info object
- * @param t - The translation function from useTranslation
- * @returns The translated model name, or the original name if no translation exists
- */
-export function getTranslatedModelName(model: ModelInfo, t: TFunction): string {
-  const translationKey = `onboarding.models.${model.id}.name`;
-  const translated = t(translationKey, { defaultValue: "" });
-  return translated !== "" ? translated : model.name;
+type ModelTranslations = Pick<i18n, "t" | "exists">;
+
+/** Only translate existing catalog entries; missing-key handlers must not hide metadata. */
+export function getTranslatedModelName(
+  model: ModelInfo,
+  translations: ModelTranslations,
+): string {
+  const key = `onboarding.models.${model.id}.name`;
+  return translations.exists(key)
+    ? translations.t(key) || model.name
+    : model.name;
 }
 
-/**
- * Get the translated description for a model
- * @param model - The model info object
- * @param t - The translation function from useTranslation
- * @returns The translated model description, or the original description if no translation exists
- */
+/** Present the catalog purpose when this model has no localized description. */
 export function getTranslatedModelDescription(
   model: ModelInfo,
-  t: TFunction,
+  translations: ModelTranslations,
 ): string {
-  // Custom models use a generic translation key
-  if (model.is_custom) {
-    return t("onboarding.customModelDescription");
-  }
-  const translationKey = `onboarding.models.${model.id}.description`;
-  const translated = t(translationKey, { defaultValue: "" });
-  return translated !== "" ? translated : model.description;
+  const key = model.is_custom
+    ? "onboarding.customModelDescription"
+    : `onboarding.models.${model.id}.description`;
+  return translations.exists(key)
+    ? translations.t(key) || model.description
+    : model.description;
 }

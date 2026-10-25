@@ -25,7 +25,7 @@ interface ModelSelectorProps {
 }
 
 const ModelSelector: React.FC<ModelSelectorProps> = ({ onError }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const {
     models,
     currentModel,
@@ -160,7 +160,7 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onError }) => {
         const modelId = verifyingKeys[0];
         const model = models.find((m) => m.id === modelId);
         const modelName = model
-          ? getTranslatedModelName(model, t)
+          ? getTranslatedModelName(model, i18n)
           : t("modelSelector.verifyingGeneric").replace("...", "");
         return t("modelSelector.verifying", { modelName });
       } else {
@@ -174,7 +174,7 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onError }) => {
         const modelId = extractingKeys[0];
         const model = models.find((m) => m.id === modelId);
         const modelName = model
-          ? getTranslatedModelName(model, t)
+          ? getTranslatedModelName(model, i18n)
           : t("modelSelector.extractingGeneric").replace("...", "");
         return t("modelSelector.extracting", { modelName });
       } else {
@@ -205,31 +205,31 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onError }) => {
     switch (modelStatus) {
       case "ready":
         return currentModelInfo
-          ? getTranslatedModelName(currentModelInfo, t)
+          ? getTranslatedModelName(currentModelInfo, i18n)
           : t("modelSelector.modelReady");
       case "loading":
         return currentModelInfo
           ? t("modelSelector.loading", {
-              modelName: getTranslatedModelName(currentModelInfo, t),
+              modelName: getTranslatedModelName(currentModelInfo, i18n),
             })
           : t("modelSelector.loadingGeneric");
       case "extracting":
         return currentModelInfo
           ? t("modelSelector.extracting", {
-              modelName: getTranslatedModelName(currentModelInfo, t),
+              modelName: getTranslatedModelName(currentModelInfo, i18n),
             })
           : t("modelSelector.extractingGeneric");
       case "error":
         return modelError || t("modelSelector.modelError");
       case "unloaded":
         return currentModelInfo
-          ? getTranslatedModelName(currentModelInfo, t)
+          ? getTranslatedModelName(currentModelInfo, i18n)
           : t("modelSelector.modelUnloaded");
       case "none":
         return t("modelSelector.noModelDownloadRequired");
       default:
         return currentModelInfo
-          ? getTranslatedModelName(currentModelInfo, t)
+          ? getTranslatedModelName(currentModelInfo, i18n)
           : t("modelSelector.modelUnloaded");
     }
   };

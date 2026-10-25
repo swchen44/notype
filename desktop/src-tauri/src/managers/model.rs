@@ -2554,6 +2554,16 @@ impl ModelManager {
     }
 
     pub fn get_model_path(&self, model_id: &str) -> Result<PathBuf> {
+        self.resolve_model_path(model_id, true)
+    }
+
+    /// Resolve an existing completed model for display without cleaning files or
+    /// changing catalog availability. Missing/incomplete models remain errors.
+    pub fn get_model_path_for_display(&self, model_id: &str) -> Result<PathBuf> {
+        self.resolve_model_path(model_id, false)
+    }
+
+    fn resolve_model_path(&self, model_id: &str, update_state: bool) -> Result<PathBuf> {
         let model_info = self
             .get_model_info(model_id)
             .ok_or_else(|| anyhow::anyhow!("Model not found: {}", model_id))?;
@@ -2583,12 +2593,14 @@ impl ModelManager {
                 let partial_path = self
                     .models_dir
                     .join(format!("{}.partial", &model_info.filename));
-                if partial_path.exists() {
+                if update_state && partial_path.exists() {
                     let _ = fs::remove_file(&partial_path);
                 }
                 return Ok(local_path);
             }
-            self.mark_model_unavailable(model_id);
+            if update_state {
+                self.mark_model_unavailable(model_id);
+            }
             return Err(anyhow::anyhow!(
                 "Complete model file not found in HF cache or models dir: {}",
                 model_id
@@ -2602,7 +2614,9 @@ impl ModelManager {
 
         if model_info.is_directory {
             if !model_path.exists() || !model_path.is_dir() {
-                self.mark_model_unavailable(model_id);
+                if update_state {
+                    self.mark_model_unavailable(model_id);
+                }
                 return Err(anyhow::anyhow!(
                     "Complete model directory not found: {}",
                     model_id
@@ -2617,7 +2631,9 @@ impl ModelManager {
             Ok(model_path)
         } else {
             if !model_path.exists() {
-                self.mark_model_unavailable(model_id);
+                if update_state {
+                    self.mark_model_unavailable(model_id);
+                }
                 return Err(anyhow::anyhow!(
                     "Complete model file not found: {}",
                     model_id
