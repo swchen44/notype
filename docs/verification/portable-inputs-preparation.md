@@ -26,13 +26,28 @@
 
 [Microsoft 配送文件](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/distribution)及[實際 fixed-runtime EULA](https://developer.microsoft.com/microsoft-edge/api/eula/webview2?locale=en-us&fixed=true)需與 payload 一併評估。Runtime 是專有授權，不能改標 MIT；隨附 Widevine 條款與 Microsoft bundle 的再散布權利／notices 尚未完整釐清。先完成私有打包與啟動測試，公開發布另保留此實際缺口。
 
-尚未證明 notype 選到此 runtime、Evergreen 不可用時仍可啟動、離線依賴完整，或公司 Proxy 可取得。Tauri 的 installer 設定本身不能證明 npm no-bundle launch 已正確選用 fixed runtime。
+下方追加探針已觀察 notype 選到此 runtime；Evergreen 不可用時的啟動、離線依賴完整及公司 Proxy 取得仍未驗證。Tauri 的 installer 設定本身不能證明 npm no-bundle launch 已正確選用 fixed runtime。
 
 ## 一般權限啟動探針
 
 目前工具宿主為 elevated/high。另以 [Microsoft 文件記載的 Explorer parent-process attribute 機制](https://devblogs.microsoft.com/oldnewthing/20190425-00/?p=102443)，在同使用者／同 session 啟動僅會回報自身權限的隱藏 helper；子程序實際回報 `elevated=false`、`integrityMedium=true`、`integrityBelowHigh=true`、`uiAccess=false`，exit 0，已清理程序。未使用 token duplication、registry、UAC 或排程變更。
 
-這提供 #14 在本機驗證一般使用者啟動的可行測試路徑，尚未啟動 notype／WebView。呼叫者環境仍可能繼承，後續須明確設定測試自己的 fixed folder／資料目錄並觀察實際 runtime process path。
+這個 helper 探針本身只證明權限；後續 App 探針見下節。呼叫者環境仍可能繼承，測試必須明確設定自己的 fixed folder／資料目錄並觀察實際 runtime process path。
+
+## App 選用 fixed runtime 的實測
+
+以 #17 完成的 native debug binary（SHA256 `c9792ffa68fd72b283db6920d041fec053e4e47c1debcf340ffe8f8153ecb66a`）製作獨立快照：33 個 regular files、110,605,942 bytes，包含已展開為實體檔案的 DirectML。固定 helper 只允許這份 App、hash 及 runtime；用 Explorer parent 啟動 suspended child，確認同使用者／session 及 medium 權限後，在獨立 kill-on-close Job Object 中執行。使用全新自有 profile、停用快捷鍵／自動啟動，未選模型、未設定 API，沒有麥克風或使用者工作資料。
+
+| 案例 | 實際觀察 | 結果 |
+| --- | --- | --- |
+| 有效 fixed folder | notype 為 medium RID 8192；7 個 WebView 程序均來自指定 `156.0.4314.42` 路徑／版本；3 個 medium、4 個 sandbox 權限 | 選用指定 runtime 通過 |
+| 存在但空白的 fixed folder | 10 秒內無 WebView，記錄兩次 runtime-not-found；背景 host 仍存活，建立 0 entries 的空 sessions DB | 明確失敗／結束要求未通過 |
+| 不存在的 fixed folder | 空目錄案例出現非預期結果後停止擴大測試 | 未執行 |
+| 清理 | 兩個 jobs 均為 0 members；快照檔案及原 source bindings bytes 維持相同 | 通過 |
+
+未觀察到 Evergreen 路徑的 browser image，但本機 Evergreen 仍在，不能宣稱已完成無 Evergreen 的乾淨機驗證。空目錄實測也證明不能依賴目前 Tauri window build 錯誤讓 host 自行結束；#14 launcher 須在 spawn 前驗證完整 manifest／runtime，對缺少或損壞檔案明確失敗。這不是完整 native 相依閉包、release build、離線外連、更新或 npm 發布的驗收。
+
+外部 `fixed-runtime-probe.md` 保存完整方法與限制；`observed-results.json` 的 SHA256 為 `5ff7ff009eee0062e3e42e327a46e79bae95d1682b49ec3b98916275ed433fe8`。保留的原失敗 receipt 沒有改寫成通過。
 
 ## Native DLL 連結與 VC runtime
 
@@ -44,4 +59,4 @@ PE regular import table 確實包含 DirectML，沒有 delay import；#11 的獨
 
 ## 外部證據位置
 
-本機 `%LOCALAPPDATA%/notype-study/agent-notes/` 的 `model-fixtures.md`、`packaging-runtime.md`、`normal-user-launch.md` 記錄來源與重跑方式；`build-cache/whisper-small-provision/`、`build-cache/webview2-fixed-prep/` 保存下載與完整 manifests。大型模型／runtime／WAV 不入 Git；公司 endpoint、key、工作內容也不在這些合成資料中。
+本機 `%LOCALAPPDATA%/notype-study/agent-notes/` 的 `model-fixtures.md`、`packaging-runtime.md`、`normal-user-launch.md`、`fixed-runtime-probe.md` 記錄來源與重跑方式；`build-cache/whisper-small-provision/`、`build-cache/webview2-fixed-prep/` 保存下載與完整 manifests。大型模型／runtime／WAV 不入 Git；公司 endpoint、key、工作內容也不在這些合成資料中。

@@ -1,0 +1,284 @@
+{
+  "purpose": "Breeze ASR25 Q5_K synthetic Chinese/English comparison; no human/company/p95 acceptance",
+  "startedAt": 1792888453.124701,
+  "executableSha256": "86ec70cdac8f54547f886a715acec9b27ab0d2bfb360da3ec580cfaec7e69dba",
+  "sourceCommit": "0bd8ed54f95364eb7fb28d84275113747d69df13",
+  "options": {
+    "task": "transcribe",
+    "decodingLanguage": "auto",
+    "translate": false,
+    "manualTerms": [],
+    "cpuThreads": 4,
+    "deviceIndex": 0,
+    "repeatsPerFreshLoad": 2
+  },
+  "model": {
+    "id": "breeze-asr",
+    "file": "breeze-asr-q5_k.bin",
+    "bytes": 1080732108,
+    "sha256": "8efbf0ce8a3f50fe332b7617da787fb81354b358c288b008d3bdef8359df64c6"
+  },
+  "metrics": {
+    "CER": "Levenshtein over NFKC/lowercase codepoints, punctuation/whitespace removed, no ITN repair",
+    "memory": "Largest observed Windows PeakWorkingSetSize for the native CLI process, counters polled50ms; excludes helper and child processes",
+    "cold": "Fresh process and model load, OS file cache not flushed",
+    "warm": "Second inference in same process",
+    "p95": "Not estimated from this small synthetic sample"
+  },
+  "runs": [
+    {
+      "mode": "traditional_english",
+      "fixture": "numbers-negation-switch",
+      "wavSha256": "39dec0a99dff6bec753bf4a699673dbed7dac8d1a32482ec08051a25dec90433",
+      "gold": "今天請保留42筆測試資料，不要刪除。The API is not ready. 等驗證完成後，再送出2筆請求。Keep the test data.",
+      "exitCode": 0,
+      "observed": {
+        "audio_secs": 13.992625,
+        "best_ms": 28284,
+        "bound_backend": "CPU",
+        "cpu_threads": 4,
+        "load_ms": 1073,
+        "model": "breeze-asr",
+        "raw_text": "今天請保留 42 筆測試資料 不要刪除The API is not ready.等驗證完成後 再送出兩筆請求Keep the test data.",
+        "recognition_mode": "traditional_english",
+        "requested_device": "index 0",
+        "rtf": 0.49471874558054024,
+        "text": "今天請保留 42 筆測試資料 不要刪除The API is not ready.等驗證完成後 再送出兩筆請求Keep the test data.",
+        "transcribe_ms": [
+          28284,
+          30997
+        ]
+      },
+      "wallMs": 60739,
+      "processCpuSeconds": 235.703125,
+      "observedPeakWorkingSetBytes": 1528037376,
+      "memoryCounterReads": 1202,
+      "memoryCounterErrors": 0,
+      "characterErrors": 1,
+      "referenceCharacters": 60,
+      "cer": 0.016666666666666666,
+      "missingRequiredLiterals": [
+        "2"
+      ],
+      "perRepeatRawTexts": [
+        "今天請保留 42 筆測試資料 不要刪除The API is not ready.等驗證完成後 再送出兩筆請求Keep the test data.",
+        "今天請保留 42 筆測試資料 不要刪除The API is not ready.等驗證完成後 再送出兩筆請求Keep the test data."
+      ],
+      "rawOutputsIdentical": true,
+      "scoredRepeat": 2
+    },
+    {
+      "mode": "traditional_english",
+      "fixture": "technical-names",
+      "wavSha256": "6061239d0564e331915cc48ff923b0dacd0ad83c5c8351d42372bb4a2c9ef5a9",
+      "gold": "Check the API and session underscore id. 這是測試用的設定，請保留英文名稱，不要改成中文。Use Visual Studio Code, then check GitHub.",
+      "exitCode": 0,
+      "observed": {
+        "audio_secs": 13.3440625,
+        "best_ms": 30331,
+        "bound_backend": "CPU",
+        "cpu_threads": 4,
+        "load_ms": 1002,
+        "model": "breeze-asr",
+        "raw_text": "Check the API and session underscore id這是測試用的設定請保留英文名稱不要改成中文Use Visual Studio Code, then check GitHub.",
+        "recognition_mode": "traditional_english",
+        "requested_device": "index 0",
+        "rtf": 0.4399479905047641,
+        "text": "Check the API and session underscore id這是測試用的設定請保留英文名稱不要改成中文Use Visual Studio Code, then check GitHub.",
+        "transcribe_ms": [
+          30391,
+          30331
+        ]
+      },
+      "wallMs": 61940,
+      "processCpuSeconds": 242.046875,
+      "observedPeakWorkingSetBytes": 1526497280,
+      "memoryCounterReads": 1226,
+      "memoryCounterErrors": 0,
+      "characterErrors": 0,
+      "referenceCharacters": 88,
+      "cer": 0.0,
+      "missingRequiredLiterals": [],
+      "perRepeatRawTexts": [
+        "Check the API and session underscore id這是測試用的設定請保留英文名稱不要改成中文Use Visual Studio Code, then check GitHub.",
+        "Check the API and session underscore id這是測試用的設定請保留英文名稱不要改成中文Use Visual Studio Code, then check GitHub."
+      ],
+      "rawOutputsIdentical": true,
+      "scoredRepeat": 2
+    },
+    {
+      "mode": "traditional_english",
+      "fixture": "script-context-version",
+      "wavSha256": "7b139bc6439bb75297bc59c108202f991d8a71159e8163c103bc8e6385de077f",
+      "gold": "頭髮的髮和發展的發意思不同，今天不要發布正式版本。This is a test build, version 2.0. 請檢查後再送出，不要自動執行命令。",
+      "exitCode": 0,
+      "observed": {
+        "audio_secs": 14.726125,
+        "best_ms": 31081,
+        "bound_backend": "CPU",
+        "cpu_threads": 4,
+        "load_ms": 995,
+        "model": "breeze-asr",
+        "raw_text": "頭髮的髮和發展的發意思不同今天不要發佈正式版本This is a test build, version 2.0.請檢查後再送出不要自動執行命令",
+        "recognition_mode": "traditional_english",
+        "requested_device": "index 0",
+        "rtf": 0.4737983012129597,
+        "text": "頭髮的髮和發展的發意思不同今天不要發佈正式版本This is a test build, version 2.0.請檢查後再送出不要自動執行命令",
+        "transcribe_ms": [
+          31371,
+          31081
+        ]
+      },
+      "wallMs": 63772,
+      "processCpuSeconds": 249.0,
+      "observedPeakWorkingSetBytes": 1526648832,
+      "memoryCounterReads": 1262,
+      "memoryCounterErrors": 0,
+      "characterErrors": 1,
+      "referenceCharacters": 63,
+      "cer": 0.015873015873015872,
+      "missingRequiredLiterals": [],
+      "perRepeatRawTexts": [
+        "頭髮的髮和發展的發意思不同今天不要發佈正式版本This is a test build, version 2.0.請檢查後再送出不要自動執行命令",
+        "頭髮的髮和發展的發意思不同今天不要發佈正式版本This is a test build, version 2.0.請檢查後再送出不要自動執行命令"
+      ],
+      "rawOutputsIdentical": true,
+      "scoredRepeat": 2
+    },
+    {
+      "mode": "simplified_english",
+      "fixture": "numbers-negation-switch",
+      "wavSha256": "39dec0a99dff6bec753bf4a699673dbed7dac8d1a32482ec08051a25dec90433",
+      "gold": "今天请保留42笔测试资料，不要删除。The API is not ready. 等验证完成后，再送出2笔请求。Keep the test data.",
+      "exitCode": 0,
+      "observed": {
+        "audio_secs": 13.992625,
+        "best_ms": 31708,
+        "bound_backend": "CPU",
+        "cpu_threads": 4,
+        "load_ms": 1004,
+        "model": "breeze-asr",
+        "raw_text": "今天請保留 42 筆測試資料 不要刪除The API is not ready.等驗證完成後 再送出兩筆請求Keep the test data.",
+        "recognition_mode": "simplified_english",
+        "requested_device": "index 0",
+        "rtf": 0.4412963605399269,
+        "text": "今天请保留 42 笔测试资料 不要删除The API is not ready.等验证完成后 再送出两笔请求Keep the test data.",
+        "transcribe_ms": [
+          32544,
+          31708
+        ]
+      },
+      "wallMs": 65508,
+      "processCpuSeconds": 254.84375,
+      "observedPeakWorkingSetBytes": 1521704960,
+      "memoryCounterReads": 1291,
+      "memoryCounterErrors": 0,
+      "characterErrors": 1,
+      "referenceCharacters": 60,
+      "cer": 0.016666666666666666,
+      "missingRequiredLiterals": [
+        "2"
+      ],
+      "perRepeatRawTexts": [
+        "今天請保留 42 筆測試資料 不要刪除The API is not ready.等驗證完成後 再送出兩筆請求Keep the test data.",
+        "今天請保留 42 筆測試資料 不要刪除The API is not ready.等驗證完成後 再送出兩筆請求Keep the test data."
+      ],
+      "rawOutputsIdentical": true,
+      "scoredRepeat": 2
+    },
+    {
+      "mode": "simplified_english",
+      "fixture": "technical-names",
+      "wavSha256": "6061239d0564e331915cc48ff923b0dacd0ad83c5c8351d42372bb4a2c9ef5a9",
+      "gold": "Check the API and session underscore id. 这是测试用的设定，请保留英文名称，不要改成中文。Use Visual Studio Code, then check GitHub.",
+      "exitCode": 0,
+      "observed": {
+        "audio_secs": 13.3440625,
+        "best_ms": 32074,
+        "bound_backend": "CPU",
+        "cpu_threads": 4,
+        "load_ms": 1082,
+        "model": "breeze-asr",
+        "raw_text": "Check the API and session underscore id這是測試用的設定請保留英文名稱不要改成中文Use Visual Studio Code, then check GitHub.",
+        "recognition_mode": "simplified_english",
+        "requested_device": "index 0",
+        "rtf": 0.4160398609465611,
+        "text": "Check the API and session underscore id这是测试用的设定请保留英文名称不要改成中文Use Visual Studio Code, then check GitHub.",
+        "transcribe_ms": [
+          33385,
+          32074
+        ]
+      },
+      "wallMs": 66786,
+      "processCpuSeconds": 260.046875,
+      "observedPeakWorkingSetBytes": 1520234496,
+      "memoryCounterReads": 1320,
+      "memoryCounterErrors": 0,
+      "characterErrors": 0,
+      "referenceCharacters": 88,
+      "cer": 0.0,
+      "missingRequiredLiterals": [],
+      "perRepeatRawTexts": [
+        "Check the API and session underscore id這是測試用的設定請保留英文名稱不要改成中文Use Visual Studio Code, then check GitHub.",
+        "Check the API and session underscore id這是測試用的設定請保留英文名稱不要改成中文Use Visual Studio Code, then check GitHub."
+      ],
+      "rawOutputsIdentical": true,
+      "scoredRepeat": 2
+    },
+    {
+      "mode": "simplified_english",
+      "fixture": "script-context-version",
+      "wavSha256": "7b139bc6439bb75297bc59c108202f991d8a71159e8163c103bc8e6385de077f",
+      "gold": "头发的发和发展的发意思不同，今天不要发布正式版本。This is a test build, version 2.0. 请检查后再送出，不要自动执行命令。",
+      "exitCode": 0,
+      "observed": {
+        "audio_secs": 14.726125,
+        "best_ms": 32607,
+        "bound_backend": "CPU",
+        "cpu_threads": 4,
+        "load_ms": 980,
+        "model": "breeze-asr",
+        "raw_text": "頭髮的髮和發展的發意思不同今天不要發佈正式版本This is a test build, version 2.0.請檢查後再送出不要自動執行命令",
+        "recognition_mode": "simplified_english",
+        "requested_device": "index 0",
+        "rtf": 0.4516246511485264,
+        "text": "头发的发和发展的发意思不同今天不要发布正式版本This is a test build, version 2.0.请检查后再送出不要自动执行命令",
+        "transcribe_ms": [
+          32655,
+          32607
+        ]
+      },
+      "wallMs": 66475,
+      "processCpuSeconds": 259.84375,
+      "observedPeakWorkingSetBytes": 1520779264,
+      "memoryCounterReads": 1317,
+      "memoryCounterErrors": 0,
+      "characterErrors": 0,
+      "referenceCharacters": 63,
+      "cer": 0.0,
+      "missingRequiredLiterals": [],
+      "perRepeatRawTexts": [
+        "頭髮的髮和發展的發意思不同今天不要發佈正式版本This is a test build, version 2.0.請檢查後再送出不要自動執行命令",
+        "頭髮的髮和發展的發意思不同今天不要發佈正式版本This is a test build, version 2.0.請檢查後再送出不要自動執行命令"
+      ],
+      "rawOutputsIdentical": true,
+      "scoredRepeat": 2
+    }
+  ],
+  "finishedAt": 1792888838.550171,
+  "freeBytesAfter": 7175897088,
+  "hardware": {
+    "Name": "11th Gen Intel(R) Core(TM) i5-1135G7 @ 2.40GHz",
+    "NumberOfCores": 4,
+    "NumberOfLogicalProcessors": 8
+  },
+  "referenceErrata": {
+    "reason": "SAPI source says 測試資料; Simplified script-only reference must retain 资料 rather than regional-vocabulary substitute 数据. Manually corrected independent reference; no model/output changed. Numeric required-literal checks use digit boundaries so2 cannot match42. Original outside receipts remain historical."
+  },
+  "sourceState": "Exact retained native no-bundle debug executable built from functional8ef71e7, merged-doc HEAD0bd8ed54; later product URL/path delimiter fix not present in this benchmark binary. These three fixtures have no URL/path literals.",
+  "quietWindow": "Other agent explicitly deferred Cargo/native/Vite/lint during inference. UI/HTTP checks allowed; OS load/thermals/file cache not controlled. No population latency estimate.",
+  "benchmarkScriptSha256": "71ba37a0055fa715f6cc6b272919e3dafb5e8df7adab86d840a680ee73c95d69",
+  "definitionsSha256": "d6fd15585b5c5c8d066c6e6fac07c3172f5f312c55e542b2fc925157df2c5baf",
+  "qualityAcceptance": "Synthetic observations support retained Chinese+English on these three fixtures. Human/code-switching coverage/company acceptance and latency target remain unfulfilled; no shipping default selected.",
+  "comparisonLimit": "Previous Small/Q5/SenseVoice exact outputs preserved in recognition-quality.json; reference errata recalculates only gold-dependent diagnostics, no prior inference rerun."
+}

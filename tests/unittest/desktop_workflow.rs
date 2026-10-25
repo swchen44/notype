@@ -43,6 +43,124 @@ async fn captured_target_delivery_uses_one_adapter_and_never_retries_uncertain_w
 }
 
 #[tokio::test]
+async fn saved_original_distinguishes_hair_from_development_in_overlapping_words() {
+    for (mode, raw, expected) in [
+        (RecognitionMode::TraditionalEnglish, "保留发展", "保留發展"),
+        (
+            RecognitionMode::TraditionalEnglish,
+            "保留发展空间",
+            "保留發展空間",
+        ),
+        (
+            RecognitionMode::TraditionalEnglish,
+            "请打开https://example.com/头发，然后保留发展。",
+            "請打開https://example.com/头发，然後保留發展。",
+        ),
+        (
+            RecognitionMode::TraditionalEnglish,
+            "留发与发展",
+            "留髮與發展",
+        ),
+        (
+            RecognitionMode::TraditionalEnglish,
+            "头发、长发、理发、染发",
+            "頭髮、長髮、理髮、染髮",
+        ),
+        (
+            RecognitionMode::TraditionalEnglish,
+            "保留發展，頭髮與發展。",
+            "保留發展，頭髮與發展。",
+        ),
+        (
+            RecognitionMode::SimplifiedEnglish,
+            "保留發展，頭髮與發展。",
+            "保留发展，头发与发展。",
+        ),
+    ] {
+        let workflow = DesktopWorkflow::new(SessionService::in_memory().unwrap(), Arc::new(|| {}));
+        let recording = workflow.begin(mode, None).unwrap();
+        let entry = workflow
+            .finish(recording, raw, TextConfiguration::default(), vec![])
+            .await
+            .unwrap();
+        assert_eq!(entry.transcript, expected, "{raw}");
+    }
+}
+
+#[tokio::test]
+async fn both_profiles_keep_code_literals_whitespace_and_manual_terms_exact() {
+    let literals = "```rust\nlet 头发 = \"頭髮\";\n```\nhttps://example.test/头发?q=42，保留 0.5 和 API_v2。 \"发型\" \"頭髮\"";
+    for (mode, raw_prefix, expected_prefix) in [
+        (
+            RecognitionMode::TraditionalEnglish,
+            "保留发展，不要删除发型项目",
+            "保留發展，不要刪除发型项目",
+        ),
+        (
+            RecognitionMode::SimplifiedEnglish,
+            "保留發展，不要刪除发型项目",
+            "保留发展，不要删除发型项目",
+        ),
+    ] {
+        let workflow = DesktopWorkflow::new(SessionService::in_memory().unwrap(), Arc::new(|| {}));
+        let recording = workflow
+            .begin_with_profile(
+                workflow::recognition::RecognitionProfile::new(mode, vec!["发型项目".into()]),
+                None,
+            )
+            .unwrap();
+        let raw = format!(" \t{raw_prefix}🙂\r\n{literals}");
+        let entry = workflow
+            .finish(recording, &raw, TextConfiguration::default(), vec![])
+            .await
+            .unwrap();
+        assert_eq!(
+            entry.transcript,
+            format!(" \t{expected_prefix}🙂\r\n{literals}")
+        );
+    }
+}
+
+#[tokio::test]
+async fn traditional_profile_converts_prose_after_url_sentence_separator() {
+    let workflow = DesktopWorkflow::new(SessionService::in_memory().unwrap(), Arc::new(|| {}));
+    let recording = workflow
+        .begin(RecognitionMode::TraditionalEnglish, None)
+        .unwrap();
+    let entry = workflow
+        .finish(
+            recording,
+            "请打开https://example.com/头发，然后检查发展。",
+            TextConfiguration::default(),
+            vec![],
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        entry.transcript,
+        "請打開https://example.com/头发，然後檢查發展。"
+    );
+}
+
+#[tokio::test]
+async fn simplified_profile_converts_prose_after_path_sentence_separator() {
+    let workflow = DesktopWorkflow::new(SessionService::in_memory().unwrap(), Arc::new(|| {}));
+    let recording = workflow
+        .begin(RecognitionMode::SimplifiedEnglish, None)
+        .unwrap();
+    let entry = workflow
+        .finish(
+            recording,
+            r"請打開C:\資料\頭髮，然後保留發展。",
+            TextConfiguration::default(),
+            vec![],
+        )
+        .await
+        .unwrap();
+    assert_eq!(entry.transcript, r"请打开C:\資料\頭髮，然后保留发展。");
+}
+
+#[tokio::test]
 async fn recorded_original_uses_captured_traditional_profile_before_text_processing() {
     let workflow = DesktopWorkflow::new(SessionService::in_memory().unwrap(), Arc::new(|| {}));
     let recording = workflow

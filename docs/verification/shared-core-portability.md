@@ -32,3 +32,11 @@ Linux 結果：[Shared core contracts run 40137924066](https://github.com/swchen
 `5ad169845c49881ec7873b694051117eb4cc7372` 新增需要設定的可復原錯誤分支後，Windows merger 再次通過核心 9 unit、6 persistence、3 HTTP 與 1 doc，共 19 項；Node unit／integration 仍為 11 + 5。Linux [run 40143094184](https://github.com/swchen44/notype/actions/runs/40143094184) 同樣全部通過，0 failed／0 ignored，Node 0 skipped；fmt／clippy 亦通過。已檢查實際 logs 的各 test target 數量，空的 inline harness 不計入 19。
 
 此 run 尚不包含後續 #12 辨識模式及 #17 三場景的新修改。桌面 #11 的 7 項 Rust checks 與 5 項 Windows native tests 另記於 [desktop workflow receipt](desktop-workflow.md)，不與此 Linux 核心數量混算。
+
+## 三場景與 App 名稱限定合併後
+
+`af947359b875584751447e5b532a0f630605d86e` 的 Linux [run 40148240213](https://github.com/swchen44/notype/actions/runs/40148240213) 已完成，conclusion `success`。實際 logs 為 9 public unit、17 integration（3 HTTP + 9 persistence + 5 review）及 1 doc，共 27 passed、0 failed、0 ignored；Node 仍為 11 unit + 5 integration，0 failed／0 skipped。核心 fmt／clippy 通過。
+
+後續 workflow 擴充為直接執行 test-only desktop harness 的 `desktop-workflow` 及 `desktop-provider` targets，並加入對應來源／manifest／lock 的觸發路徑。上述 40148240213 只證明核心與 Node checks。
+
+擴充 commit `8edd42fa89d87c2977c8595c5f1b034107eca22c` 的 Linux [run 40150344759](https://github.com/swchen44/notype/actions/runs/40150344759) 已完成，conclusion `success`。已核對實際 logs：核心 27 項、desktop workflow 5 + HTTP provider 11 項、Node 11 + 5 項全通過，0 failed／0 ignored／0 skipped；核心 fmt／clippy 通過。這次不需要 Tauri、Windows SDK 或 STT 模型，且尚不包含 #12 後續詞級字形修正或 #13 原生輸入。

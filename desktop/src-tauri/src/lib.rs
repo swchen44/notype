@@ -598,6 +598,8 @@ fn run_headless_transcription(app: &AppHandle, args: &CliArgs) -> i32 {
         preferences.custom_words,
     );
     let mut times_ms: Vec<u64> = Vec::new();
+    let mut recognition_ms: Vec<u64> = Vec::new();
+    let mut normalization_ms: Vec<u64> = Vec::new();
     let mut text = String::new();
     let mut raw_text = String::new();
     for i in 0..runs {
@@ -613,7 +615,9 @@ fn run_headless_transcription(app: &AppHandle, args: &CliArgs) -> i32 {
         let t = Instant::now();
         match tm.transcribe_raw_with_profile(samples.clone(), &profile) {
             Ok(out) => {
+                recognition_ms.push(t.elapsed().as_millis() as u64);
                 raw_text = out;
+                let normalization_started = Instant::now();
                 match profile.normalize(&raw_text) {
                     Ok(normalized) => text = normalized,
                     Err(_) => {
@@ -621,6 +625,7 @@ fn run_headless_transcription(app: &AppHandle, args: &CliArgs) -> i32 {
                         return 1;
                     }
                 }
+                normalization_ms.push(normalization_started.elapsed().as_millis() as u64);
             }
             Err(e) => {
                 eprintln!("error: transcribe failed: {}", e);
@@ -646,6 +651,8 @@ fn run_headless_transcription(app: &AppHandle, args: &CliArgs) -> i32 {
                 "audio_secs": audio_secs,
                 "load_ms": load_ms,
                 "transcribe_ms": times_ms,
+                "recognition_ms": recognition_ms,
+                "normalization_ms": normalization_ms,
                 "best_ms": best_ms,
                 "rtf": rtf,
                 "text": text,

@@ -209,8 +209,12 @@ for (const model of models) {
           : fixture.goldSimplified;
       const reference = normalized(gold);
       const errors = distance(reference, normalized(observed.text));
-      const missing = fixture.mustPreserve.filter(
-        (value) => !observed.text.toLowerCase().includes(value.toLowerCase()),
+      const missing = fixture.mustPreserve.filter((value) =>
+        /^\d+(?:\.\d+)?$/.test(value)
+          ? !new RegExp(`(?<!\\d)${value.replaceAll(".", "\\.")}(?!\\d)`).test(
+              observed.text,
+            )
+          : !observed.text.toLowerCase().includes(value.toLowerCase()),
       );
       const entry = {
         model: model.id,
