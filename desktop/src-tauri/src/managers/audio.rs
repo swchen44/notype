@@ -635,6 +635,23 @@ impl AudioRecordingManager {
     }
 
     pub fn start_microphone_stream(&self) -> Result<(), anyhow::Error> {
+        use crate::diagnostics::{record, Outcome, Phase};
+        let started = Instant::now();
+        record(Phase::AudioStreamOpen, Outcome::Started, None);
+        let result = self.open_microphone_stream();
+        record(
+            Phase::AudioStreamOpen,
+            if result.is_ok() {
+                Outcome::Ok
+            } else {
+                Outcome::Failed
+            },
+            Some(started.elapsed().as_millis() as u64),
+        );
+        result
+    }
+
+    fn open_microphone_stream(&self) -> Result<(), anyhow::Error> {
         let mut open_flag = self.is_open.lock().unwrap();
         if *open_flag {
             // `is_open` only records that we opened a stream at some point, not

@@ -52,3 +52,18 @@ cargo test --locked --manifest-path tests/integration/desktop-contracts/Cargo.to
 無 installer、僅 Windows amd64 的限制也適用於 integration 測試的部署程序。
 
 詳見 [unit tests](unittest/README.md) 與 [integration tests](integration/README.md)。
+
+## Main window lifecycle contract
+
+`tests/unittest/desktop_window_lifecycle.rs` exercises the public `close_to_tray`
+platform-policy seam used by the actual native close handler. It verifies that a
+failed native tray recovery keeps the window visible, and that successful tray
+confirmation precedes hiding. Native tray registration, shell overflow, restore
+clicks and explicit Quit still require the separately reported Windows fixture.
+
+```powershell
+cargo test --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test window-lifecycle
+```
+
+The same std-only contract can run without a native Cargo build/cache:
+`rustc --edition=2021 --test tests/unittest/desktop_window_lifecycle.rs -o <task-owned-test.exe>`.

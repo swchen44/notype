@@ -41,3 +41,7 @@ incremental = false
 [profile.test]
 debug = 0
 incremental = false
+
+[[test]]
+name = "window-lifecycle"
+path = "../../unittest/desktop_window_lifecycle.rs"

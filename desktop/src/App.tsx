@@ -156,6 +156,9 @@ function App() {
           );
       },
     );
+    const trayFailure = listen("tray-unavailable", () => {
+      toast.error(t("tray.unavailable"));
+    });
     const failure = listen<string>("session-error", (event) => {
       toast.error(
         t(`notype.errors.${event.payload}`, {
@@ -166,6 +169,7 @@ function App() {
     return () => {
       void outcome.then((stop) => stop());
       void failure.then((stop) => stop());
+      void trayFailure.then((stop) => stop());
     };
   }, [t]);
 
