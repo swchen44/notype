@@ -17,7 +17,7 @@ const ModelDropdown: React.FC<ModelDropdownProps> = ({
   currentModelId,
   onModelSelect,
 }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const downloadedModels = models.filter((m) => m.is_downloaded);
 
   const handleModelClick = (modelId: string) => {
@@ -49,7 +49,7 @@ const ModelDropdown: React.FC<ModelDropdownProps> = ({
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-sm text-text/80">
-                    {getTranslatedModelName(model, t)}
+                    {getTranslatedModelName(model, i18n)}
                     {model.is_custom && (
                       <span className="ms-1.5 text-[10px] font-medium text-text/40 uppercase">
                         {t("modelSelector.custom")}
@@ -62,7 +62,7 @@ const ModelDropdown: React.FC<ModelDropdownProps> = ({
                     )}
                   </div>
                   <div className="text-xs text-text/40 italic pe-4">
-                    {getTranslatedModelDescription(model, t)}
+                    {getTranslatedModelDescription(model, i18n)}
                   </div>
                 </div>
                 {currentModelId === model.id && (

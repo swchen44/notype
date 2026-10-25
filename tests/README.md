@@ -53,3 +53,14 @@ cargo test --locked --manifest-path tests/integration/desktop-contracts/Cargo.to
 無 installer、僅 Windows amd64 的限制也適用於 integration 測試的部署程序。
 
 詳見 [unit tests](unittest/README.md) 與 [integration tests](integration/README.md)。
+
+## Desktop UI 契約
+
+沿用已確認的公開 UI／模型呈現 seam。前端測試使用 `*.ui.mjs`，與不依賴 desktop 套件／瀏覽器的 portable suite 分開執行：
+
+- `npm.cmd run test:ui:unit`：真正 i18next instance 與公開模型名稱／說明 presenter；驗證缺少翻譯時仍呈現 metadata，而非 missing-key 錯誤文字。
+- `npm.cmd run test:ui:integration`：真實 React／i18next／Vite 加上全新 headless 瀏覽器，透過呈現的 UI 操作驗證完整語言、相對評分排序、下載狀態、進階資訊與窄視窗。只在 Tauri 公開 IPC 邊界提供合成資料，不啟動原生 App、不觸碰麥克風／剪貼簿／使用者設定。
+
+需要已準備好的 `desktop/node_modules`。整合測試在 Windows 預設使用已安裝的 Edge；可用 `NOTYPE_TEST_BROWSER` 指定瀏覽器路徑，其他平台需 Playwright Chromium。缺少必要依賴或瀏覽器會失敗，不會 skip。畫面檢查產物寫入忽略追蹤的 `.local/model-explorer-*.png`；內容是明確命名的合成 metadata fixture，不能視為真實 STT 或目前 App 狀態。
+
+此 UI suite 沒有加入 `Shared core contracts` 的 portable CI；該 CI 只安裝根目錄套件，不能宣稱已驗證需要 desktop 依賴與瀏覽器的 UI。驗證紀錄見 [模型介面 receipt](../docs/verification/model-interface.md)。
