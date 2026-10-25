@@ -4,7 +4,7 @@
 
 ## 可觀察行為
 
-口述、翻譯、隨便問各有實際使用且可編輯的提示詞。預設包含忠實整理／自然保真翻譯／依口述意圖回答或代寫；公開口述例子放在可見的預設提示詞中。第一個 system 訊息只設 App 文字／工具及資料信任邊界，第二個 system 為所選提示詞；自訂內容不被隱藏預設文風或例子覆蓋。原稿、手動術語、辨識模式、場景、目標語言及允許的 App 名稱／網站網域以結構化資料提供。#13 才負責取得這兩項 metadata；目前未知時為空，不讀其他 App 內容。
+口述、翻譯、隨便問各有實際使用且可編輯的提示詞。預設包含忠實整理／自然保真翻譯／依口述意圖回答或代寫；公開口述例子放在可見的預設提示詞中。第一個 system 訊息只設 App 文字／工具及資料信任邊界，第二個 system 為所選提示詞；自訂內容不被隱藏預設文風或例子覆蓋。原稿、手動術語、辨識模式、場景、目標語言及允許的 App 名稱以結構化資料提供。#13 負責取得 App 名稱；未知時為空，不讀其他 App 內容。依使用者最新縮減範圍，網站網域及各網站整合不在 MVP。
 
 開始錄音時捕捉設定，後續修改不改變進行中的 session。歷史保存場景及翻譯目標，明確重試採該 entry 的場景／目標／context 與重試當下提示詞。UI 提供單一場景提示詞保存／還原及翻譯目標、手動領域／語氣／目標範圍詞彙對照。還原不觸及其他提示詞、API endpoint／model／認證／key、歷史、辨識偏好或模型。API 表單保存只更新自己的欄位，防止過期表單覆寫提示詞設定。
 
@@ -54,6 +54,20 @@ node --test --test-concurrency=1 --test-name-pattern='Simplified interface' test
 原生建置必須從 `desktop/` 讀取 scoped MSVC UTF-8 config：`bun run tauri build --no-bundle --debug -- --locked`；設定 `CARGO_TARGET_DIR=D:/git/notype-build`、`CARGO_PROFILE_DEV_DEBUG=0`、`CARGO_INCREMENTAL=0`、`CARGO_BUILD_JOBS=2`。重新啟動 debug App 產生實際 Specta bindings。`bun run build`／`bun run lint` 從 desktop 執行。既有 upstream `secure_input.rs` unused Emitter 及 Vite chunk-size 警告仍在，未作不相關修整。
 
 最後實際 native debug binary SHA256：`f66a35f9b9b761f9f24f5fb780a3e7413154a82473f8fc1feaf2ee24672aa5a6`。純 Rust harness 重用的 module 出現未使用 public export／helper 警告，非產品 build 失敗；core clippy 使用 -D warnings 通過。Specta 產生的 bindings 只移除行尾空白，型別／命令內容採實際 native 產出。
+
+## App 名稱限定 delta
+
+使用者在 c45d595 驗證完成後明確取消 MVP 的網站網域取得。這個後續 delta 移除 SourceContext 的網域欄位、網站語法驗證、request／提示與 UI 中的網域預期；只保留可選的 App 名稱。較早的 v3 context JSON 可讀取，但舊 metadata 不會序列化進新的 request。翻譯的手動「領域」是使用者自行輸入的專業範圍，與網站資訊分開，保持原有功能。
+
+等 Breeze CPU 測量完成並釋放後，先實測兩個 RED：舊實作仍驗證已取消的網域 metadata，HTTP session 因 InvalidInput 失敗；較早 v3 SQLite 讀回的 context 也仍暴露舊欄位。移除欄位後兩者 GREEN。重新執行 core 為 9 unit +17 integration +1 doc，portable workflow 5 +HTTP 11 全數通過；core clippy -D warnings 通過。新增的 SQLite restart fixture 保留原稿／時間／App 名稱，舊 metadata 只作相容讀取，不再輸出。這些結果取代上方縮減前的 core integration 16 數量。
+
+增量 native build 27.34 秒完成，包含 TypeScript／Vite build。針對性原生 UI／HTTP 3 passed：可見說明只列 App 名稱、提示詞保存／還原／重啟、回譯與 revision 確認，以及 request 僅有 application 的完整錯誤／重試／取消回歸。本次沒有宣稱重跑整套原生矩陣。命令：
+
+```powershell
+node --test --test-concurrency=1 --test-name-pattern='visible scenario prompts|native translation history|visible native text settings' tests/integration/desktop-scenarios.runtime.mjs tests/integration/desktop-workflow.runtime.mjs
+```
+
+App-only native debug binary SHA256：`c9792ffa68fd72b283db6920d041fec053e4e47c1debcf340ffe8f8153ecb66a`。沒有新增瀏覽器／各網站整合、網域取得計畫或 API key 需求；原有回譯預設關閉、人工確認及原目標保護規則保持不變。
 
 ## 未涵蓋
 

@@ -25,6 +25,12 @@ test(
       await app.page.getByText("文字整理", { exact: true }).first().click();
       const scene = app.page.getByLabel("場景", { exact: true });
       await scene.waitFor({ timeout: 4000 });
+      await app.page
+        .getByText(
+          "下方可編輯各場景提示詞。僅傳送當次原稿與手動詞彙，以及允許的應用程式名稱。",
+          { exact: true },
+        )
+        .waitFor();
       const prompt = app.page.getByLabel("可編輯提示詞", { exact: true });
       for (const [id, text] of [
         ["dictation", "DICTATION_USER_STYLE keep API_42."],

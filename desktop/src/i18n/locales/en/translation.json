@@ -81,7 +81,7 @@
       "saved": "Local settings saved",
       "ready": "Settings are complete. Retry editing from text history.",
       "notReady": "Settings are incomplete. Originals remain recoverable.",
-      "preset": "Each scenario has an editable prompt below. Only current transcript and your manual terms are sent.",
+      "preset": "Each scenario has an editable prompt below. Only current transcript, manual terms and the allowed application name are sent.",
       "chooseAuthentication": "Select authentication requirement"
     },
     "scenarios": {

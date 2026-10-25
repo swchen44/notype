@@ -219,7 +219,7 @@ async fn failed_back_step_keeps_primary_but_requires_retry_or_explicit_original_
 }
 
 #[test]
-fn source_context_rejects_full_urls_before_saving_any_history() {
+fn source_context_rejects_control_characters_before_saving_any_history() {
     let service = SessionService::in_memory().unwrap();
     assert_eq!(
         service
@@ -227,8 +227,7 @@ fn source_context_rejects_full_urls_before_saving_any_history() {
                 "raw",
                 SessionOptions {
                     source_context: SourceContext {
-                        application: Some("Browser".into()),
-                        website_domain: Some("https://example.test/private?input=secret".into())
+                        application: Some("Editor\nprivate input".into()),
                     },
                     ..Default::default()
                 }

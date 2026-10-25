@@ -33,27 +33,15 @@ pub enum Scenario {
     Ask,
 }
 
-/// Only platform-verified, minimized metadata. Never page titles, input values or URLs.
+/// Only a platform-verified application name. No website or content acquisition.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct SourceContext {
     pub application: Option<String>,
-    pub website_domain: Option<String>,
 }
 impl SourceContext {
     pub fn is_valid(&self) -> bool {
         self.application.as_ref().is_none_or(|name| {
             !name.trim().is_empty() && name.len() <= 256 && !name.chars().any(char::is_control)
-        }) && self.website_domain.as_ref().is_none_or(|domain| {
-            domain.len() <= 253
-                && !domain.is_empty()
-                && domain.split('.').all(|label| {
-                    !label.is_empty()
-                        && label.len() <= 63
-                        && !label.starts_with('-')
-                        && !label.ends_with('-')
-                        && label.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
-                })
         })
     }
 }

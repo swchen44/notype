@@ -53,6 +53,36 @@ fn core_v2_history_migrates_to_dictation_without_changing_raw_result_or_recognit
 }
 
 #[test]
+fn earlier_context_metadata_remains_readable_but_exposes_only_application_name() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("earlier-v3.db");
+    let service = SessionService::open(&path).unwrap();
+    let entry = service
+        .create("preserve original", SessionOptions::default())
+        .unwrap();
+    drop(service);
+    let fixture = rusqlite::Connection::open(&path).unwrap();
+    fixture
+        .execute(
+            "UPDATE sessions SET source_context=?2 WHERE id=?1",
+            rusqlite::params![
+                entry.id,
+                r#"{"application":"Test Editor","website_domain":"legacy.example"}"#
+            ],
+        )
+        .unwrap();
+    drop(fixture);
+    let reopened = SessionService::open(&path).unwrap();
+    let saved = reopened.get(&entry.id).unwrap();
+    assert_eq!(saved.transcript, "preserve original");
+    assert_eq!(saved.created_at, entry.created_at);
+    assert_eq!(
+        serde_json::to_value(saved.source_context).unwrap(),
+        serde_json::json!({"application":"Test Editor"})
+    );
+}
+
+#[test]
 fn original_and_captured_profile_survive_sqlite_restart_without_a_recording() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory
