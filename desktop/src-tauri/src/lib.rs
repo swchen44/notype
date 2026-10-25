@@ -16,6 +16,7 @@ mod physical_shortcuts;
 mod clipboard;
 mod commands;
 mod data_policy;
+mod diagnostics;
 mod helpers;
 mod input;
 #[cfg(test)]
@@ -779,6 +780,8 @@ pub fn run(cli_args: CliArgs) {
             commands::get_default_settings,
             commands::get_log_dir_path,
             commands::set_log_level,
+            commands::diagnostics::get_diagnostic_report,
+            commands::diagnostics::export_diagnostic_report,
             commands::open_recordings_folder,
             commands::open_log_dir,
             commands::open_app_data_dir,
@@ -787,6 +790,7 @@ pub fn run(cli_args: CliArgs) {
             commands::initialize_shortcuts,
             commands::models::get_available_models,
             commands::models::get_model_info,
+            commands::models::get_model_path,
             commands::models::download_model,
             commands::models::delete_model,
             commands::models::cancel_download,
@@ -957,6 +961,8 @@ pub fn run(cli_args: CliArgs) {
         // A future stable facade adapter must preserve explicit data overrides.
         .manage(cli_args.clone())
         .setup(move |app| {
+            let diagnostic_startup_started = std::time::Instant::now();
+            diagnostics::record(diagnostics::Phase::Startup, diagnostics::Outcome::Started, None);
             #[cfg(target_os = "windows")]
             log::info!(
                 "Vulkan layer policy: VK_LOADER_LAYERS_DISABLE={:?}, HANDY_KEEP_VULKAN_IMPLICIT_LAYERS={}",
@@ -1087,10 +1093,20 @@ pub fn run(cli_args: CliArgs) {
             // viewer is the sole consumer and only exists in debug mode). This also
             // honors the runtime `--debug` override applied to `settings` above.
             WEBVIEW_LOG_STREAMING.store(settings.debug_mode, Ordering::Relaxed);
+            // This fixed marker respects the persisted level. Empty files at
+            // Warn/Error can be normal; absence is never proof of no errors.
+            log::info!("notype-startup logger-ready");
+            log::logger().flush();
             let app_handle = app.handle().clone();
             app.manage(TranscriptionCoordinator::new(app_handle.clone()));
 
-            initialize_core_logic(&app_handle)?;
+            let core_result = initialize_core_logic(&app_handle);
+            diagnostics::record(
+                diagnostics::Phase::Startup,
+                if core_result.is_ok() { diagnostics::Outcome::Ok } else { diagnostics::Outcome::Failed },
+                Some(diagnostic_startup_started.elapsed().as_millis().min(u64::MAX as u128) as u64),
+            );
+            core_result?;
 
             // Initialize the local script dictionary away from the first Stop.
             // The headless CLI branch returns earlier and retains cold timings.

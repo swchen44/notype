@@ -31,6 +31,14 @@ name = "physical-gestures"
 path = "../../unittest/physical_gestures.rs"
 
 [[test]]
+name = "desktop-diagnostics"
+path = "../../unittest/desktop_diagnostics.rs"
+
+[[test]]
+name = "diagnostics-export"
+path = "../desktop_diagnostics.rs"
+
+[[test]]
 name = "native-delivery"
 path = "../native_delivery.rs"
 

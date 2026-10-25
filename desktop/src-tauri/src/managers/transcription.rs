@@ -500,6 +500,30 @@ impl TranscriptionManager {
         model_id: &str,
         device_index: Option<usize>,
     ) -> Result<()> {
+        let started = Instant::now();
+        crate::diagnostics::record(
+            crate::diagnostics::Phase::ModelLoad,
+            crate::diagnostics::Outcome::Started,
+            None,
+        );
+        let result = self.load_model_with_device_inner(model_id, device_index);
+        crate::diagnostics::record(
+            crate::diagnostics::Phase::ModelLoad,
+            if result.is_ok() {
+                crate::diagnostics::Outcome::Ok
+            } else {
+                crate::diagnostics::Outcome::Failed
+            },
+            Some(started.elapsed().as_millis().min(u64::MAX as u128) as u64),
+        );
+        result
+    }
+
+    fn load_model_with_device_inner(
+        &self,
+        model_id: &str,
+        device_index: Option<usize>,
+    ) -> Result<()> {
         apply_accelerator_settings(&self.app_handle);
 
         let load_start = std::time::Instant::now();
@@ -1058,6 +1082,11 @@ impl TranscriptionManager {
                     }
                     StreamCmd::Finalize(reply) => {
                         let finalize_start = Instant::now();
+                        crate::diagnostics::record(
+                            crate::diagnostics::Phase::Transcription,
+                            crate::diagnostics::Outcome::Started,
+                            None,
+                        );
                         let result = match stream.finalize() {
                             // After finalize the committed prefix holds the full
                             // text; display() = committed + tentative is the safe read.
@@ -1082,6 +1111,15 @@ impl TranscriptionManager {
                                 None
                             }
                         };
+                        crate::diagnostics::record(
+                            crate::diagnostics::Phase::Transcription,
+                            if result.is_some() {
+                                crate::diagnostics::Outcome::Ok
+                            } else {
+                                crate::diagnostics::Outcome::Failed
+                            },
+                            Some(finalize_start.elapsed().as_millis().min(u64::MAX as u128) as u64),
+                        );
                         let chars = match &result {
                             Some(finalized) => finalized.text.len(),
                             _ => 0,
@@ -1207,7 +1245,23 @@ impl TranscriptionManager {
         profile: &RecognitionProfile,
         owner: crate::workflow::GenerationToken,
     ) -> Result<String> {
-        self.transcribe_owned(audio, profile, Some(owner))
+        let started = Instant::now();
+        crate::diagnostics::record(
+            crate::diagnostics::Phase::Transcription,
+            crate::diagnostics::Outcome::Started,
+            None,
+        );
+        let result = self.transcribe_owned(audio, profile, Some(owner));
+        crate::diagnostics::record(
+            crate::diagnostics::Phase::Transcription,
+            if result.is_ok() {
+                crate::diagnostics::Outcome::Ok
+            } else {
+                crate::diagnostics::Outcome::Failed
+            },
+            Some(started.elapsed().as_millis().min(u64::MAX as u128) as u64),
+        );
+        result
     }
     fn transcribe_owned(
         &self,

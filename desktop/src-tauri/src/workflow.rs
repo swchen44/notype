@@ -1,4 +1,5 @@
 //! Desktop session orchestration; platform capture and Tauri events stay outside.
+use crate::diagnostics::{record as diagnose, Outcome, Phase};
 use notype_core::{
     CancellationToken, CoreError, DeliveryAdapter, DeliveryFuture, DeliveryOutcome,
     DeliveryRequest, RecognitionMode, Scenario, SessionEntry, SessionOptions, SessionService,
@@ -303,12 +304,24 @@ impl DesktopWorkflow {
                 return Err(CoreError::Busy);
             }
             let normalized = recording.profile.normalize(transcript);
-            let entry = match normalized {
-                Ok(original) => self.sessions.create(&original, recording.options.clone())?,
+            let save_started = std::time::Instant::now();
+            diagnose(Phase::HistorySave, Outcome::Started, None);
+            let saved = match normalized {
+                Ok(original) => self.sessions.create(&original, recording.options.clone()),
                 Err(_) => self
                     .sessions
-                    .create_recognition_failure(transcript, recording.options.clone())?,
+                    .create_recognition_failure(transcript, recording.options.clone()),
             };
+            diagnose(
+                Phase::HistorySave,
+                if saved.is_ok() {
+                    Outcome::Ok
+                } else {
+                    Outcome::Failed
+                },
+                Some(save_started.elapsed().as_millis().min(u64::MAX as u128) as u64),
+            );
+            let entry = saved?;
             recording.entry = Some(entry.id.clone());
             (
                 entry,
@@ -325,11 +338,30 @@ impl DesktopWorkflow {
         if entry.error.as_deref() == Some("recognition-script-failed") {
             return Ok(entry);
         }
+        let processing_started = std::time::Instant::now();
+        diagnose(Phase::TextProcessing, Outcome::Started, None);
         let result = tokio::select! {
             biased;
             _ = cancellation.cancelled() => self.sessions.cancel(&entry.id),
             result = self.sessions.process_with_review(&entry.id,glossary,faithful_provider::processor(configuration.clone()),configuration.translation.back_translation) => result,
         };
+        diagnose(
+            Phase::TextProcessing,
+            match &result {
+                Ok(entry) if entry.status == SessionStatus::Cancelled => Outcome::Cancelled,
+                Ok(entry) if entry.status == SessionStatus::Failed || entry.error.is_some() => {
+                    Outcome::Failed
+                }
+                Ok(_) => Outcome::Ok,
+                Err(_) => Outcome::Failed,
+            },
+            Some(
+                processing_started
+                    .elapsed()
+                    .as_millis()
+                    .min(u64::MAX as u128) as u64,
+            ),
+        );
         let result = result?;
         (self.notify)();
         if result.status == SessionStatus::Pending
@@ -427,10 +459,19 @@ impl DesktopWorkflow {
     }
     /// Attempt guarded, deduplicated delivery to the captured target; never focus an arbitrary window.
     pub async fn deliver(&self, id: &str) -> Result<SessionEntry, CoreError> {
-        let entry = self
-            .sessions
-            .deliver(id, Arc::clone(&self.delivery))
-            .await?;
+        let started = std::time::Instant::now();
+        diagnose(Phase::Delivery, Outcome::Started, None);
+        let result = self.sessions.deliver(id, Arc::clone(&self.delivery)).await;
+        diagnose(
+            Phase::Delivery,
+            match &result {
+                Ok(entry) if entry.status == SessionStatus::Delivered => Outcome::Ok,
+                Ok(_) => Outcome::Unavailable,
+                Err(_) => Outcome::Failed,
+            },
+            Some(started.elapsed().as_millis().min(u64::MAX as u128) as u64),
+        );
+        let entry = result?;
         (self.notify)();
         Ok(entry)
     }
