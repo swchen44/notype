@@ -8,7 +8,12 @@ on:
       - crates/notype-core/**
       - tests/unittest/**
       - tests/integration/core_*.rs
+      - tests/integration/desktop-contracts/**
+      - tests/integration/desktop_provider.rs
       - tests/integration/text-flow.test.mjs
+      - desktop/src-tauri/src/workflow.rs
+      - desktop/src-tauri/src/faithful_provider.rs
+      - desktop/src-tauri/src/recognition.rs
       - src/**
       - package.json
       - package-lock.json
@@ -19,7 +24,7 @@ permissions:
 
 jobs:
   portable-core:
-    name: Core and diagnostic contracts on Linux
+    name: Core, desktop workflow and diagnostic contracts on Linux
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -32,6 +37,8 @@ jobs:
         run: cargo +1.99.1 test --locked --manifest-path crates/notype-core/Cargo.toml
       - name: Lint the core
         run: cargo +1.99.1 clippy --locked --manifest-path crates/notype-core/Cargo.toml --all-targets -- -D warnings
+      - name: Exercise desktop orchestration and HTTP contracts without Tauri
+        run: cargo +1.99.1 test --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test desktop-workflow --test desktop-provider
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22.15.0
