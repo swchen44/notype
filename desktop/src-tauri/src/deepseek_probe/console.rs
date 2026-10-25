@@ -86,6 +86,9 @@ pub fn read_local_key(console: &impl ConsolePort) -> Result<KeyMaterial, Console
     console.set_input_mode(original_mode & !4)?;
     let result = read_events(console);
     guard.restore()?;
+    if console.interrupted() {
+        return Err(ConsoleError::Interrupted);
+    }
     result
 }
 

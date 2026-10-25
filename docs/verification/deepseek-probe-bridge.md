@@ -97,3 +97,49 @@ mark through the six-test matrix is 32542720 bytes; the 192MiB cap, proactive
 160MiB stop and drive floors remain in force. No native App, new target,
 dependency download, package version change or cleanup is authorized by this
 receipt. Console feature unification still requires a matching cache/cost audit.
+
+## Native/helper source checkpoint — not compiled
+
+Fixed helper, native console/known-folder/space adapters, source launcher and
+nine-case hidden owned-console fixture are now written and formatted only.
+Native port's missing-module compiler RED was observed first. The portable console
+algorithm additionally had a real late-interrupt RED after Enter/restoration;
+its final interrupt check now passes **seven unit tests**. Those port tests do not
+prove Windows APIs or the new helper/fixture executables compile or run.
+
+Source adds only locked windows-sys0.61.2 features Foundation, Console, Threading,
+Com, Shell, Security and Storage_FileSystem. Security's exact
+[plan](https://github.com/swchen44/notype/issues/23#issuecomment-6401238944) /
+[approval](https://github.com/swchen44/notype/issues/23#issuecomment-6401254722)
+supports CreateProcessW's type gate; storage's
+[plan](https://github.com/swchen44/notype/issues/23#issuecomment-6401375965) /
+[approval](https://github.com/swchen44/notype/issues/23#issuecomment-6401385514)
+supports quota-aware GetDiskFreeSpaceExW. No crate version changes/downloads.
+The actual cache reverse-closure audit could not bound feature-unification/new
+binaries/link peaks within the remaining budget. **No new union build was tried.**
+Full helper/Windows fixtures, actual binary/hash, pre-live docs and user launch
+remain pending; source launcher is not a ready key-entry handoff.
+
+Native source verifies singleton PID using a valid buffer, rejects redirected
+input, decodes UTF-16/repeats, and keeps callback state process-static. Borrowed
+stdin is never closed, and unregister is not treated as joining callbacks. Exact
+restoration precedes key handoff and bounded nonsecret ReadConsoleW confirmation;
+pending input is cleared between phases. Existing rounds are report-only before
+any key prompt. A marker is created only after final local confirmation. An
+unpinned build cannot ask for a key: NOTYPE_PROBE_SOURCE_COMMIT is a nonsecret
+compile-time 40-hex source pin, not a credential/config override.
+
+Fixture source requests CREATE_NEW_CONSOLE and STARTF_USESHOWWINDOW/SW_HIDE0,
+checks actual startup info/singleton ownership, injects only nonsecret records and
+observes actual modes. Nine cases cover Unicode/repeats/Backspace, Escape,
+Control-C key, read error, unwind, real Control-Break, late restore interruption,
+disable failure and restore retry. Parent reaps only returned owned process
+handles and never broadcasts from its own console. These are **not performed**,
+not skipped/passed. Close/power-loss cleanup is best effort; console isolation
+avoids modifying the user's existing terminal.
+
+The independent core manifest does not enable the blocked desktop Windows feature
+union. Its affected full tests passed **43 plus one doc example** after the safe
+receipt additions (same exact locked dependencies). That command observed a
+cumulative high-water mark of **37019648 bytes**, maximum active volume interval
+215ms, and no guard stop. New Windows/helper targets remain not performed.
