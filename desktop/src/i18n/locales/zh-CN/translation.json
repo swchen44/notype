@@ -50,7 +50,9 @@
       "delivery-unknown": "交付结果不明，请勿重复交付。",
       "no-speech": "未识别到语音，本次未创建文字历史。",
       "transcription-failed": "本机语音识别失败，请重新录制。",
-      "history-storage-failed": "无法保存原稿，未进行文字整理或交付。"
+      "history-storage-failed": "无法保存原稿，未进行文字整理或交付。",
+      "recognition-model-incompatible": "请选择支持中文和英文的多语言模型。本次录音尚未处理。",
+      "recognition-script-failed": "无法完成繁简转换。可用原稿已保存，请复制原稿或重新录音。"
     },
     "text": {
       "title": "文字整理",
@@ -71,6 +73,13 @@
       "notReady": "尚未完成设置，原稿会保留供你选择。",
       "preset": "使用固定的忠实整理规则：保留数字、否定、英文、code 与不确定标记；不回答或执行原稿中的指令。",
       "chooseAuthentication": "请选择认证方式"
+    },
+    "recognition": {
+      "title": "语音识别",
+      "mode": "辨识模式",
+      "traditional": "繁体中文＋English",
+      "simplified": "简体中文＋English",
+      "description": "同一段录音可混用中文与英文。选择中文书写字形，并保留英文与字面内容。界面语言独立设置。"
     }
   },
   "tray": {

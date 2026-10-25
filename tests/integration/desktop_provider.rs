@@ -74,6 +74,52 @@ fn configured(endpoint: String) -> TextConfiguration {
 }
 
 #[tokio::test]
+async fn both_profile_originals_are_saved_and_sent_in_the_requested_script_before_llm() {
+    for (mode, raw, expected) in [
+        (
+            RecognitionMode::TraditionalEnglish,
+            "不要删除 42 个 API request，头发和发展。",
+            "不要刪除 42 個 API request，頭髮和發展。",
+        ),
+        (
+            RecognitionMode::SimplifiedEnglish,
+            "不要刪除 42 個 API request，頭髮和發展。",
+            "不要删除 42 个 API request，头发和发展。",
+        ),
+    ] {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("sessions.db");
+        let reply = json!({"choices":[{"message":{"role":"assistant","content":expected},"finish_reason":"stop"}]}).to_string();
+        let (endpoint, request, server) = fixture(&reply, Duration::ZERO).await;
+        let workflow = DesktopWorkflow::new(SessionService::open(&path).unwrap(), Arc::new(|| {}));
+        let generation = workflow.begin(mode, None).unwrap();
+        let entry = workflow
+            .finish(generation, raw, configured(endpoint), vec![])
+            .await
+            .unwrap();
+        assert_eq!(entry.transcript, expected);
+        let request = request.await.unwrap();
+        let data: Value = serde_json::from_str(
+            request["messages"].as_array().unwrap().last().unwrap()["content"]
+                .as_str()
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(data["transcript"], expected);
+        server.await.unwrap();
+        drop(workflow);
+        assert_eq!(
+            SessionService::open(path)
+                .unwrap()
+                .get(&entry.id)
+                .unwrap()
+                .transcript,
+            expected
+        );
+    }
+}
+
+#[tokio::test]
 async fn session_http_separates_fixed_faithful_rules_examples_and_structured_current_data() {
     let reply=json!({"choices":[{"message":{"role":"assistant","content":"不要删除 API 的 session_id，保留 42 个 request。"},"finish_reason":"stop"}]}).to_string();
     let (endpoint, request, server) = fixture(&reply, Duration::ZERO).await;

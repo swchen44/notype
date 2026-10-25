@@ -310,6 +310,31 @@ impl SessionService {
         transcript: &str,
         options: SessionOptions,
     ) -> Result<SessionEntry, CoreError> {
+        self.create_entry(transcript, options, "recognized", None)
+    }
+
+    /// Preserve available recognition text when the requested local script failed.
+    /// This entry cannot accidentally enter automatic text processing or delivery.
+    pub fn create_recognition_failure(
+        &self,
+        transcript: &str,
+        options: SessionOptions,
+    ) -> Result<SessionEntry, CoreError> {
+        self.create_entry(
+            transcript,
+            options,
+            "failed",
+            Some("recognition-script-failed"),
+        )
+    }
+
+    fn create_entry(
+        &self,
+        transcript: &str,
+        options: SessionOptions,
+        status: &str,
+        error: Option<&str>,
+    ) -> Result<SessionEntry, CoreError> {
         if transcript.trim().is_empty() {
             return Err(CoreError::InvalidInput);
         }
@@ -317,8 +342,8 @@ impl SessionService {
         let timestamp = now();
         self.connection()?.execute(
             "INSERT INTO sessions
-            (id, transcript, created_at, updated_at, status, recognition_mode, original_target)
-            VALUES (?1,?2,?3,?3,'recognized',?4,?5)",
+            (id, transcript, created_at, updated_at, status, recognition_mode, original_target, error)
+            VALUES (?1,?2,?3,?3,?6,?4,?5,?7)",
             params![
                 id,
                 transcript,
@@ -326,7 +351,9 @@ impl SessionService {
                 serde_json::to_string(&options.recognition_mode)
                     .unwrap()
                     .trim_matches('"'),
-                options.original_target
+                options.original_target,
+                status,
+                error
             ],
         )?;
         self.get(&id)

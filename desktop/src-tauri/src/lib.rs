@@ -584,8 +584,14 @@ fn run_headless_transcription(app: &AppHandle, args: &CliArgs) -> i32 {
     let bound_backend = tm.current_backend();
 
     let runs = args.repeat.unwrap_or(1).max(1);
+    let preferences = get_settings(app);
+    let profile = workflow::recognition::RecognitionProfile::new(
+        preferences.recognition_mode.into(),
+        preferences.custom_words,
+    );
     let mut times_ms: Vec<u64> = Vec::new();
     let mut text = String::new();
+    let mut raw_text = String::new();
     for i in 0..runs {
         // If the model's unload-timeout is "Immediately", transcribe() unloads
         // the engine after each run; reload (untimed) so repeats keep working
@@ -597,8 +603,17 @@ fn run_headless_transcription(app: &AppHandle, args: &CliArgs) -> i32 {
             }
         }
         let t = Instant::now();
-        match tm.transcribe(samples.clone()) {
-            Ok(out) => text = out,
+        match tm.transcribe_raw_with_profile(samples.clone(), &profile) {
+            Ok(out) => {
+                raw_text = out;
+                match profile.normalize(&raw_text) {
+                    Ok(normalized) => text = normalized,
+                    Err(_) => {
+                        eprintln!("error: recognition-script-failed");
+                        return 1;
+                    }
+                }
+            }
             Err(e) => {
                 eprintln!("error: transcribe failed: {}", e);
                 return 1;
@@ -626,6 +641,9 @@ fn run_headless_transcription(app: &AppHandle, args: &CliArgs) -> i32 {
                 "best_ms": best_ms,
                 "rtf": rtf,
                 "text": text,
+                "raw_text": raw_text,
+                "recognition_mode": profile.mode,
+                "cpu_threads": if bound_backend.as_deref() == Some("onnx") { None } else { Some(workflow::recognition::CPU_THREADS) },
             })
         );
     } else {
@@ -721,6 +739,7 @@ pub fn run(cli_args: CliArgs) {
             shortcut::change_vad_backend_setting,
             shortcut::change_filler_word_removal_enabled_setting,
             shortcut::change_chinese_script_setting,
+            shortcut::change_recognition_mode_setting,
             shortcut::change_app_language_setting,
             shortcut::change_update_checks_setting,
             shortcut::change_show_whats_new_on_update_setting,

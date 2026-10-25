@@ -11,6 +11,8 @@ use std::sync::{
 #[path = "faithful_provider.rs"]
 mod faithful_provider;
 pub use faithful_provider::{TextAuthentication, TextConfiguration, TextTransport};
+#[path = "recognition.rs"]
+pub mod recognition;
 
 struct UnavailableDelivery;
 impl DeliveryAdapter for UnavailableDelivery {
@@ -31,6 +33,7 @@ struct Recording {
     options: SessionOptions,
     cancellation: CancellationToken,
     entry: Option<String>,
+    profile: recognition::RecognitionProfile,
 }
 
 struct RecordingLease<'a> {
@@ -68,18 +71,44 @@ impl DesktopWorkflow {
         recognition_mode: RecognitionMode,
         original_target: Option<String>,
     ) -> Result<u64, CoreError> {
+        self.begin_with_profile(
+            recognition::RecognitionProfile::new(recognition_mode, vec![]),
+            original_target,
+        )
+    }
+    pub fn begin_with_profile(
+        &self,
+        profile: recognition::RecognitionProfile,
+        original_target: Option<String>,
+    ) -> Result<u64, CoreError> {
         let generation = self.generation.fetch_add(1, Ordering::SeqCst) + 1;
         self.cancel_active()?;
         *self.recording.lock().map_err(|_| CoreError::Storage)? = Some(Recording {
             generation,
             options: SessionOptions {
-                recognition_mode,
+                recognition_mode: profile.mode,
                 original_target,
             },
             cancellation: CancellationToken::new(),
             entry: None,
+            profile,
         });
         Ok(generation)
+    }
+    /// The exact profile captured at recording start, never the current preferences.
+    pub fn recognition_profile(
+        &self,
+        generation: u64,
+    ) -> Result<recognition::RecognitionProfile, CoreError> {
+        self.recording
+            .lock()
+            .map_err(|_| CoreError::Storage)?
+            .as_ref()
+            .filter(|recording| {
+                recording.generation == generation && !recording.cancellation.is_cancelled()
+            })
+            .map(|recording| recording.profile.clone())
+            .ok_or(CoreError::InvalidTransition)
     }
     pub fn active_generation(&self) -> Result<Option<u64>, CoreError> {
         Ok(self
@@ -122,9 +151,13 @@ impl DesktopWorkflow {
             if recording.entry.is_some() {
                 return Err(CoreError::Busy);
             }
-            let entry = self
-                .sessions
-                .create(transcript, recording.options.clone())?;
+            let normalized = recording.profile.normalize(transcript);
+            let entry = match normalized {
+                Ok(original) => self.sessions.create(&original, recording.options.clone())?,
+                Err(_) => self
+                    .sessions
+                    .create_recognition_failure(transcript, recording.options.clone())?,
+            };
             recording.entry = Some(entry.id.clone());
             (entry, recording.cancellation.clone())
         };
@@ -133,6 +166,9 @@ impl DesktopWorkflow {
             generation,
         };
         (self.notify)();
+        if entry.error.as_deref() == Some("recognition-script-failed") {
+            return Ok(entry);
+        }
         let result = tokio::select! {
             biased;
             _ = cancellation.cancelled() => self.sessions.cancel(&entry.id),
@@ -155,6 +191,37 @@ impl DesktopWorkflow {
         (self.notify)();
         Ok(entry)
     }
+    /// ASR adapters call this when text exists but cannot satisfy the local profile.
+    /// The raw text remains readable; no provider or delivery is invoked.
+    pub fn finish_recognition_failure(
+        &self,
+        generation: u64,
+        raw: &str,
+    ) -> Result<SessionEntry, CoreError> {
+        let entry = {
+            let mut recording = self.recording.lock().map_err(|_| CoreError::Storage)?;
+            let recording = recording
+                .as_mut()
+                .filter(|recording| {
+                    recording.generation == generation && !recording.cancellation.is_cancelled()
+                })
+                .ok_or(CoreError::InvalidTransition)?;
+            if recording.entry.is_some() {
+                return Err(CoreError::Busy);
+            }
+            let entry = self
+                .sessions
+                .create_recognition_failure(raw, recording.options.clone())?;
+            recording.entry = Some(entry.id.clone());
+            entry
+        };
+        let _lease = RecordingLease {
+            workflow: self,
+            generation,
+        };
+        (self.notify)();
+        Ok(entry)
+    }
     pub fn cancel(&self, id: &str) -> Result<SessionEntry, CoreError> {
         let entry = self.sessions.cancel(id)?;
         (self.notify)();
@@ -171,6 +238,9 @@ impl DesktopWorkflow {
         configuration: TextConfiguration,
         glossary: Vec<String>,
     ) -> Result<SessionEntry, CoreError> {
+        if self.sessions.get(id)?.error.as_deref() == Some("recognition-script-failed") {
+            return Err(CoreError::InvalidTransition);
+        }
         (self.notify)();
         let entry = self
             .sessions

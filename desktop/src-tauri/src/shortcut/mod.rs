@@ -1340,6 +1340,18 @@ pub fn change_chinese_script_setting(app: AppHandle, script: ChineseScript) -> R
 
 #[tauri::command]
 #[specta::specta]
+pub fn change_recognition_mode_setting(
+    app: AppHandle,
+    mode: settings::RecognitionModeSetting,
+) -> Result<(), String> {
+    let mut preferences = settings::get_settings(&app);
+    preferences.recognition_mode = mode;
+    settings::write_settings(&app, preferences);
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
 pub fn change_app_language_setting(app: AppHandle, language: String) -> Result<(), String> {
     let mut settings = settings::get_settings(&app);
     settings.app_language = language.clone();
