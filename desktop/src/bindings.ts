@@ -875,6 +875,14 @@ async getHistoryEntries(query: string | null) : Promise<Result<SessionDto[], str
     else return { status: "error", error: e  as any };
 }
 },
+async exportHistoryCsv() : Promise<Result<HistoryCsvExportResult, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("export_history_csv") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e as any };
+}
+},
 async getTextConfiguration() : Promise<Result<TextConfiguration, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_text_configuration") };
@@ -1208,7 +1216,7 @@ uncovered_bindings: string[];
  * warning banner appears and explains why recording refused.
  */
 recorder_blocked: boolean }
-export type SessionDto = { id: string; transcript: string; result: string | null; created_at: string; updated_at: string; status: SessionPhase; error: string | null; recognition_mode: string | null; selection: string; scenario: SceneId; translation_target: string | null; source_language: string | null; back_translation: string | null; review_required: boolean; review_confirmed: boolean; revision: number }
+export type SessionDto = { id: string; transcript: string; result: string | null; created_at: string; updated_at: string; status: SessionPhase; error: string | null; recognition_mode: string | null; selection: string; scenario: SceneId; translation_target: string | null; source_language: string | null; back_translation: string | null; review_required: boolean; review_confirmed: boolean; revision: number; observations: HistoryObservationsDto; api_summary: HistoryApiSummaryDto }
 export type SessionPhase = "recognized" | "processing" | "pending" | "failed" | "cancelled" | "delivering" | "delivered" | "delivery-unknown"
 /**
  * How the transcribe shortcut's key events drive a recording.
@@ -1263,7 +1271,7 @@ export type StreamTextEvent = { capture_id: string; committed: string; tentative
  */
 export type StreamWorkKind = "transcribing" | "polishing"
 export type TextAuthentication = "unspecified" | "none" | "bearer"
-export type TextConfiguration = { transport: TextTransport; endpoint: string; model: string; authentication: TextAuthentication; api_key: string; timeout_ms: number; prompts: ScenarioPrompts; translation: TranslationSettings }
+export type TextConfiguration = { transport: TextTransport; endpoint: string; model: string; authentication: TextAuthentication; api_key: string; timeout_ms: number; provider_profile: TextProviderProfile; effort: string | null; max_output_tokens: number | null; prompts: ScenarioPrompts; translation: TranslationSettings }
 export type TextTransport = "disabled" | "open_ai_chat"
 /**
  * UI appearance mode. `System` follows the OS `prefers-color-scheme`; `Light`
@@ -1337,3 +1345,27 @@ function __makeEvents__<T extends Record<string, any>>(
 		},
 	);
 }
+
+/** Explicit request controls; independent of endpoint and credentials. */
+export type TextProviderProfile = "generic" | "deepseek";
+/** Milliseconds of received audio before VAD, resampling or decoder padding. */
+export type HistoryRecordingDto = { audio_ms: number; quality: string };
+/** Identity of the actual producer lease, independent of current settings. */
+export type HistoryModelDto = { id: string; name: string | null; backend: string | null };
+/** Durable nullable observations; zero means an observed zero. */
+export type HistoryObservationsDto = { recording: HistoryRecordingDto | null; requested_asr_model: string | null; actual_asr_model: HistoryModelDto | null; original_count: number | null; result_count: number | null; count_rule: string; asr_after_stop_ms: number | null; initial_stop_to_result_ms: number | null; latest_processing_kind: string | null; latest_processing_ms: number | null; latest_api_ms: number | null; latest_outcome: string | null; api_metadata_unavailable: boolean };
+/** Completeness applies independently to each metric across actual calls. */
+export type HistoryMetricStatus = "not_applicable" | "complete" | "partial" | "unknown";
+/** A complete total or a separately labeled known subtotal. */
+export type HistoryUsageDto = { status: HistoryMetricStatus; total: number | null; known_subtotal: number | null; reported_calls: number };
+/** Actual reported money; amount must remain an exact decimal string. */
+export type HistoryCurrencyAmountDto = { currency: string; amount: string };
+/** Actual fees by currency, with no conversion or estimates. */
+export type HistoryFeeDto = { status: HistoryMetricStatus; totals: HistoryCurrencyAmountDto[]; known_subtotals: HistoryCurrencyAmountDto[]; reported_calls: number };
+/** Requested and explicitly reported model/effort remain associated. */
+export type HistoryModelEffortDto = { requested_model: string | null; reported_model: string | null; requested_effort: string | null; reported_effort: string | null };
+/** All-call history summary, including retries and back-translation. */
+export type HistoryApiSummaryDto = { call_count: number | null; observed_call_count: number; input: HistoryUsageDto; output: HistoryUsageDto; fees: HistoryFeeDto; requested_models: string[]; reported_models: string[]; model_efforts: HistoryModelEffortDto[] };
+/** Native acknowledgement of the explicit all-history save. */
+export type HistoryCsvExportStatus = "saved" | "cancelled";
+export type HistoryCsvExportResult = { status: HistoryCsvExportStatus; rows: number | null };

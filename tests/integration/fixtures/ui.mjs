@@ -1,3 +1,5 @@
+import { createServer as reservePort } from "node:net";
+import { once } from "node:events";
 import { mkdir } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
@@ -16,11 +18,36 @@ export const desktop = fileURLToPath(
 );
 
 /** Fresh browser + real Vite/React/i18next; the caller stubs only public IPC. */
-export async function uiFixture(t) {
+export async function uiFixture(t, { cacheName, entry } = {}) {
   await mkdir(new URL("../../../.local", import.meta.url), { recursive: true });
+  const reservation = reservePort();
+  reservation.listen(0, "127.0.0.1");
+  await once(reservation, "listening");
+  const port = reservation.address().port;
+  await new Promise((resolve) => reservation.close(resolve));
   const server = await createServer({
     root: desktop,
-    server: { host: "127.0.0.1", port: 0, strictPort: false },
+    ...(cacheName
+      ? {
+          cacheDir: fileURLToPath(
+            new URL(`../../../.local/${cacheName}-vite`, import.meta.url),
+          ),
+        }
+      : {}),
+    plugins: entry
+      ? [
+          {
+            name: "ui-fixture-entry",
+            resolveId(id) {
+              if (id === "/__ui_fixture.tsx") return id;
+            },
+            load(id) {
+              if (id === "/__ui_fixture.tsx") return entry;
+            },
+          },
+        ]
+      : [],
+    server: { host: "127.0.0.1", port, strictPort: true },
   });
   await server.listen();
   t.after(() => server.close());
