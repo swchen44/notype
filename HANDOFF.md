@@ -6,9 +6,9 @@
 
 ## 目前 checkpoint
 
-2026-10-25 本機試用回饋正在處理：#18 模型資訊／Anthropic 風格、#19 收音等待／系統匣、#20 安全診斷，首輪 source 已合入 `735b571`；尚未更新使用者正在執行的正式包。獨立 source review 為 Spec 0、Standards 4 項；單一修正 worktree 的前置進度保留，後續產品修改已因新計畫審查門檻停止。#21 錄音數字 `00:12` 尚未實作。
+2026-10-25 本機試用回饋正在處理：#18 模型資訊／Anthropic 風格、#19 收音等待／系統匣、#20 安全診斷，首輪 source 已合入 `735b571`；尚未更新使用者正在執行的正式包。獨立 source review 為 Spec 0、Standards 4 項；單一 diagnostics worktree 正依已核准的新計畫完成修正。#21 純數字 `00:12` 與跨錄音事件保護正在獨立 worktree 實作，尚未合入或交付。
 
-使用者已確認右 Alt 短按有效，但很久才看到收音提示；不是長按模式。原 `notype.log` 為 0 bytes，不能推定沒有錯誤。最新要求包括 diagnostics 預設開啟／可關閉／可清除，以及敏感 token/key 中段遮罩。**所有新實作須先通過 [GPT-6-Astra issue 計畫審查](docs/agents/plan-review.md)。** P0-v1 流程文件已核准；P20-v2、P21-v2、P19-latency-v2 被要求修訂，對應 issue 保留審查結果，尚未授權其後續實作。下一步先完成新版本計畫並複審，勿直接沿舊 source 審查通過狀態開始新增功能。
+使用者已確認右 Alt 短按有效，但很久才看到收音提示；不是長按模式。原 `notype.log` 為 0 bytes，不能推定沒有錯誤。最新要求包括 diagnostics 預設開啟／可關閉／可清除，以及敏感 token/key 中段遮罩，短值與模糊值全部遮蔽；白名單仍不收集憑證。**所有新實作須先通過 [GPT-6-Astra issue 計畫審查](docs/agents/plan-review.md)。** [P20-v3 計畫](https://github.com/swchen44/notype/issues/20#issuecomment-6398232178)／[核准 0 項未解問題](https://github.com/swchen44/notype/issues/20#issuecomment-6398249625) 與 [P21-v3 計畫](https://github.com/swchen44/notype/issues/21#issuecomment-6398232459)／[核准 0 項未解問題](https://github.com/swchen44/notype/issues/21#issuecomment-6398249848) 已解決前版 findings，可依確切範圍實作。[P19-latency-v3](https://github.com/swchen44/notype/issues/19#issuecomment-6398258525) 尚待審查與兩項實作相依；未確認真機等待原因。P14 建置計畫已有條件核准，但尚未滿足全部前置條件；包裝／更新／使用者 App 操作需另有核准計畫。
 
 正式功能與審查修正已合入 `implement/notype-mvp`。#9 桌面基線、#10 共用核心、#11 文字流程、#17 三場景／提示詞已依各自 receipt 結案；#12／#13 的功能已合入，品質／實際操作仍有未驗收項目。兩個獨立 reviewer 的 Standards／Spec findings 均已修正，最終限定複核各 0 項，見 [完整審查紀錄](docs/verification/local-code-review.md) 及 [修正與 RED→GREEN](docs/verification/local-review-fixes.md)。
 
