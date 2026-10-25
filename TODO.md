@@ -18,7 +18,7 @@
 
 整合分支：`implement/notype-mvp`，起點 `be6f0a5`。每個實作 ticket 使用獨立 branch／worktree 與已確認的 public seams 做 TDD，合入整合分支後再啟動被解鎖的工作；最後對起點到整合分支的完整 diff 做 Standards／Spec review。本輪不建立 PR，不把公司／目標環境尚未執行的驗收當作完成。
 
-目前 #9～#11 已合入整合分支，最新合併點 `5ad1698`；#12 語言及 #17 三場景／提示詞正在平行實作。Issues 保持 open 直到 review／驗收完成。#11 通過 core 19、desktop 7、native 5 項，含可見歷史／設定、HTTP、重啟及唯讀匯入；合併後 Node 16、core 19 與前端建置通過。見 [桌面流程 receipt](docs/verification/desktop-workflow.md)、[桌面基線](docs/verification/windows-desktop-baseline.md) 與 [核心 portability receipt](docs/verification/shared-core-portability.md)。
+目前 #9～#11、#12 功能部分與 #17 已合入整合分支，最新合併點 `af94735`；#13 快捷鍵／原目標交付正在實作，#12 模型品質及本機轉換缺口仍未完成。Issues 保持 open 直到 review／驗收完成。最新合併檢查通過 core 27、portable harness 16、Node 16、前端 lint/build 及繁簡各 559 keys；原生測試結果與限制分列於 [三場景 receipt](docs/verification/scenarios-prompts.md) 及 [語言 receipt](docs/verification/languages.md)，不把功能測試視為語音品質／效能通過。
 
 | Ticket | 阻擋來源 | 可展示／驗收成果 |
 | --- | --- | --- |
@@ -27,7 +27,7 @@
 | [#11 桌面文字流程](https://github.com/swchen44/notype/issues/11) | #9、#10 | 正式錄音／STT 接核心，失敗待選、歷史搜尋／複製／刪除與無 WAV 重試 |
 | [#12 語言完整切片](https://github.com/swchen44/notype/issues/12) | #11 | 繁／簡介面與繁／簡中英辨識，獨立設定、偏好保存、固定模型／音訊驗收 |
 | [#17 三場景與提示詞](https://github.com/swchen44/notype/issues/17) | #11 | 三場景路由、獨立可編輯／還原提示詞、翻譯目標／領域／語氣／術語對照、預設關閉的可選回譯、版本綁定確認交付、快照與歷史 migration |
-| [#13 錄音與原生交付](https://github.com/swchen44/notype/issues/13) | #11、#17 | 三場景點按開始／獨立停止鍵／Esc、共享前綴手勢、當次音訊清理、Windows 原目標保護、允許的 App／網域情境提示、去重與手動 Enter |
+| [#13 錄音與原生交付](https://github.com/swchen44/notype/issues/13) | #11、#17 | 三場景點按開始／獨立停止鍵／Esc、共享前綴手勢、當次音訊清理、Windows 原目標保護、通用 App 名稱情境、去重與手動 Enter；不做網域擷取 |
 | [#14 npm portable](https://github.com/swchen44/notype/issues/14) | #12、#13、#17 | 完整預編譯 App／runtime／模型 tarball、cold launch、更新資料保留 |
 | [#15 公司 API 驗收](https://github.com/swchen44/notype/issues/15) | #11、#17；公司連線／憑證／政策 | Chat Completions 格式已確認；真實三場景品質、錯誤／取消及公司資料政策仍待驗證，目前 needs-info；真正需要 key 時才詢問 |
 | [#16 目標環境驗收](https://github.com/swchen44/notype/issues/16) | #14、#15；目標 App／帳號／Proxy | 五個 App、公司 Proxy、兩模式品質與 p95、更新資料保留；尚缺環境時保持未完成 |
