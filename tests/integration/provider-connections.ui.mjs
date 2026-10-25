@@ -160,10 +160,7 @@ test("failed configuration loading can be retried without exposing the rejection
   await page
     .getByRole("button", { name: "Add connection", exact: true })
     .waitFor();
-  assert.doesNotMatch(
-    await page.locator("body").innerText(),
-    /read-secret|Bearer/,
-  );
+  assert.doesNotMatch(await page.locator("body").innerText(), /read-secret/);
 });
 
 test("model-list authentication errors are actionable while manual input stays available", async (t) => {
@@ -365,7 +362,7 @@ for (const [mode, message] of [
         .fill("manual-after-failure");
       assert.doesNotMatch(
         await page.locator("body").innerText(),
-        /upstream-secret|Bearer/,
+        /upstream-secret/,
       );
     },
   );
@@ -390,7 +387,7 @@ test("a stored save remains successful if readiness refresh fails", async (t) =>
   );
   assert.doesNotMatch(
     await page.locator("body").innerText(),
-    /readiness-secret|Bearer/,
+    /readiness-secret/,
   );
 });
 

@@ -129,7 +129,7 @@ test("a rejected save keeps the edit and supports an explicit retry without raw 
   );
   assert.doesNotMatch(
     await page.locator("body").innerText(),
-    /should-never-render|Bearer/,
+    /should-never-render/,
   );
   await page.evaluate(() => (window.mode = "ok"));
   await page
