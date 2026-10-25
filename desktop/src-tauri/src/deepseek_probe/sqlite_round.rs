@@ -1,7 +1,7 @@
 //! Owned, one-round SQLite reservation store. No App database or history fee.
 use super::{
     policy::{Denied, ROUND_ID},
-    round::{valid_id, Access, Outcome, RoundStore, SlotRecord, SlotState, Snapshot},
+    round::{validate_snapshot, Access, Outcome, RoundStore, SlotRecord, SlotState, Snapshot},
 };
 use rusqlite::{params, Connection, OpenFlags, TransactionBehavior};
 use std::{
@@ -24,6 +24,8 @@ pub struct SqliteRoundStore {
 impl SqliteRoundStore {
     /// Create a fresh round exclusively, or open an existing valid report only.
     /// Missing/corrupt/foreign artifacts fail closed instead of recreating them.
+    /// The returned store owns its file lock until Drop. Errors reveal only fixed
+    /// codes; partial fresh creation remains evidence and is never auto-reset.
     pub fn open_owned(directory: &Path) -> Result<Self, Denied> {
         if !directory.is_absolute() || directory.file_name().is_none() {
             return Err(Denied::Storage);
@@ -125,82 +127,81 @@ impl SqliteRoundStore {
     }
 }
 
+fn read_snapshot(connection: &Connection) -> Result<Snapshot, Denied> {
+    let schema: i64 = connection
+        .query_row("PRAGMA user_version", [], |r| r.get(0))
+        .map_err(|_| Denied::Storage)?;
+    if schema != 1 {
+        return Err(Denied::Storage);
+    }
+    let (revision, armed, halted): (i64, i64, i64) = connection
+        .query_row(
+            "SELECT revision,armed,halted FROM round_meta WHERE id=1 AND round_id=?1",
+            [ROUND_ID],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
+        .map_err(|_| Denied::Storage)?;
+    if revision < 0 || !(0..=1).contains(&armed) || !(0..=1).contains(&halted) {
+        return Err(Denied::Storage);
+    }
+    let mut state = Snapshot {
+        revision: revision as u64,
+        armed: armed == 1,
+        halted: halted == 1,
+        ..Snapshot::default()
+    };
+    let mut statement = connection.prepare("SELECT number,state,history_id,call_id FROM slots WHERE length(history_id)<=128 AND length(call_id)<=128 ORDER BY number").map_err(|_| Denied::Storage)?;
+    let rows = statement
+        .query_map([], |r| {
+            Ok((
+                r.get::<_, u8>(0)?,
+                r.get::<_, u8>(1)?,
+                r.get::<_, String>(2)?,
+                r.get::<_, String>(3)?,
+            ))
+        })
+        .map_err(|_| Denied::Storage)?;
+    let mut count = 0;
+    for row in rows {
+        let (number, code, history_id, call_id) = row.map_err(|_| Denied::Storage)?;
+        if count >= 8 || number as usize != count + 1 {
+            return Err(Denied::Storage);
+        }
+        let slot_state = decode(code)?;
+        state.slots[count] = SlotRecord {
+            state: slot_state,
+            history_id,
+            call_id,
+        };
+        count += 1;
+    }
+    if count != 8 {
+        return Err(Denied::Storage);
+    }
+    validate_snapshot(&state)?;
+    Ok(state)
+}
 impl RoundStore for SqliteRoundStore {
     fn load(&self) -> Result<(Access, Snapshot), Denied> {
-        let schema: i64 = self
-            .connection
-            .query_row("PRAGMA user_version", [], |r| r.get(0))
-            .map_err(|_| Denied::Storage)?;
-        if schema != 1 {
-            return Err(Denied::Storage);
-        }
-        let (revision, armed, halted): (i64, i64, i64) = self
-            .connection
-            .query_row(
-                "SELECT revision,armed,halted FROM round_meta WHERE id=1 AND round_id=?1",
-                [ROUND_ID],
-                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
-            )
-            .map_err(|_| Denied::Storage)?;
-        if revision < 0 || !(0..=1).contains(&armed) || !(0..=1).contains(&halted) {
-            return Err(Denied::Storage);
-        }
-        let mut state = Snapshot {
-            revision: revision as u64,
-            armed: armed == 1,
-            halted: halted == 1,
-            ..Snapshot::default()
-        };
-        let mut statement = self.connection.prepare("SELECT number,state,history_id,call_id FROM slots WHERE length(history_id)<=128 AND length(call_id)<=128 ORDER BY number").map_err(|_| Denied::Storage)?;
-        let rows = statement
-            .query_map([], |r| {
-                Ok((
-                    r.get::<_, u8>(0)?,
-                    r.get::<_, u8>(1)?,
-                    r.get::<_, String>(2)?,
-                    r.get::<_, String>(3)?,
-                ))
-            })
-            .map_err(|_| Denied::Storage)?;
-        let mut count = 0;
-        for row in rows {
-            let (number, code, history_id, call_id) = row.map_err(|_| Denied::Storage)?;
-            if count >= 8 || number as usize != count + 1 {
-                return Err(Denied::Storage);
-            }
-            let slot_state = decode(code)?;
-            if matches!(slot_state, SlotState::NotRun | SlotState::Skipped) {
-                if !history_id.is_empty()
-                    || !call_id.is_empty()
-                    || (slot_state == SlotState::Skipped && number != 6)
-                {
-                    return Err(Denied::Storage);
-                }
-            } else if !valid_id(&history_id) || !valid_id(&call_id) || !state.armed {
-                return Err(Denied::Storage);
-            }
-            state.slots[count] = SlotRecord {
-                state: slot_state,
-                history_id,
-                call_id,
-            };
-            count += 1;
-        }
-        if count != 8 {
-            return Err(Denied::Storage);
-        }
-        Ok((self.access, state))
+        Ok((self.access, read_snapshot(&self.connection)?))
     }
     fn commit(&mut self, previous_revision: u64, next: &Snapshot) -> Result<(), Denied> {
         if self.access != Access::Fresh {
             return Err(Denied::ReportOnly);
         }
+        validate_snapshot(next)?;
         let previous = i64::try_from(previous_revision).map_err(|_| Denied::Storage)?;
         let revision = i64::try_from(next.revision).map_err(|_| Denied::Storage)?;
         let transaction = self
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(|_| Denied::Storage)?;
+        let current = read_snapshot(&transaction)?;
+        if current.revision != previous_revision
+            || previous_revision.checked_add(1) != Some(next.revision)
+        {
+            return Err(Denied::Storage);
+        }
         if transaction
             .execute(
                 "UPDATE round_meta SET revision=?1,armed=?2,halted=?3 WHERE id=1 AND revision=?4",

@@ -5,17 +5,112 @@ use super::policy::{schedule, validate_wire, Denied, WireFacts, BUDGET_UNITS, RE
 /// Whether this process exclusively created the round or reopened a report.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Access {
+    /// This process exclusively created the owned store and may reserve once.
     Fresh,
+    /// The round already existed; opening evidence never reauthorizes a send.
     ReportOnly,
 }
 
 /// Bounded storage snapshot, independent of credentials and product history.
 #[derive(Clone, Default)]
 pub struct Snapshot {
+    /// Monotonic durable compare-and-commit revision, initially zero.
     pub revision: u64,
+    /// Whether the single arm operation committed before any slot reservation.
     pub armed: bool,
+    /// Persisted admission halt; a final receipt may still complete the active slot.
     pub halted: bool,
+    /// Fixed ordered schedule records; untouched trailing entries remain NotRun.
     pub slots: [SlotRecord; 8],
+}
+
+/// Shared persisted-state invariant; adapters must reject inconsistent evidence.
+pub(super) fn validate_snapshot(state: &Snapshot) -> Result<(), Denied> {
+    let mut not_run = false;
+    let mut reserved = 0u64;
+    let mut finished = 0u64;
+    let mut skipped = 0u64;
+    let mut fatal = false;
+    for (index, slot) in state.slots.iter().enumerate() {
+        match slot.state {
+            SlotState::NotRun | SlotState::Skipped => {
+                if !slot.history_id.is_empty()
+                    || !slot.call_id.is_empty()
+                    || (slot.state == SlotState::Skipped && index != 5)
+                {
+                    return Err(Denied::Storage);
+                }
+            }
+            _ if !valid_id(&slot.history_id) || !valid_id(&slot.call_id) => {
+                return Err(Denied::Storage);
+            }
+            _ => {}
+        }
+        if slot.state == SlotState::NotRun {
+            not_run = true;
+            continue;
+        }
+        if not_run || !state.armed || fatal {
+            return Err(Denied::Storage);
+        }
+        if index > 0
+            && !matches!(
+                state.slots[index - 1].state,
+                SlotState::Finished(_) | SlotState::Skipped
+            )
+        {
+            return Err(Denied::Storage);
+        }
+        if slot.state == SlotState::Skipped {
+            if state.slots[4].state != SlotState::Finished(Outcome::Success) {
+                return Err(Denied::Storage);
+            }
+            skipped += 1;
+            continue;
+        }
+        reserved += 1;
+        for (prior_index, prior) in state.slots[..index].iter().enumerate() {
+            if prior.history_id.is_empty() {
+                continue;
+            }
+            if prior.call_id == slot.call_id
+                || ((schedule()[prior_index].history_group == schedule()[index].history_group)
+                    != (prior.history_id == slot.history_id))
+            {
+                return Err(Denied::Storage);
+            }
+        }
+        if let SlotState::Finished(outcome) = slot.state {
+            finished += 1;
+            fatal = outcome != Outcome::Success
+                && !(index == 6
+                    && matches!(
+                        outcome,
+                        Outcome::IntentionalCancellation | Outcome::CancelRacedWithCompletion
+                    ));
+        }
+    }
+    if reserved > 8
+        || reserved
+            .checked_mul(RESERVATION_UNITS)
+            .filter(|total| *total <= BUDGET_UNITS)
+            .is_none()
+        || (fatal && !state.halted)
+    {
+        return Err(Denied::Storage);
+    }
+    // Every arm/admit/finish/skip commits once. Explicit halt can commit once,
+    // including before a final receipt; a fatal finish itself also sets halted.
+    let operations = u64::from(state.armed) + reserved + finished + skipped;
+    let revision_valid = if fatal {
+        state.revision == operations || state.revision == operations + 1
+    } else {
+        state.revision == operations + u64::from(state.halted)
+    };
+    if !revision_valid {
+        return Err(Denied::Storage);
+    }
+    Ok(())
 }
 
 /// Bounded persisted admission state. PossiblySent conservatively includes a
@@ -23,17 +118,24 @@ pub struct Snapshot {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum SlotState {
     #[default]
+    /// No reservation or local linkage exists for this slot.
     NotRun,
+    /// Reservation committed; dispatch/completion may be unknown after interruption.
     PossiblySent,
+    /// Terminal classification retaining the same full reservation and identifiers.
     Finished(Outcome),
+    /// Only slot 6 may be explicitly omitted; it has no reservation or identifiers.
     Skipped,
 }
 
 /// Safe local correlation identifiers; never provider text or Authorization.
 #[derive(Debug, Clone, Default)]
 pub struct SlotRecord {
+    /// Durable lifecycle classification; never a provider response body.
     pub state: SlotState,
+    /// Bounded local history correlation key; grouped by the fixed schedule.
     pub history_id: String,
+    /// Bounded local call correlation key, unique across reserved slots.
     pub call_id: String,
 }
 
@@ -41,10 +143,15 @@ pub struct SlotRecord {
 /// may continue. A network/storage/contract failure must halt remaining sends.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Outcome {
+    /// Successful terminal attempt; it does not refund the reservation.
     Success,
+    /// Expected cancellation; only slot 7 may continue to a later slot.
     IntentionalCancellation,
+    /// Completion won the cancellation race; only slot 7 may continue afterward.
     CancelRacedWithCompletion,
+    /// Ordinary failure requiring a persisted halt before further admission.
     Failed,
+    /// Wire/response contract failed; remaining sends must be halted.
     ContractViolation,
 }
 
@@ -54,15 +161,27 @@ pub struct Report {
     pub reserved_slots: u8,
     /// Budget reservations in USD units of 10^-7; never actual billed fees.
     pub reservation_units: u64,
+    /// Whether reopening forbids every mutation and new send permit.
     pub report_only: bool,
+    /// Whether a persisted halt or this process's storage failure blocks admission.
     pub halted: bool,
+    /// Owned copies of safe local slot classifications/IDs, not actual fee receipts.
     pub slots: [SlotRecord; 8],
 }
 
 /// Durable compare-and-commit boundary. An error must never grant permission.
 /// The SQLite adapter uses FULL synchronization and exclusive ownership.
 pub trait RoundStore {
+    /// Load validated, bounded evidence and this owner's access capability.
+    /// Reopened rounds are report-only; missing/corrupt/inconsistent state returns
+    /// a fixed error and must never be reset or repaired into fresh permission.
     fn load(&self) -> Result<(Access, Snapshot), Denied>;
+    /// Atomically compare the current revision and durably store valid `next`.
+    /// The caller owns exclusive write access; current and candidate evidence
+    /// must both be valid, and `next.revision` must be `previous_revision + 1`.
+    /// Success means durable commit before any send permit can be returned.
+    /// Failure grants no permit and may follow a completed durable commit: callers
+    /// must halt, never refund/retry a send, and reopen only for reporting.
     fn commit(&mut self, previous_revision: u64, next: &Snapshot) -> Result<(), Denied>;
 }
 
@@ -106,6 +225,8 @@ impl<S: RoundStore> Round<S> {
     }
 
     /// Validate and reserve one fixed slot before allowing any HTTP polling.
+    /// A storage error blocks this instance even if the commit actually finished;
+    /// never infer an unsent/refundable slot or retry from that error.
     pub fn admit(
         &mut self,
         slot: u8,

@@ -11,49 +11,79 @@ pub const ROUND_ID: &str = "P23-live-v1";
 /// Safe facts from the *complete actual wire*. Never pass credentials or text.
 /// The future production bridge must obtain these after request construction.
 pub struct WireFacts<'a> {
+    /// Borrowed final endpoint; must be the pinned public URL without credentials.
     pub endpoint: &'a str,
+    /// Borrowed model identifier actually serialized in the request body.
     pub model: &'a str,
+    /// Whether the request used the explicit reviewed DeepSeek profile.
     pub deepseek_profile: bool,
+    /// Explicit final effort value; absence is not equivalent to the required value.
     pub effort: Option<&'a str>,
+    /// Explicit final thinking flag; absence cannot silently inherit a default.
     pub thinking: Option<bool>,
+    /// Whether the actual request uses the approved nonstreaming response mode.
     pub non_streaming: bool,
+    /// Output-token limit actually present on the wire, not a UI preference.
     pub max_output_tokens: Option<u32>,
+    /// Complete serialized request size, including every field, in bytes.
     pub wire_bytes: u64,
+    /// Number of messages in that complete request, including system messages.
     pub message_count: u32,
+    /// Whether all message content uses plain text without tools or attachments.
     pub plain_text_only: bool,
 }
 
 /// Fixed codes contain no configuration, request text or secrets.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Denied {
+    /// Final wire facts violate the pinned provider/request contract.
     WireContract,
+    /// Slot, state or local identifier violates the fixed one-round schedule.
     Schedule,
+    /// The fresh round has not been durably armed.
     NotArmed,
+    /// Existing evidence was reopened; no mutation or send may be authorized.
     ReportOnly,
+    /// A prior halt or storage failure blocks further admission in this process.
     Halted,
+    /// Storage is missing, corrupt, inconsistent or failed; never includes raw details.
     Storage,
+    /// Another process or handle currently owns the exclusive round lock.
     AlreadyOwned,
 }
 
 /// Purpose of one fixed live slot. Never infer it from a later user setting.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Purpose {
+    /// The single initial connection request.
     Connection,
+    /// Fixed synthetic dictation sample.
     Dictation,
+    /// Translation of the fixed synthetic sample.
     Translation,
+    /// Fixed synthetic instruction request.
     Ask,
+    /// Forward result for the scheduled translation review.
     ForwardReview,
+    /// Optional reverse call sharing the forward result's history group.
     BackTranslation,
+    /// Scheduled cancellation attempt; its reservation is never refunded.
     Cancellation,
+    /// One scheduled retry sharing slot 7's history, with its own call ID.
     Retry,
 }
 
 /// Exact nonsecret schedule item, shared by the eventual runner and guard.
 pub struct SlotSpec {
+    /// Unique fixed position from 1 through 8; no replacement slots are created.
     pub number: u8,
+    /// Required local history grouping, independent of call IDs or provider IDs.
     pub history_group: u8,
+    /// Immutable purpose of this authorized slot.
     pub purpose: Purpose,
+    /// Reviewed static synthetic input; never user speech or a credential.
     pub sample: &'static str,
+    /// Whether this slot belongs to the scheduled forward/reverse review pair.
     pub review: bool,
 }
 

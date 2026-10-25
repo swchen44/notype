@@ -82,3 +82,117 @@ until the #22 contract gate; no shared manifest/lock was modified.
 - User App/profile, mic, clipboard, company environment or installation actions.
 
 #23 remains open. Parent #8 retains every unfinished gate and acceptance item.
+
+## Offline source-review fixes (2026-10-26)
+
+The independent reviews pinned `8a273e980854b65ffe074fa8ba31b356111dd7f3`
+(same tree as integration `83639c90b79eccc4681d0a90902de03223533149`) and found
+one Spec/P2 and one Standards/P3 issue. The exact
+[P23-offline-review-fix-v1 plan](https://github.com/swchen44/notype/issues/23#issuecomment-6400259566)
+received [GPT-6-Astra APPROVED / zero unresolved](https://github.com/swchen44/notype/issues/23#issuecomment-6400277302)
+before this follow-up's implementation/test edits. Original results above remain
+the historical preparation receipt.
+
+**P2 original finding:** SQLite accepted individually valid rows which could not
+form a Round snapshot, such as slot 1 NotRun followed by slot 2 Finished, or slots
+5/6 using different history IDs. This was an evidence acceptance/reporting defect;
+review did not establish additional sends or a budget-cap bypass.
+
+A single production snapshot validator now serves actual load and candidate
+commit; current data is also read/validated inside the IMMEDIATE transaction
+before any UPDATE. Candidate revision advances exactly once and must match the
+current compare revision. Invalid current data cannot be washed into valid-looking
+evidence. Schema/round identity and eight unique ordered row positions remain
+checked at decoding; the fixed array represents the slots without duplicate keys.
+
+The validator checks a continuous occupied prefix, serial completion, allowed
+slot-6 skip, slot-7 cancellation/race continuation, fatal terminal/halt consistency,
+revision operations, unique local call IDs and exact history groups. The fixed
+reservation count/product stays within eight and the reviewed budget; schema 1
+has no independent persisted fee/total column. This does not calculate actual fees.
+
+Missing external history/call rows are not guessed or queried. Positive fixtures
+use actual Round transitions whose local IDs are already reserved even if another
+store never committed or HTTP never started. NotRun/Skipped IDs remain empty;
+no new blank-ID reserved state or future bridge ID mapping was invented.
+Corrupt/inconsistent state returns only `Denied::Storage`, never resets, and
+reopened evidence remains report-only. Invalid compare commits preserve the
+prior logical rows.
+
+**Actual RED → GREEN:**
+
+- `sqlite_rejects_individually_valid_rows_with_an_impossible_slot_prefix`: created
+  a real schema-1 owned database, then injected individually valid rows with slot
+  2 Finished while slot 1 remained NotRun. Before validation, the named case was
+  **0 passed / 1 failed** because actual `open_owned` accepted the impossible state.
+  After the shared validator, it was **1 passed / 0 failed**.
+- `sqlite_rejects_impossible_identity_completion_and_halt_combinations`: the first
+  actual corruption (slot 2 reusing slot 1's call ID in an otherwise valid completed
+  eight-slot round) was likewise accepted, giving **0 passed / 1 failed**. After
+  validation, **1 passed / 0 failed**, including all eight logical corruption
+  variants: duplicate call, split 5/6 group, split 7/8 group, merged distinct group,
+  unfinished earlier slot, fatal failure followed by later slots, missing fatal
+  halt, and incompatible revision.
+- These RED cases observed actual successful storage opens, not malformed SQL,
+  compile errors, wrong locators or zero tests. Fixture writes touch only verified
+  task-owned temporary directories. No fault injection remains in product code.
+
+Additional actual SQLite regressions include **44 valid transition-prefix
+fixtures**: every completed prefix, pending crash boundary, explicit halt with
+pending receipt, ordinary failure, halt before final receipt, both planned slot-7
+cancellation outcomes with skipped slot 6 and slot 8, and halt before arming.
+Reopened reservation counts, units, halt and local slot state/IDs are preserved.
+The compare-commit case rejects an invalid candidate, skipped/stale revisions and
+an invalid current snapshot without changing logical rows; a valid commit positive
+control confirms rejected writes did not poison the owner.
+
+**P3 original finding:** new public fields/variants and ConsolePort/RoundStore
+methods lacked method-level API documentation. Every public field/variant now
+has purpose documentation. Port methods specify owned interactive input, private
+buffer ownership, bounded polling, interrupt lifetime/restore/retry and cleanup
+errors. RoundStore methods specify exclusive access, complete validation,
+revision compare, durability before permit, and the possibility that a failed
+commit already completed: halt, never refund/resend, reopen for reporting only.
+These comments do not change console, budget or admission semantics.
+
+### Follow-up commands and results
+
+Compiler: `rustc 1.99.1 (58cf8f9c3 2026-10-13)`. From the diagnostics worktree,
+all outputs use task-owned TEMP paths, never the leased native/core target.
+
+```powershell
+foreach ($part in @('policy','round','console')) {
+  $rootTestPath = "tests/unittest/deepseek_probe_$part.rs"
+  $testExePath = Join-Path $env:TEMP "notype-p23-review-$part.exe"
+  rustc --edition=2021 -A dead_code --test $rootTestPath -o $testExePath
+  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+  & $testExePath
+  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
+rustc --edition=2021 -A dead_code --test tests/integration/deepseek_probe_round.rs -o "$env:TEMP/notype-p23-review-sqlite.exe" --extern rusqlite=D:/git/notype-build/release/deps/librusqlite-90012f4035d3bfdd.rlib -L dependency=D:/git/notype-build/release/deps -L native=D:/git/notype-build/release/build/libsqlite3-sys-b72ad247cb31790d/out
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+& "$env:TEMP/notype-p23-review-sqlite.exe"
+```
+
+The two RED/GREEN runs used the SQLite compilation above, then the corresponding
+full named test with `--exact`. Final results: policy **3**, round **9**, console
+port **6**, SQLite **10** passed: **28 total / 0 failed / 0 ignored**, retaining all
+original 24 plus four new executable cases and their real-file fixture matrices.
+
+The entire public helper API also compiled with missing docs denied:
+
+```powershell
+rustc --edition=2021 --crate-type lib --crate-name notype_p23_review -D missing_docs desktop/src-tauri/src/deepseek_probe/mod.rs -o "$env:TEMP/notype-p23-review-api.rlib" --extern rusqlite=D:/git/notype-build/release/deps/librusqlite-90012f4035d3bfdd.rlib -L dependency=D:/git/notype-build/release/deps -L native=D:/git/notype-build/release/build/libsqlite3-sys-b72ad247cb31790d/out
+```
+
+That API check passed; it is not counted as a test. All referenced dependencies
+were existing read-only rlibs/native libraries; no Cargo, dependency changes,
+target writes or downloads. Required desktop frontend lint/build also passed,
+with the existing Vite chunk-size advisory; no frontend source was modified.
+Changed Rust `rustfmt --edition 2021 --check`, Markdown Prettier and
+`git diff --check` passed. No UI suite was broadened for this helper-only change.
+
+No App registration, native console, HTTP/production observer bridge, user binary,
+key, paid API, product history/CSV, profile/microphone/clipboard or live reset/cleanup
+operation was added or performed. Full #22 merge and every live-v1/offline-prep-v1
+gate remain binding. This fix does not enable the paid round or close #23.

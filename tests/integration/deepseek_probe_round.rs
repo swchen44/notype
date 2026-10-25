@@ -6,7 +6,7 @@ mod round;
 mod sqlite_round;
 
 use policy::{Denied, WireFacts};
-use round::Round;
+use round::{Round, RoundStore};
 use sqlite_round::SqliteRoundStore;
 use std::{
     path::PathBuf,
@@ -230,4 +230,254 @@ fn process_exit_without_destructors_cannot_restart_a_paid_round() {
     assert_eq!(reopened.report().reservation_units, 104_448);
     assert!(reopened.report().report_only);
     assert_eq!(reopened.arm(), Err(Denied::ReportOnly));
+}
+
+#[test]
+fn sqlite_rejects_individually_valid_rows_with_an_impossible_slot_prefix() {
+    let fixture = OwnedFixture::new();
+    drop(SqliteRoundStore::open_owned(&fixture.round()).unwrap());
+    let connection = rusqlite::Connection::open(fixture.round().join("round.db")).unwrap();
+    connection
+        .execute_batch(
+            "UPDATE round_meta SET revision=3,armed=1;
+         UPDATE slots SET state=2,history_id='h2',call_id='c2' WHERE number=2;",
+        )
+        .unwrap();
+    drop(connection);
+    assert!(
+        matches!(
+            SqliteRoundStore::open_owned(&fixture.round()),
+            Err(Denied::Storage)
+        ),
+        "valid individual rows cannot make slot2 precede slot1"
+    );
+}
+
+fn complete_prefix(fixture: &OwnedFixture, count: u8) {
+    let mut round = Round::open(SqliteRoundStore::open_owned(&fixture.round()).unwrap()).unwrap();
+    round.arm().unwrap();
+    for number in 1..=count {
+        let group = policy::schedule()[usize::from(number - 1)].history_group;
+        let permit = round
+            .admit(number, &format!("h{group}"), &format!("c{number}"), &wire())
+            .unwrap();
+        round
+            .finish(
+                &permit,
+                if number == 7 {
+                    round::Outcome::IntentionalCancellation
+                } else {
+                    round::Outcome::Success
+                },
+            )
+            .unwrap();
+    }
+}
+
+#[test]
+fn sqlite_rejects_impossible_identity_completion_and_halt_combinations() {
+    for mutation in [
+        "UPDATE slots SET call_id='c1' WHERE number=2",
+        "UPDATE slots SET history_id='wrong-group' WHERE number=6",
+        "UPDATE slots SET history_id='wrong-retry-group' WHERE number=8",
+        "UPDATE slots SET history_id='h1' WHERE number=2",
+        "UPDATE slots SET state=1 WHERE number=1",
+        "UPDATE slots SET state=5 WHERE number=2; UPDATE round_meta SET halted=1",
+        "UPDATE slots SET state=5 WHERE number=8",
+        "UPDATE round_meta SET revision=0",
+    ] {
+        let fixture = OwnedFixture::new();
+        complete_prefix(&fixture, 8);
+        let connection = rusqlite::Connection::open(fixture.round().join("round.db")).unwrap();
+        connection.execute_batch(mutation).unwrap();
+        drop(connection);
+        assert!(
+            matches!(
+                SqliteRoundStore::open_owned(&fixture.round()),
+                Err(Denied::Storage)
+            ),
+            "accepted impossible snapshot: {mutation}"
+        );
+    }
+}
+
+fn finish_next(round: &mut Round<SqliteRoundStore>, number: u8, outcome: round::Outcome) {
+    let group = policy::schedule()[usize::from(number - 1)].history_group;
+    let permit = round
+        .admit(number, &format!("h{group}"), &format!("c{number}"), &wire())
+        .unwrap();
+    round.finish(&permit, outcome).unwrap();
+}
+
+#[test]
+fn sqlite_preserves_actual_transition_crash_prefixes_and_cross_store_failure_evidence() {
+    for completed in 0..=8 {
+        for edge in [
+            "completed",
+            "pending",
+            "halted-pending",
+            "failed",
+            "halted-receipt",
+        ] {
+            if completed == 8 && edge != "completed" {
+                continue;
+            }
+            let fixture = OwnedFixture::new();
+            let mut round =
+                Round::open(SqliteRoundStore::open_owned(&fixture.round()).unwrap()).unwrap();
+            round.arm().unwrap();
+            for number in 1..=completed {
+                finish_next(
+                    &mut round,
+                    number,
+                    if number == 7 {
+                        round::Outcome::CancelRacedWithCompletion
+                    } else {
+                        round::Outcome::Success
+                    },
+                );
+            }
+            if edge != "completed" {
+                let number = completed + 1;
+                let group = policy::schedule()[usize::from(number - 1)].history_group;
+                let permit = round
+                    .admit(number, &format!("h{group}"), &format!("c{number}"), &wire())
+                    .unwrap();
+                // No history/call store has been created: a crash or another
+                // store's failure does not invalidate this durable reservation.
+                if edge.starts_with("halted") {
+                    round.halt().unwrap();
+                }
+                if edge == "failed" {
+                    round.finish(&permit, round::Outcome::Failed).unwrap();
+                }
+                if edge == "halted-receipt" {
+                    round
+                        .finish(&permit, round::Outcome::ContractViolation)
+                        .unwrap();
+                }
+            }
+            let before = round.report();
+            drop(round);
+            let reopened =
+                Round::open(SqliteRoundStore::open_owned(&fixture.round()).unwrap()).unwrap();
+            let after = reopened.report();
+            assert!(after.report_only);
+            assert_eq!(
+                after.reserved_slots, before.reserved_slots,
+                "{completed}/{edge}"
+            );
+            assert_eq!(after.reservation_units, before.reservation_units);
+            assert_eq!(after.halted, before.halted);
+            for (before, after) in before.slots.iter().zip(after.slots.iter()) {
+                assert_eq!(after.state, before.state);
+                assert_eq!(after.history_id, before.history_id);
+                assert_eq!(after.call_id, before.call_id);
+            }
+        }
+    }
+    for cancellation in [
+        round::Outcome::IntentionalCancellation,
+        round::Outcome::CancelRacedWithCompletion,
+    ] {
+        let fixture = OwnedFixture::new();
+        let mut round =
+            Round::open(SqliteRoundStore::open_owned(&fixture.round()).unwrap()).unwrap();
+        round.arm().unwrap();
+        for number in 1..=5 {
+            finish_next(&mut round, number, round::Outcome::Success);
+        }
+        round.skip_back_translation().unwrap();
+        finish_next(&mut round, 7, cancellation);
+        finish_next(&mut round, 8, round::Outcome::Success);
+        drop(round);
+        let reopened =
+            Round::open(SqliteRoundStore::open_owned(&fixture.round()).unwrap()).unwrap();
+        assert_eq!(reopened.report().reserved_slots, 7);
+        assert_eq!(reopened.report().reservation_units, 731_136);
+        assert_eq!(reopened.report().slots[5].state, round::SlotState::Skipped);
+    }
+    let fixture = OwnedFixture::new();
+    let mut round = Round::open(SqliteRoundStore::open_owned(&fixture.round()).unwrap()).unwrap();
+    round.halt().unwrap(); // Legal fail-closed halt before arming or any slots.
+    drop(round);
+    let reopened = Round::open(SqliteRoundStore::open_owned(&fixture.round()).unwrap()).unwrap();
+    assert!(reopened.report().halted);
+    assert_eq!(reopened.report().reserved_slots, 0);
+}
+
+fn logical_rows(path: &std::path::Path) -> ((i64, i64, i64), Vec<(u8, u8, String, String)>) {
+    let connection = rusqlite::Connection::open(path).unwrap();
+    let meta = connection
+        .query_row("SELECT revision,armed,halted FROM round_meta", [], |r| {
+            Ok((r.get(0)?, r.get(1)?, r.get(2)?))
+        })
+        .unwrap();
+    let mut statement = connection
+        .prepare("SELECT number,state,history_id,call_id FROM slots ORDER BY number")
+        .unwrap();
+    let slots = statement
+        .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    (meta, slots)
+}
+
+#[test]
+fn sqlite_compare_commit_rejects_invalid_candidates_and_cannot_wash_corrupt_current_state() {
+    let fixture = OwnedFixture::new();
+    let database = fixture.round().join("round.db");
+    let mut store = SqliteRoundStore::open_owned(&fixture.round()).unwrap();
+    let (_, mut armed) = store.load().unwrap();
+    armed.armed = true;
+    armed.revision = 1;
+    store.commit(0, &armed).unwrap();
+    let before = logical_rows(&database);
+    let mut invalid = armed.clone();
+    invalid.revision = 2;
+    invalid.slots[1] = round::SlotRecord {
+        state: round::SlotState::PossiblySent,
+        history_id: "h2".into(),
+        call_id: "c2".into(),
+    };
+    assert_eq!(store.commit(1, &invalid), Err(Denied::Storage));
+    assert_eq!(
+        logical_rows(&database),
+        before,
+        "invalid candidate must not change logical state"
+    );
+    let mut skipped_revision = armed.clone();
+    skipped_revision.halted = true;
+    skipped_revision.revision = 3;
+    assert_eq!(store.commit(1, &skipped_revision), Err(Denied::Storage));
+    assert_eq!(logical_rows(&database), before);
+    let mut halted = armed.clone();
+    halted.halted = true;
+    halted.revision = 2;
+    assert_eq!(store.commit(0, &halted), Err(Denied::Storage));
+    assert_eq!(
+        logical_rows(&database),
+        before,
+        "stale revision does not mutate a valid current state"
+    );
+    store.commit(1, &halted).unwrap(); // Rejected writes did not poison the owner.
+    let connection = rusqlite::Connection::open(&database).unwrap();
+    connection.execute_batch("UPDATE round_meta SET revision=2; UPDATE slots SET state=1,history_id='h2',call_id='c2' WHERE number=2").unwrap();
+    drop(connection);
+    let corrupt = logical_rows(&database);
+    assert!(matches!(store.load(), Err(Denied::Storage)));
+    let mut washed = armed;
+    washed.revision = 3;
+    washed.slots[0] = round::SlotRecord {
+        state: round::SlotState::Finished(round::Outcome::Success),
+        history_id: "h1".into(),
+        call_id: "c1".into(),
+    };
+    assert_eq!(store.commit(2, &washed), Err(Denied::Storage));
+    assert_eq!(
+        logical_rows(&database),
+        corrupt,
+        "invalid current state cannot be overwritten by a valid-looking candidate"
+    );
 }

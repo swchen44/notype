@@ -84,6 +84,42 @@ These are ordinary crash/restart protections, not protection against an external
 actor deleting all files or modifying the binary, nor a power-loss guarantee
 beyond the storage/OS durability contract.
 
+### Complete persisted-state validation
+
+The [offline review fix](https://github.com/swchen44/notype/issues/23#issuecomment-6400259566)
+and [GPT-6-Astra approval](https://github.com/swchen44/notype/issues/23#issuecomment-6400277302)
+retain all live enablement gates. Schema/row decoding checks still require eight
+unique ordered positions, the pinned round identity and schema version. A single
+production `validate_snapshot` then checks the whole logical snapshot on actual
+SQLite load and candidate commit. Commit validates the current snapshot again
+inside the IMMEDIATE transaction before any UPDATE, compares its revision, and
+requires the candidate revision to advance by exactly one. Invalid current data
+cannot be overwritten by a valid-looking candidate.
+
+Occupied slots form a continuous prefix; only its last slot can remain
+PossiblySent. Earlier outcomes must permit progression: success, the explicit
+slot-6 skip after a successful forward result, or slot 7's expected cancellation/
+completion race. An ordinary terminal failure requires halt and cannot have a
+later occupied slot. An explicit halt with no slots or with one pending terminal
+receipt remains valid. Revision matches the persisted arm/admit/finish/skip
+operations and the optional explicit halt, rather than accepting arbitrary
+versions. A pending slot may survive a crash even if HTTP was never polled.
+
+Every existing local call ID is unique. History IDs obey the fixed groups:
+slots 1–4 distinct, 5/6 shared, 7/8 shared, and different groups never merged.
+NotRun/Skipped retain no IDs. These are the local IDs supplied by the actual
+Round admission API; the validator does not look up or fabricate rows in another
+store. A reserved local slot remains valid if a later history/call-store commit
+never happened. Future bridge ID scoping still requires explicit integration.
+
+Each reserved slot has the same fixed 104448-unit reservation; the derived count
+and product remain bounded to eight and the authorized budget. Snapshot schema 1
+has no independent fee/total columns to reconcile, and this is not billed cost.
+Inconsistent evidence returns only `Denied::Storage`, never resets or enables a
+send, and invalid commits leave the prior logical state intact. Reopen remains
+report-only. This corrects evidence acceptance/reporting; no extra-send or
+budget-bypass defect has been established.
+
 ## Console lifetime port
 
 `console::read_local_key(ConsolePort)` is the actual platform-independent input
