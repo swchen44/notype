@@ -1,5 +1,7 @@
 # notype 開發待辦
 
+最新新增：[多 Provider／Thinking／內網錯誤處理 #25](https://github.com/swchen44/notype/issues/25)，[研究紀錄](docs/research/12-provider-gateway-design.md) 已完成；[P25-errors-v1](https://github.com/swchen44/notype/issues/25#issuecomment-6403957943) 尚待 GPT-6-Astra 核准，未實作。金鑰最新決策為 App 自己設定檔優先、`~/.env` 後備；未讀取 home secrets。Thinking 預設關閉；OpenRouter／Gemini 模型與 mandatory-thinking 政策待回覆。舊 source41 helper 的建置證據保留，但不直接啟動新需求的付費測試。
+
 更新日期：2026-10-26。這份文件是接手順序與狀態快照；live [GitHub Issues](https://github.com/swchen44/notype/issues) 是工作追蹤入口。先讀 [HANDOFF.md](HANDOFF.md)。
 
 最新來源整合為 `af4ce80a315de025c0d8001e71081c3794c8fea2`。#23 完整 source `41cb62d` 已合入，最終獨立 Spec／Standards 皆 0；[Linux CI 40224287522](https://github.com/swchen44/notype/actions/runs/40224287522) 於精確 `41cb62d` 通過。bridge 6、shared console 7、core 43＋doc 1 等 portable checks 通過；原生 Windows owned-console direct-rustc driver 2 tests／9 cases 通過，見 [receipt](docs/verification/deepseek-native-console.md)。完整 Windows helper 已完成精確來源啟用建置、固定參數拒絕、無 key console gate smoke 與 dated 私有 package，見 [helper receipt](docs/verification/deepseek-reviewed-helper.md)；這不代表真實 API／費用／品質或 Tauri App 驗收。**沒有取得 key，沒有付費呼叫。**

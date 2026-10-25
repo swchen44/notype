@@ -6,6 +6,8 @@
 
 ## 目前 checkpoint
 
+2026-10-26 新需求先走 to-spec：[多 Provider／Thinking／錯誤處理 #25](https://github.com/swchen44/notype/issues/25)。已下載獨立參考 `respan-gateway`，見 [研究](docs/research/12-provider-gateway-design.md)。使用者指定 DeepSeek `deepseek-v4-flash`、OpenRouter、Gemini；Thinking 可設定且預設關閉；key 採 App 自己設定檔優先、家目錄 `~/.env` 後備，取代原先 vault 建議。目前僅研究／規格與 [P25-errors-v1 計畫](https://github.com/swchen44/notype/issues/25#issuecomment-6403957943)，正在等實際 GPT-6-Astra 審查，尚未修改產品。OpenRouter／Gemini model ID 及無法關閉 thinking 的處理政策待回覆。舊 source41 helper 仍是舊設定證據，先不啟動付費輪次；新模型／key 來源接線須有新的精確核准計畫，不自行讀取 `~/.env`。
+
 2026-10-26 最新來源整合：`af4ce80a315de025c0d8001e71081c3794c8fea2`，分支 `implement/notype-mvp`。#23 完整 source `41cb62da8482592bde02cc0b2b52460e361e75a9` 已合入；獨立最終 Spec／Standards 皆 0，[完整 Linux CI 40224287522](https://github.com/swchen44/notype/actions/runs/40224287522) 在精確 `41cb62d` 通過。這是來源與限定驗證完成，不代表使用者 helper／付費 API／新版 App 已交付。
 
 #23 實際 production provider → owned HTTP fixture → SessionService／SQLite → 單一 UTF-8 CSV 的 bridge 6 tests 通過（含 12 error variants、固定 8 requests、取消／同 ID retry／回譯、6-row CSV）；shared console algorithm 7 tests 通過。受影響 core 43＋doc 1、Clippy 等 portable checks 已通過。原生 Windows console 的實際 direct-rustc driver **2 tests／9 cases 通過**，確認專屬 hidden owned console、非回顯輸入及模式還原，沒有修改使用者既有 terminal，見 [native console receipt](docs/verification/deepseek-native-console.md)。這些 fixture 使用非機密合成輸入，未使用真實 key、未付費呼叫。
