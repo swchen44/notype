@@ -117,3 +117,25 @@ Approved plan: [P21-v3](https://github.com/swchen44/notype/issues/21#issuecommen
 - The existing `test:ui:integration` script also discovers this test. Native App,
   mic readiness latency, Windows geometry/permissions and audio duration are not
   established by this suite. See [event contract](../docs/desktop-overlay-events.md).
+
+## Capture readiness observation seams (#19)
+
+Approved [P19-latency-v3](https://github.com/swchen44/notype/issues/19#issuecomment-6398258525),
+[Astra approval](https://github.com/swchen44/notype/issues/19#issuecomment-6398268939),
+[completed P20/P21 dependency gate](https://github.com/swchen44/notype/issues/19#issuecomment-6398707430).
+
+- `tests/unittest/capture_startup.rs`: production `RecorderPort` startup service,
+  captured-chunk readiness wrapper, one-shot waiter and queued dispatch. Hardware
+  operations and clocks are adapters; the timing/handoff algorithm is production.
+- `tests/integration/capture_readiness.rs`: actual P20 service/report and capture
+  observation registry; ordinal/epoch/revision correlation, incomplete and
+  truncated/capped reports, local frontend vs backend round-trip origins.
+- `tests/integration/recording-overlay.ui.mjs`: actual rendered overlay additionally
+  verifies independent delivery/commit/settings observations and an effective
+  ready display despite a delayed settings Promise. No native App or mic.
+
+The Rust contracts are std-only and may run with `rustc --edition=2021 --test
+<root-test.rs> -o <task-owned-test.exe>` and that executable. They are also targets
+`capture-startup` / `capture-readiness` in the existing desktop-contracts harness
+and Linux CI. CLI/unit legacy recorder handoffs preserve their prior semantics.
+See [exact timing/privacy contract](../docs/capture-readiness-timing.md).

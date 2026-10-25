@@ -1,3 +1,4 @@
+import { reportCaptureObservation } from "./contracts";
 import { listen } from "@tauri-apps/api/event";
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import "./RecordingOverlay.css";
@@ -28,6 +29,7 @@ type Capture = Identity & {
   closed: boolean;
   hidden: boolean;
   origin: number | null;
+  commitObserved: boolean;
 };
 const validId = (value: unknown): value is string =>
   typeof value === "string" && /^[1-9][0-9]{0,19}$/.test(value);
@@ -123,6 +125,12 @@ const RecordingOverlay: React.FC = () => {
       )
         return;
       current.origin = performance.now();
+      void reportCaptureObservation(
+        current.captureId,
+        current.captureRevision,
+        "received",
+        0,
+      ).catch(() => {});
       setElapsed(0);
       setCaptureReady(true);
     };
@@ -158,6 +166,7 @@ const RecordingOverlay: React.FC = () => {
             closed: !capturing,
             hidden: false,
             origin: null,
+            commitObserved: false,
           };
           setCaptureId(payload.captureId);
           setCaptureReady(false);
@@ -186,6 +195,7 @@ const RecordingOverlay: React.FC = () => {
           pendingReady.current = null;
         // Presentation becomes active before nonessential settings I/O. Its result
         // belongs to this exact request and can never resurrect a hidden capture.
+        const settingsStarted = performance.now();
         void commands
           .getAppSettings()
           .then((settings) => {
@@ -198,6 +208,12 @@ const RecordingOverlay: React.FC = () => {
               current.revision !== payload.revision
             )
               return;
+            void reportCaptureObservation(
+              current.captureId,
+              current.captureRevision,
+              "settings",
+              performance.now() - settingsStarted,
+            ).catch(() => {});
             if (settings.status === "ok") {
               setPosition(
                 settings.data.overlay_position === "top" ? "top" : "bottom",
@@ -232,6 +248,7 @@ const RecordingOverlay: React.FC = () => {
           closed: true,
           hidden: true,
           origin: null,
+          commitObserved: false,
         };
         stopClock();
         setIsVisible(false);
@@ -307,6 +324,27 @@ const RecordingOverlay: React.FC = () => {
     const id = setInterval(update, 250);
     return () => clearInterval(id);
   }, [state, phase, isVisible, captureReady, captureId]);
+
+  // React commit observation is local to this webview, not paint or sample time.
+  useLayoutEffect(() => {
+    const current = capture.current;
+    if (
+      !current ||
+      current.hidden ||
+      current.closed ||
+      !captureReady ||
+      current.origin === null ||
+      current.commitObserved
+    )
+      return;
+    current.commitObserved = true;
+    void reportCaptureObservation(
+      current.captureId,
+      current.captureRevision,
+      "committed",
+      performance.now() - current.origin,
+    ).catch(() => {});
+  }, [captureReady, captureId]);
 
   // Stick to the bottom as text streams in — but only while pinned, so a user who
   // has scrolled up to read history isn't yanked back down by the next chunk.

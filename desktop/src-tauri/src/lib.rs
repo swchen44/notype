@@ -4,6 +4,8 @@ mod apple_intelligence;
 mod audio_feedback;
 pub mod audio_toolkit;
 mod autostart;
+mod capture_observations;
+mod capture_startup;
 mod catalog;
 mod chinese_script;
 pub mod cli;
@@ -794,6 +796,7 @@ pub fn run(cli_args: CliArgs) {
             commands::get_log_dir_path,
             commands::set_log_level,
             commands::diagnostics::get_diagnostic_report,
+            commands::diagnostics::report_capture_observation,
             commands::diagnostics::get_diagnostic_status,
             commands::diagnostics::set_diagnostics_enabled,
             commands::diagnostics::clear_diagnostics,

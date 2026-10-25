@@ -270,7 +270,11 @@ fn repeated_start_stop_cycles_resume_capture_without_leaking_samples() {
     let first_input = [0.25f32, -0.5, 1.0];
     let (ready_tx, ready_rx) = mpsc::channel();
     cmd_tx
-        .send(Cmd::Start(VadPolicy::Disabled, Instant::now(), ready_tx))
+        .send(Cmd::Start(
+            VadPolicy::Disabled,
+            Instant::now(),
+            ReadySignal::Legacy(ready_tx),
+        ))
         .expect("first start");
     AudioRecorder::write_input_to_ring(&first_input, 1, None, &mut producer, &transport);
     ready_rx
@@ -305,7 +309,11 @@ fn repeated_start_stop_cycles_resume_capture_without_leaking_samples() {
     let second_input = [0.75f32, -0.25, 0.5];
     let (ready_tx, ready_rx) = mpsc::channel();
     cmd_tx
-        .send(Cmd::Start(VadPolicy::Disabled, Instant::now(), ready_tx))
+        .send(Cmd::Start(
+            VadPolicy::Disabled,
+            Instant::now(),
+            ReadySignal::Legacy(ready_tx),
+        ))
         .expect("second start");
     AudioRecorder::write_input_to_ring(&second_input, 1, None, &mut producer, &transport);
     ready_rx
@@ -366,7 +374,11 @@ fn missing_callback_at_stop_marks_stream_for_rebuild_and_returns_samples() {
 
     let (ready_tx, _ready_rx) = mpsc::channel();
     cmd_tx
-        .send(Cmd::Start(VadPolicy::Disabled, Instant::now(), ready_tx))
+        .send(Cmd::Start(
+            VadPolicy::Disabled,
+            Instant::now(),
+            ReadySignal::Legacy(ready_tx),
+        ))
         .expect("start");
     let (reply_tx, reply_rx) = mpsc::channel();
     cmd_tx.send(Cmd::Stop(reply_tx)).expect("stop");

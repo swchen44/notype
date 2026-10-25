@@ -89,6 +89,10 @@ pub fn cancel_current_operation(app: &AppHandle) {
     let mut cancelled_owner = None;
     let generation = workflow.cancel_active_with(|generation| {
         cancelled_owner = Some(workflow.token(generation));
+        crate::capture_observations::global().finish(
+            generation,
+            crate::capture_startup::CaptureOutcome::Cancelled,
+        );
         // Unregister the cancel shortcut asynchronously
         shortcut::unregister_cancel_shortcut(app);
 

@@ -50,3 +50,9 @@ are disposed once, pending registrations are disposed once if they finish after
 cleanup, and rejected registration/settings Promises are handled. Event handlers
 and settings completion check the mount/capture/request fence. Overlay-local
 language/position presentation cannot be revived by an old Promise.
+
+
+P19 adds the typed, nonblocking production `report_capture_observation` ACK,
+without changing these event envelopes or display elapsed. Its origins,
+collector-generation fence and report limitations are documented in
+[capture-readiness-timing](capture-readiness-timing.md).

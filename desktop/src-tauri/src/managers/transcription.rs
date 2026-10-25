@@ -3,6 +3,7 @@ use crate::audio_toolkit::{
     apply_custom_words, normalize_transcription_output, remove_filler_words,
 };
 use crate::audio_toolkit::{detect_output_language, OutputLanguageEvidence};
+use crate::capture_startup::{CaptureOutcome, CaptureSpan, CaptureTrace};
 use crate::chinese_script::{convert_chinese_script, ChineseVariety};
 use crate::managers::audio::AudioRecordingManager;
 use crate::managers::model::{EngineType, ModelManager};
@@ -793,26 +794,53 @@ impl TranscriptionManager {
 
     /// Kicks off the model loading in a background thread if it's not already loaded
     pub fn initiate_model_load(&self) {
+        self.initiate_model_load_for_capture(None);
+    }
+
+    /// Correlates only a job actually spawned by this capture; existing work is unassociated.
+    pub fn initiate_model_load_for_capture(&self, trace: Option<CaptureTrace>) {
         let mut is_loading = self.is_loading.lock().unwrap();
         if *is_loading {
+            if let Some(trace) = &trace {
+                trace.unassociated_model_job();
+            }
             return;
         }
 
         let reload_pending = self.reload_model_on_next_use.load(Ordering::Acquire);
         if !reload_pending && self.is_model_loaded() {
+            if let Some(trace) = &trace {
+                trace.record(CaptureSpan::ModelLoad, CaptureOutcome::Reused, None);
+            }
             return;
         }
 
         *is_loading = true;
         let self_clone = self.clone();
         thread::spawn(move || {
+            let job_started = trace.as_ref().map(|trace| {
+                trace.record(CaptureSpan::ModelLoad, CaptureOutcome::Started, None);
+                trace.now()
+            });
             if reload_pending {
                 self_clone
                     .reload_model_on_next_use
                     .store(false, Ordering::Release);
             }
             let settings = get_settings(&self_clone.app_handle);
-            if let Err(e) = self_clone.load_model(&settings.selected_model) {
+            let result = self_clone.load_model(&settings.selected_model);
+            if let (Some(trace), Some(started)) = (&trace, job_started) {
+                trace.record(
+                    CaptureSpan::ModelLoad,
+                    if result.is_ok() {
+                        CaptureOutcome::Ok
+                    } else {
+                        CaptureOutcome::Failed
+                    },
+                    Some(trace.now().saturating_duration_since(started)),
+                );
+            }
+            if let Err(e) = result {
                 error!("Failed to load model: {}", e);
             }
             let mut is_loading = self_clone.is_loading.lock().unwrap();

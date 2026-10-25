@@ -73,3 +73,11 @@ path = "../../unittest/desktop_window_lifecycle.rs"
 [[test]]
 name = "overlay-lifecycle"
 path = "../../unittest/desktop_overlay_lifecycle.rs"
+
+[[test]]
+name = "capture-startup"
+path = "../../unittest/capture_startup.rs"
+
+[[test]]
+name = "capture-readiness"
+path = "../capture_readiness.rs"
