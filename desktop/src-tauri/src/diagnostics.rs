@@ -355,9 +355,8 @@ impl Diagnostics {
         }
         let footer=format!("report_limit_bytes=65536 report_limit_lines=512\nevents_discarded={} ring_truncated={}\nRequest-wait spans send polling to response headers, including pool/proxy/DNS/connect/TLS/server waits. DNS/TLS subphase timing is unobservable. Body bytes are decoded bytes delivered by reqwest. Possibly-sent/cancel/timeout never establishes zero billing.\n",self.discarded,self.discarded>0);
         let mut bounded = String::new();
-        let mut lines = 0usize;
         let mut truncated = false;
-        for line in text.lines() {
+        for (lines, line) in text.lines().enumerate() {
             if bounded.len() + line.len() + 1 + footer.len() + 64 > 65_536
                 || lines + footer.lines().count() + 2 > 512
             {
@@ -366,7 +365,6 @@ impl Diagnostics {
             }
             bounded.push_str(line);
             bounded.push('\n');
-            lines += 1;
         }
         bounded.push_str(&footer);
         let _ = writeln!(bounded, "report_truncated={truncated}");
