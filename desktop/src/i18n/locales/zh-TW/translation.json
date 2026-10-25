@@ -233,6 +233,7 @@
       }
     },
     "connections": {
+      "mandatoryCapability": "此模型需要 thinking，即使使用者偏好為關閉。",
       "reload": "重新載入連線",
       "modelErrors": {
         "provider-auth": "模型清單認證失敗，請檢查此連線的金鑰。",

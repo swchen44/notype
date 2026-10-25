@@ -233,6 +233,7 @@
       }
     },
     "connections": {
+      "mandatoryCapability": "This model requires thinking even when the preference is Off.",
       "reload": "Reload connections",
       "modelErrors": {
         "provider-auth": "Model-list authentication failed. Check the connection key.",

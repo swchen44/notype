@@ -186,6 +186,7 @@
       }
     },
     "connections": {
+      "mandatoryCapability": "此模型需要 thinking，即使用户偏好为关闭。",
       "reload": "重新加载连接",
       "modelErrors": {
         "provider-auth": "模型列表认证失败，请检查此连接的密钥。",

@@ -215,4 +215,11 @@ test("a mandatory model displays minimum thinking without inventing a minimal op
     0,
   );
   await page.getByLabel("Effort", { exact: true }).selectOption("low");
+  await page.getByLabel("Temperature", { exact: true }).fill("0.3");
+  await page
+    .getByText(
+      "This model requires thinking even when the preference is Off.",
+      { exact: true },
+    )
+    .waitFor();
 });

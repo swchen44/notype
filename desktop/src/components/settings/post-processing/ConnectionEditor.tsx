@@ -359,6 +359,12 @@ export function ConnectionEditor({
           />
           {t("notype.connections.thinking")}
         </label>
+        {(declaration?.kind === "mandatory" ||
+          (sameModel && connection.resolution?.capability === "mandatory")) && (
+          <p role="note" className="text-sm">
+            {t("notype.connections.mandatoryCapability")}
+          </p>
+        )}
         {resolution?.reason === "mandatory_minimum" && (
           <p role="note" className="text-sm">
             {t("notype.connections.mandatoryHint", {
