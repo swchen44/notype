@@ -27,7 +27,7 @@ notype 免安裝語音輸入 App 的研究、決策與實作追蹤；先交付 W
 
 | 文件 | 用途 |
 | --- | --- |
-| [MVP 與跨平台核心規格 #8](https://github.com/swchen44/notype/issues/8) | to-spec 規格、68 條 user stories、三場景／獨立提示詞、允許的情境 metadata／可選回譯、介面／辨識語言、共用核心與平台 adapter、驗收與範圍 |
+| [MVP 與跨平台核心規格 #8](https://github.com/swchen44/notype/issues/8) | to-spec 規格、69 條 user stories、三場景／獨立提示詞、允許的情境 metadata／可選回譯與確認交付、介面／辨識語言、共用核心與平台 adapter、驗收與範圍 |
 | [Windows 11 HANDOFF](HANDOFF.md) | 下一個 Codex session 的首讀文件、現況與可直接貼用的 prompt |
 | [TODO](TODO.md) | 開放 issues、建議接續順序與完成條件 |
 | [Windows MVP 定稿](docs/research/10-confirmed-windows-mvp.md) | 已確認產品行為、上游必改點與 Windows 實作／驗收順序 |

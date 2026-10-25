@@ -26,7 +26,7 @@
 | [#10 共用 Rust 核心](https://github.com/swchen44/notype/issues/10) | 無 | 原稿到 HTTP fixture、SQLite 歷史、重啟／重試／取消與受保護交付；無 Tauri／Windows 相依 |
 | [#11 桌面文字流程](https://github.com/swchen44/notype/issues/11) | #9、#10 | 正式錄音／STT 接核心，失敗待選、歷史搜尋／複製／刪除與無 WAV 重試 |
 | [#12 語言完整切片](https://github.com/swchen44/notype/issues/12) | #11 | 繁／簡介面與繁／簡中英辨識，獨立設定、偏好保存、固定模型／音訊驗收 |
-| [#17 三場景與提示詞](https://github.com/swchen44/notype/issues/17) | #11 | 三場景路由、獨立可編輯／還原提示詞、翻譯目標／領域／語氣／術語對照、可選回譯、快照與歷史 migration；回譯預設／交付方式待回答 |
+| [#17 三場景與提示詞](https://github.com/swchen44/notype/issues/17) | #11 | 三場景路由、獨立可編輯／還原提示詞、翻譯目標／領域／語氣／術語對照、預設關閉的可選回譯、版本綁定確認交付、快照與歷史 migration |
 | [#13 錄音與原生交付](https://github.com/swchen44/notype/issues/13) | #11、#17 | 三場景點按開始／獨立停止鍵／Esc、共享前綴手勢、當次音訊清理、Windows 原目標保護、允許的 App／網域情境提示、去重與手動 Enter |
 | [#14 npm portable](https://github.com/swchen44/notype/issues/14) | #12、#13、#17 | 完整預編譯 App／runtime／模型 tarball、cold launch、更新資料保留 |
 | [#15 公司 API 驗收](https://github.com/swchen44/notype/issues/15) | #11、#17；公司連線／憑證／政策 | Chat Completions 格式已確認；真實三場景品質、錯誤／取消及公司資料政策仍待驗證，目前 needs-info；真正需要 key 時才詢問 |
