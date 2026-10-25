@@ -1095,6 +1095,18 @@ pub fn run(cli_args: CliArgs) {
 
             initialize_core_logic(&app_handle)?;
 
+            // Initialize the local script dictionary away from the first Stop.
+            // The headless CLI branch returns earlier and retains cold timings.
+            let recognition_mode = settings.recognition_mode.into();
+            std::thread::spawn(move || {
+                if workflow::recognition::RecognitionProfile::new(recognition_mode, Vec::new())
+                    .normalize("")
+                    .is_err()
+                {
+                    log::warn!("recognition-script-prewarm-failed");
+                }
+            });
+
             // Secure Input monitor (macOS): detects stuck secure input that
             // silently blocks keyed shortcuts, warns the user, and activates
             // the Carbon fallback. See secure_input.rs and issue #1578.

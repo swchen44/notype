@@ -1,6 +1,8 @@
 import path from "node:path";
 import { createRequire } from "node:module";
 import { realpath } from "node:fs/promises";
+import { spawn } from "node:child_process";
+import { activateModel } from "./model.mjs";
 import {
   PackageError,
   jsonFile,
@@ -48,12 +50,15 @@ async function resolvedFuturePath(directory) {
     }
   }
 }
-export async function inspectRelease({
-  facadeRoot,
-  platform = process.platform,
-  arch = process.arch,
-  env = process.env,
-}) {
+async function inspectInputs(
+  {
+    facadeRoot,
+    platform = process.platform,
+    arch = process.arch,
+    env = process.env,
+  },
+  probe,
+) {
   if (platform !== "win32" || arch !== "x64")
     throw new PackageError(
       "unsupported-platform",
@@ -92,9 +97,17 @@ export async function inspectRelease({
     "application",
   );
   const model = await verifyPackage(modelRoot, release.model, "model");
+  const hostProbe = path.join(applicationRoot, application.hostProbe);
+  const host = probe
+    ? await probe({ hostProbe, cpu: application.cpu })
+    : undefined;
   const configured =
     env.NOTYPE_DATA_DIR === undefined
-      ? env.APPDATA && path.join(env.APPDATA, "io.github.swchen44.notype")
+      ? (host?.roaming_app_data || env.APPDATA) &&
+        path.join(
+          host?.roaming_app_data || env.APPDATA,
+          "io.github.swchen44.notype",
+        )
       : env.NOTYPE_DATA_DIR;
   if (
     typeof configured !== "string" ||
@@ -122,27 +135,42 @@ export async function inspectRelease({
   }
   const environment = Object.fromEntries(
     Object.entries(env).filter(
-      ([name]) => !name.toUpperCase().startsWith("WEBVIEW2_"),
+      ([name]) =>
+        !name.toUpperCase().startsWith("WEBVIEW2_") &&
+        name.toUpperCase() !== "GGML_BACKEND_PATH" &&
+        name.toUpperCase() !== "NOTYPE_DATA_DIR",
     ),
   );
+  if (env.NOTYPE_DATA_DIR !== undefined)
+    environment.NOTYPE_DATA_DIR = dataDirectory;
   return {
     executable: path.join(applicationRoot, application.entrypoint),
+    hostProbe,
+    host,
+    cpu: application.cpu,
     dataDirectory,
     model: {
       identity: model.identity,
       root: modelRoot,
       files: model.modelFiles,
+      activation: model.activation,
+      artifact: model.files.find(
+        (file) => file.path === model.activation.source,
+      ),
     },
     environment: {
       ...environment,
-      NOTYPE_DATA_DIR: dataDirectory,
       WEBVIEW2_BROWSER_EXECUTABLE_FOLDER: path.join(
         applicationRoot,
         application.webview.directory,
       ),
-      WEBVIEW2_USER_DATA_FOLDER: path.join(dataDirectory, "webview2"),
+      WEBVIEW2_USER_DATA_FOLDER: path.join(dataDirectory, "webview"),
     },
   };
+}
+
+export async function inspectRelease(options) {
+  return inspectInputs(options);
 }
 
 export async function prepareLaunch(options) {
@@ -157,7 +185,62 @@ export async function prepareLaunch(options) {
   // A supplied host object is useful to platform adapters; production supplies a
   // token probe function, invoked only after missing/corrupt packages are refused.
   if (typeof options.host !== "function") medium(options.host);
-  const plan = await inspectRelease(options);
-  if (typeof options.host === "function") medium(await options.host());
+  const plan = await inspectInputs(
+    options,
+    typeof options.host === "function" ? options.host : () => options.host,
+  );
+  const host = plan.host;
+  medium(host);
+  if (plan.cpu === "avx2-bmi2" && (!host.cpu?.avx2 || !host.cpu?.bmi2))
+    throw new PackageError(
+      "unsupported-cpu",
+      "This local build requires AVX2 and BMI2 CPU support. Use a compatible Windows x64 computer.",
+    );
+  delete plan.host;
   return plan;
+}
+
+export async function runApplication(options) {
+  const plan = await prepareLaunch(options);
+  await activateModel(plan, {
+    signal: options.signal,
+    onProgress: options.onProgress,
+  });
+  if (options.signal?.aborted)
+    throw new PackageError(
+      "model-activation-cancelled",
+      "Local launch was cancelled; verified models and history have been retained.",
+    );
+  if (options.launch) return options.launch(plan);
+  return new Promise((resolve, reject) => {
+    const child = spawn(
+      plan.executable,
+      options.startHidden ? ["--start-hidden"] : [],
+      {
+        cwd: path.dirname(plan.executable),
+        env: plan.environment,
+        shell: false,
+        windowsHide: true,
+        stdio: "ignore",
+      },
+    );
+    child.once("error", () =>
+      reject(
+        new PackageError(
+          "app-launch-failed",
+          "Unable to start the verified local application.",
+        ),
+      ),
+    );
+    child.once("exit", (code) => {
+      if (code === 0) resolve({ exitCode: 0 });
+      else
+        reject(
+          new PackageError(
+            "app-exited",
+            "The local application exited before a normal shutdown. Check the local runtime package and application logs.",
+          ),
+        );
+    });
+  });
 }

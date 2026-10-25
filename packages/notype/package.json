@@ -14,6 +14,7 @@
     "bin/notype.mjs",
     "lib/launcher.mjs",
     "lib/manifest.mjs",
+    "lib/model.mjs",
     "lib/windows-host.mjs",
     "release.json",
     "README.md"
