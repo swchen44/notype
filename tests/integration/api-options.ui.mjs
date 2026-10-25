@@ -1,306 +1,225 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { historyApiFixture } from "./fixtures/history-api.mjs";
+import {
+  providerConnectionsFixture,
+  savedConnection,
+} from "./fixtures/provider-connections.mjs";
 
-test("API profile preserves endpoint/model/key, validates unsupported effort and saves explicit limits", async (t) => {
-  const page = await historyApiFixture(t, "PostProcessingSettings");
-  await page.evaluate(() => {
-    window.configuration.effort = "medium";
-    window.render();
-  });
-  const profile = page.getByRole("combobox", {
-    name: "Provider profile",
-    exact: true,
-  });
-  await profile.selectOption("deepseek");
+async function editor(t, connection = savedConnection) {
+  const page = await providerConnectionsFixture(t, "en", [connection]);
   await page
-    .getByText(
-      "Choose provider default, none, low, high or max for DeepSeek.",
-      { exact: true },
-    )
-    .waitFor();
-  assert.equal(
-    await page
-      .getByRole("textbox", { name: "Full request URL", exact: true })
-      .inputValue(),
-    "https://synthetic.invalid/chat",
-  );
-  assert.equal(
-    await page
-      .getByRole("textbox", { name: "Model ID (manual entry)", exact: true })
-      .inputValue(),
-    "fixture-model",
-  );
-  assert.equal(
-    await page.getByLabel("Local API key", { exact: true }).inputValue(),
-    "synthetic-key",
-  );
-  await page
-    .getByRole("button", { name: "Save settings", exact: true })
+    .getByRole("button", { name: "Edit Company writing", exact: true })
     .click();
+  return page;
+}
+
+test("blank options remain omitted preferences and do not trigger model requests", async (t) => {
+  const page = await editor(t);
   assert.equal(
-    await page.evaluate(
-      () =>
-        window.calls.filter((x) => x.cmd === "set_text_configuration").length,
-    ),
-    0,
+    await page.getByLabel("Temperature", { exact: true }).inputValue(),
+    "",
+  );
+  assert.equal(
+    await page.getByLabel("Top p", { exact: true }).inputValue(),
+    "",
+  );
+  assert.equal(
+    await page.getByLabel("Request thinking", { exact: true }).isChecked(),
+    false,
   );
   await page
-    .getByRole("combobox", { name: "Effort", exact: true })
-    .selectOption("none");
-  await page
-    .getByRole("textbox", {
-      name: "Maximum output tokens (blank uses API default)",
-      exact: true,
-    })
-    .fill("393216");
-  await page
-    .getByRole("button", { name: "Save settings", exact: true })
+    .getByRole("button", { name: "Save connection", exact: true })
     .click();
-  await page.getByText("Local settings saved", { exact: true }).waitFor();
-  const sent = await page.evaluate(
-    () =>
-      window.calls.find((x) => x.cmd === "set_text_configuration").args
-        .configuration,
+  await page.getByText("Connection settings saved.", { exact: true }).waitFor();
+  const call = await page.evaluate(() =>
+    window.calls.find((call) => call.cmd === "save_text_connection"),
   );
-  assert.deepEqual(
-    {
-      profile: sent.provider_profile,
-      effort: sent.effort,
-      limit: sent.max_output_tokens,
-    },
-    { profile: "deepseek", effort: "none", limit: 393216 },
-  );
-  assert.deepEqual(sent.prompts, {
-    dictation: "Saved dictation",
-    translation: "Saved translation",
-    ask: "Saved ask",
-  });
-  assert.equal(sent.translation.domain, "Fixture domain");
-  assert.equal(sent.endpoint, "https://synthetic.invalid/chat");
-  assert.equal(sent.model, "fixture-model");
-  assert.equal(sent.api_key, "synthetic-key");
+  assert.equal(call.args.connection.temperature, null);
+  assert.equal(call.args.connection.top_p, null);
+  assert.equal(call.args.connection.max_output_tokens, null);
+  assert.equal(call.args.connection.thinking_preference, "off");
+  assert.deepEqual(call.args.keyAction, { action: "keep" });
   assert.equal(
     await page.evaluate(() =>
-      window.calls.some((x) => /list.*model|test.*api/.test(x.cmd)),
+      window.calls.some((call) => call.cmd === "list_text_models"),
     ),
     false,
   );
 });
 
-test("generic custom effort remains editable through standard prefixes and persists provider-default omissions", async (t) => {
-  const page = await historyApiFixture(t, "PostProcessingSettings");
-  await page.evaluate(() => window.render());
-  const effort = page.getByRole("combobox", { name: "Effort", exact: true });
-  await effort.selectOption("custom");
-  const custom = page.getByRole("textbox", {
-    name: "Custom effort",
-    exact: true,
-  });
-  await custom.pressSequentially("low-cost_v2");
-  assert.equal(await custom.inputValue(), "low-cost_v2");
-  const limit = page.getByRole("textbox", {
-    name: "Maximum output tokens (blank uses API default)",
-    exact: true,
-  });
-  await limit.fill("1000000");
+test("an explicit declared effort and output cap are saved independently of the model", async (t) => {
+  const connection = structuredClone(savedConnection);
+  connection.capability_declaration.kind = "optional";
+  connection.capability_declaration.supported_efforts = ["low", "high"];
+  connection.resolution.capability = "optional";
+  connection.resolution.supported_efforts = ["low", "high"];
+  const page = await editor(t, connection);
+  await page.getByLabel("Request thinking", { exact: true }).check();
+  await page.getByLabel("Effort", { exact: true }).selectOption("high");
   await page
-    .getByRole("button", { name: "Save settings", exact: true })
+    .getByLabel("Maximum output tokens (blank uses API default)", {
+      exact: true,
+    })
+    .fill("512");
+  await page
+    .getByRole("button", { name: "Save connection", exact: true })
     .click();
-  await page.getByText("Local settings saved", { exact: true }).waitFor();
-  assert.deepEqual(
-    await page.evaluate(() => {
-      const c = window.configuration;
-      return [c.effort, c.max_output_tokens];
-    }),
-    ["low-cost_v2", 1000000],
+  await page.getByText("Connection settings saved.", { exact: true }).waitFor();
+  const draft = await page.evaluate(
+    () =>
+      window.calls.find((call) => call.cmd === "save_text_connection").args
+        .connection,
   );
-  await effort.selectOption("default");
-  await limit.fill("");
-  await page
-    .getByRole("button", { name: "Save settings", exact: true })
-    .click();
-  await page.getByText("Local settings saved", { exact: true }).waitFor();
-  assert.deepEqual(
-    await page.evaluate(() => {
-      const c = window.configuration;
-      return [c.provider_profile, c.effort, c.max_output_tokens];
-    }),
-    ["generic", null, null],
+  assert.equal(draft.model, "manual-model");
+  assert.equal(draft.effort, "high");
+  assert.equal(draft.thinking_preference, "on");
+  assert.equal(draft.max_output_tokens, 512);
+});
+
+test("invalid numeric options cannot be submitted and valid zero remains usable", async (t) => {
+  const page = await editor(t);
+  const output = page.getByLabel(
+    "Maximum output tokens (blank uses API default)",
+    { exact: true },
+  );
+  const save = page.getByRole("button", {
+    name: "Save connection",
+    exact: true,
+  });
+  for (const value of ["0", "1.5", "1000001", "Infinity"]) {
+    await output.fill(value);
+    assert.equal(await save.isDisabled(), true);
+  }
+  await output.fill("");
+  await page.getByLabel("Temperature", { exact: true }).fill("0");
+  await page.getByLabel("Top p", { exact: true }).fill("0");
+  assert.equal(await save.isDisabled(), true);
+  await page.getByLabel("Top p", { exact: true }).fill("1");
+  assert.equal(await save.isDisabled(), false);
+  assert.equal(
+    await page.evaluate(
+      () =>
+        window.calls.filter((call) => call.cmd === "save_text_connection")
+          .length,
+    ),
+    0,
   );
 });
 
-test("API options reject invalid spellings and limits without persistence and retain rejected save drafts for retry", async (t) => {
-  const page = await historyApiFixture(t, "PostProcessingSettings");
-  await page.evaluate(() => window.render());
-  const effort = page.getByRole("combobox", { name: "Effort", exact: true });
-  const profile = page.getByRole("combobox", {
-    name: "Provider profile",
-    exact: true,
-  });
-  const limit = page.getByRole("textbox", {
-    name: "Maximum output tokens (blank uses API default)",
-    exact: true,
-  });
-  const save = page.getByRole("button", { name: "Save settings", exact: true });
-  await effort.selectOption("custom");
-  for (const invalid of ["", "HIGH", "bad value", "a".repeat(33), "中文"]) {
-    await page
-      .getByRole("textbox", { name: "Custom effort", exact: true })
-      .fill(invalid);
-    await page
-      .getByText(
-        "Use 1–32 lowercase ASCII letters, digits, underscores or hyphens.",
-        { exact: true },
-      )
-      .waitFor();
-    await save.click();
-  }
+test("a rejected save keeps the edit and supports an explicit retry without raw rejection text", async (t) => {
+  const page = await editor(t);
   await page
-    .getByRole("textbox", { name: "Custom effort", exact: true })
-    .fill("a".repeat(32));
-  for (const invalid of ["0", "-1", "1.5", "1e3", "1000001"]) {
-    await limit.fill(invalid);
-    await page
-      .getByText(
-        "Enter a whole number from 1 to 1000000, or leave blank for API default.",
-        { exact: true },
-      )
-      .waitFor();
-    await save.click();
-  }
-  assert.equal(
-    await page.evaluate(
-      () =>
-        window.calls.filter((x) => x.cmd === "set_text_configuration").length,
-    ),
-    0,
-  );
-  await effort.selectOption("low");
-  await limit.fill("393217");
-  await profile.selectOption("deepseek");
-  await page
-    .getByText(
-      "Enter a whole number from 1 to 393216, or leave blank for API default.",
-      { exact: true },
-    )
-    .waitFor();
-  await save.click();
-  assert.equal(
-    await page.evaluate(
-      () =>
-        window.calls.filter((x) => x.cmd === "set_text_configuration").length,
-    ),
-    0,
-  );
-  await limit.fill("1");
+    .getByLabel("Model ID (manual entry)", { exact: true })
+    .fill("retry-model");
   await page.evaluate(() => (window.mode = "save-error"));
-  await save.click();
   await page
-    .getByText("Unable to save API settings. Please try again.", {
+    .getByRole("button", { name: "Save connection", exact: true })
+    .click();
+  await page
+    .getByRole("alert")
+    .getByText("Unable to update connections. Please try again.", {
       exact: true,
     })
     .waitFor();
-  assert.equal(await effort.inputValue(), "low");
-  assert.equal(await limit.inputValue(), "1");
   assert.equal(
-    await page.getByText("Local settings saved", { exact: true }).count(),
-    0,
+    await page
+      .getByLabel("Model ID (manual entry)", { exact: true })
+      .inputValue(),
+    "retry-model",
   );
   assert.doesNotMatch(
     await page.locator("body").innerText(),
-    /Bearer synthetic-secret|private/,
+    /should-never-render/,
   );
-  await page.evaluate(() => (window.mode = "save-pending"));
-  await save.click();
-  await page.waitForFunction(() => typeof window.releaseSave === "function");
-  assert.equal(await save.isDisabled(), true);
-  assert.equal(await profile.isDisabled(), true);
-  await page.evaluate(() => window.releaseSave());
-  await page.getByText("Local settings saved", { exact: true }).waitFor();
-  assert.deepEqual(
-    await page.evaluate(() => {
-      const c = window.configuration;
-      return [c.provider_profile, c.effort, c.max_output_tokens];
-    }),
-    ["deepseek", "low", 1],
+  await page.evaluate(() => (window.mode = "ok"));
+  await page
+    .getByRole("button", { name: "Save connection", exact: true })
+    .click();
+  await page.getByText("Connection settings saved.", { exact: true }).waitFor();
+  assert.equal(
+    await page.evaluate(() => window.configuration.connections[0].model),
+    "retry-model",
   );
-  await page.evaluate(() => {
-    window.uiRoot.unmount();
-  });
-  await page.evaluate(async () => {
-    const { React, createRoot, PostProcessingSettings } = await import(
-      "/__ui_fixture.tsx"
-    );
-    window.uiRoot = createRoot(document.getElementById("root"));
-    window.uiRoot.render(React.createElement(PostProcessingSettings));
-  });
-  await profile.waitFor();
-  assert.equal(await profile.inputValue(), "deepseek");
-  assert.equal(await effort.inputValue(), "low");
-  assert.equal(await limit.inputValue(), "1");
 });
 
-for (const [language, labels] of [
-  [
-    "en",
-    [
-      "Provider profile",
-      "Effort",
-      "Maximum output tokens (blank uses API default)",
-      "Save settings",
-      "Local settings saved",
-    ],
-  ],
-  [
+test("prompt reset and translation mutation preserve the saved connection collection", async (t) => {
+  const page = await editor(t);
+  await page
+    .getByRole("button", { name: "Restore this default prompt", exact: true })
+    .click();
+  await page
+    .getByText("Selected default prompt restored", { exact: true })
+    .waitFor();
+  assert.equal(
+    await page.evaluate(() => window.configuration.connections[0].model),
+    "manual-model",
+  );
+  assert.equal(
+    await page.evaluate(() => window.configuration.prompts.ask),
+    "Saved ask",
+  );
+  await page
+    .getByLabel("Scenario", { exact: true })
+    .selectOption("translation");
+  await page
+    .getByLabel("Translation target language", { exact: true })
+    .fill("zh-TW");
+  await page
+    .getByRole("button", { name: "Save translation settings", exact: true })
+    .click();
+  await page.getByText("Saved locally", { exact: true }).waitFor();
+  assert.equal(
+    await page.evaluate(() => window.configuration.connections.length),
+    1,
+  );
+  assert.equal(
+    await page.evaluate(() => window.configuration.translation.target_language),
     "zh-TW",
-    [
-      "服務設定檔",
-      "Effort",
-      "輸出 token 上限（留白使用 API 預設）",
-      "保存設定",
-      "已保存本機設定",
-    ],
-  ],
-  [
-    "zh-CN",
-    [
-      "服务配置",
-      "Effort",
-      "输出 token 上限（留空使用 API 默认）",
-      "保存设置",
-      "已保存本机设置",
-    ],
-  ],
-])
-  test(`API settings ${language} render and save default controls at narrow width`, async (t) => {
-    const page = await historyApiFixture(t, "PostProcessingSettings", language);
-    await page.setViewportSize({ width: 360, height: 900 });
-    await page.evaluate(() => window.render());
-    await page
-      .getByRole("combobox", { name: labels[0], exact: true })
-      .waitFor();
-    await page
-      .getByRole("combobox", { name: labels[1], exact: true })
-      .selectOption("default");
-    await page.getByRole("textbox", { name: labels[2], exact: true }).fill("");
-    await page.getByRole("button", { name: labels[3], exact: true }).click();
-    await page.getByText(labels[4], { exact: true }).waitFor();
-    assert.equal(
-      await page.evaluate(
-        () => document.documentElement.scrollWidth <= window.innerWidth,
-      ),
-      true,
-    );
-    assert.deepEqual(
-      await page.evaluate(() => {
-        const c = window.configuration;
-        return [c.effort, c.max_output_tokens];
-      }),
-      [null, null],
-    );
-    assert.doesNotMatch(
-      await page.locator("body").innerText(),
-      /notype\.text|notype\.metrics|目前無法顯示|\?\?/,
-    );
-  });
+  );
+  assert.equal(
+    await page.evaluate(
+      () =>
+        window.calls.find((call) => call.cmd === "save_translation_settings")
+          .args.expectedRevision,
+    ),
+    1,
+  );
+});
+
+test("a mandatory model displays minimum thinking without inventing a minimal option", async (t) => {
+  const connection = structuredClone(savedConnection);
+  connection.capability_declaration = null;
+  connection.resolution = {
+    ...connection.resolution,
+    capability: "mandatory",
+    provenance: "documented",
+    effective_thinking: true,
+    effective_effort: "low",
+    supported_efforts: ["low", "medium", "high"],
+    reason: "mandatory_minimum",
+  };
+  const page = await editor(t, connection);
+  await page
+    .getByText(
+      "This model cannot turn thinking off. The request will use its minimum supported effort: low.",
+      { exact: true },
+    )
+    .waitFor();
+  assert.equal(
+    await page.getByLabel("Request thinking", { exact: true }).isChecked(),
+    false,
+  );
+  await page.getByLabel("Request thinking", { exact: true }).check();
+  assert.equal(
+    await page.getByRole("option", { name: "minimal", exact: true }).count(),
+    0,
+  );
+  await page.getByLabel("Effort", { exact: true }).selectOption("low");
+  await page.getByLabel("Temperature", { exact: true }).fill("0.3");
+  await page
+    .getByText(
+      "This model requires thinking even when the preference is Off.",
+      { exact: true },
+    )
+    .waitFor();
+});

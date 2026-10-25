@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import type { SessionDto, HistoryUsageDto } from "@/bindings";
+import { HistoryRequestOptions } from "./HistoryRequestOptions";
 
 /** Present the authoritative history projection without recounting or totaling. */
 export function HistoryMetrics({ entry }: { entry: SessionDto }) {
@@ -144,6 +145,9 @@ export function HistoryMetrics({ entry }: { entry: SessionDto }) {
                       effort: association.reported_effort ?? unknown,
                     })}
                   </p>
+                  <HistoryRequestOptions
+                    parameters={association.parameters ?? null}
+                  />
                 </li>
               ))}
             </ul>
