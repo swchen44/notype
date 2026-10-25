@@ -263,10 +263,20 @@ pub fn prepare_packaged_process(
             .ok_or(PreflightError("data-directory-unavailable"))?
             .join("io.github.swchen44.notype"),
     };
+    validate_external_data_directory(root, &data)?;
+    Ok(PackagedRuntime {
+        browser_directory: runtime.browser_directory,
+        user_data_directory: data.join("webview"),
+    })
+}
+
+/// Validate persistent storage against versioned npm package directories without creating it.
+/// Existing ancestors are canonicalized so missing descendants and directory aliases cannot bypass policy.
+pub fn validate_external_data_directory(root: &Path, data: &Path) -> Result<(), PreflightError> {
     if !data.is_absolute() || data.to_string_lossy().starts_with("\\\\") {
         return Err(PreflightError("invalid-data-directory"));
     }
-    let mut ancestor = data.as_path();
+    let mut ancestor = data;
     let mut missing = Vec::new();
     let resolved = loop {
         match fs::canonicalize(ancestor) {
@@ -291,11 +301,31 @@ pub fn prepare_packaged_process(
         }
     };
     let package = fs::canonicalize(root).map_err(|_| PreflightError("runtime-package-missing"))?;
-    if resolved.starts_with(&package) || package.starts_with(&resolved) {
-        return Err(PreflightError("invalid-data-directory"));
+    let mut package_roots = vec![package.clone()];
+    let mut containers = vec![package.parent().ok_or(PreflightError("runtime-package-missing"))?];
+    containers.extend(package.ancestors().filter(|ancestor| {
+        ancestor.file_name().is_some_and(|name| name == "node_modules")
+    }));
+    for container in containers {
+        for role in ["notype", "notype-model", "notype-win32-x64"] {
+            let candidate = container.join(role);
+            let path = match fs::canonicalize(&candidate) {
+                Ok(path) => path,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => candidate,
+                Err(_) => return Err(PreflightError("invalid-data-directory")),
+            };
+            package_roots.push(path);
+        }
     }
-    Ok(PackagedRuntime {
-        browser_directory: runtime.browser_directory,
-        user_data_directory: data.join("webview"),
-    })
+    for package in package_roots {
+        #[cfg(windows)]
+        let (resolved, package) = (
+            PathBuf::from(resolved.to_string_lossy().to_lowercase()),
+            PathBuf::from(package.to_string_lossy().to_lowercase()),
+        );
+        if resolved.starts_with(&package) || package.starts_with(&resolved) {
+            return Err(PreflightError("invalid-data-directory"));
+        }
+    }
+    Ok(())
 }

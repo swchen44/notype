@@ -170,8 +170,11 @@ enum Effect {
 /// Commands processed sequentially by the coordinator thread.
 enum Command {
     Input(InputEvent),
-    Cancel { recording_was_active: bool },
-    ProcessingFinished,
+    Cancel {
+        recording_was_active: bool,
+        owner: crate::workflow::GenerationToken,
+    },
+    ProcessingFinished(crate::workflow::GenerationToken),
 }
 
 /// Decide whether a key-up should be deferred (so auto-repeat can cancel it)
@@ -573,9 +576,13 @@ impl TranscriptionCoordinator {
                         }
                         Command::Cancel {
                             recording_was_active,
-                        } => state.on_cancel(recording_was_active),
-                        Command::ProcessingFinished => {
-                            if let Some(effect) = state.on_processing_finished() {
+                            owner,
+                        } => {
+                            owner.run(|| state.on_cancel(recording_was_active));
+                        }
+                        Command::ProcessingFinished(owner) => {
+                            if let Some(Some(effect)) = owner.run(|| state.on_processing_finished())
+                            {
                                 run_effect(&app, &mut state, effect);
                             }
                         }
@@ -649,11 +656,16 @@ impl TranscriptionCoordinator {
         }
     }
 
-    pub fn notify_cancel(&self, recording_was_active: bool) {
+    pub fn notify_cancel(
+        &self,
+        recording_was_active: bool,
+        owner: crate::workflow::GenerationToken,
+    ) {
         if self
             .tx
             .send(Command::Cancel {
                 recording_was_active,
+                owner,
             })
             .is_err()
         {
@@ -661,8 +673,8 @@ impl TranscriptionCoordinator {
         }
     }
 
-    pub fn notify_processing_finished(&self) {
-        if self.tx.send(Command::ProcessingFinished).is_err() {
+    pub fn notify_processing_finished(&self, owner: crate::workflow::GenerationToken) {
+        if self.tx.send(Command::ProcessingFinished(owner)).is_err() {
             warn!("Transcription coordinator channel closed");
         }
     }

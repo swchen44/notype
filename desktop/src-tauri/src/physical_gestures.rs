@@ -1,6 +1,15 @@
 //! Physical tap gestures. No key text, clock, native handles or session side effects.
 use std::collections::BTreeSet;
 
+/// Authoritative Windows tap defaults, shared with persisted settings and Reset.
+pub const DEFAULT_DICTATION: &str = "alt_right";
+/// Default Translation start, parsed by both the router and settings.
+pub const DEFAULT_TRANSLATION: &str = "alt_right+shift_right";
+/// Default Ask start, parsed by both the router and settings.
+pub const DEFAULT_ASK: &str = "alt_right+space";
+/// Independent Recording-only Stop default.
+pub const DEFAULT_STOP: &str = "alt_right";
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Phase {
     Idle,
@@ -30,12 +39,13 @@ pub struct Bindings {
 }
 impl Default for Bindings {
     fn default() -> Self {
-        Self {
-            dictation: [0xa5].into(),
-            translation: [0xa5, 0xa1].into(),
-            ask: [0xa5, 0x20].into(),
-            stop: [0xa5].into(),
-        }
+        Self::parse(
+            DEFAULT_DICTATION,
+            DEFAULT_TRANSLATION,
+            DEFAULT_ASK,
+            DEFAULT_STOP,
+        )
+        .expect("authoritative shortcut defaults must be valid")
     }
 }
 impl Bindings {

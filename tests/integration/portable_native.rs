@@ -4,6 +4,39 @@ use sha2::{Digest, Sha256};
 use std::fs;
 use tempfile::TempDir;
 
+#[test]
+fn persistent_data_rejects_each_versioned_npm_role_and_its_missing_descendants() {
+    use notype_platform::validate_external_data_directory;
+    let directory = TempDir::new().unwrap();
+    let packages = directory.path().join("node_modules");
+    for role in ["notype-win32-x64", "notype", "notype-model"] {
+        fs::create_dir_all(packages.join(role)).unwrap();
+    }
+    let application = packages.join("notype-win32-x64");
+    for role in ["notype-win32-x64", "notype", "notype-model"] {
+        let forbidden = packages.join(role).join("new-history/settings");
+        assert_eq!(
+            validate_external_data_directory(&application, &forbidden)
+                .unwrap_err()
+                .code(),
+            "invalid-data-directory",
+            "{role}"
+        );
+        assert!(!forbidden.exists());
+    }
+    assert!(validate_external_data_directory(
+        &application,
+        &directory.path().join("stable-user-data")
+    )
+    .is_ok());
+    assert_eq!(
+        validate_external_data_directory(&application, directory.path())
+            .unwrap_err()
+            .code(),
+        "invalid-data-directory"
+    );
+}
+
 fn fixture() -> TempDir {
     let root = TempDir::new().unwrap();
     fs::create_dir(root.path().join("app")).unwrap();

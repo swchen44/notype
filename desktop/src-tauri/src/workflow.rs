@@ -25,12 +25,62 @@ impl DeliveryAdapter for UnavailableDelivery {
     }
 }
 
+/// Owns one current capture/processing generation and persistent session history.
+/// Capture order is begin → source context → processing snapshot → audio → finish.
 pub struct DesktopWorkflow {
     sessions: SessionService,
     generation: AtomicU64,
     recording: Mutex<Option<Recording>>,
     notify: Arc<dyn Fn() + Send + Sync>,
     delivery: Arc<dyn DeliveryAdapter>,
+    lifecycle: Mutex<u64>,
+}
+
+/// Ownership of one recording's short platform operations. Never hold this across decoding.
+#[derive(Clone)]
+pub struct GenerationToken {
+    workflow: Arc<DesktopWorkflow>,
+    generation: u64,
+}
+impl GenerationToken {
+    /// Run a short resource/UI operation only while this is the latest generation.
+    /// The closure must not begin/cancel another generation or call `run` recursively.
+    pub fn run<T>(&self, operation: impl FnOnce() -> T) -> Option<T> {
+        let owner = self.workflow.lifecycle.lock().ok()?;
+        (*owner == self.generation).then(operation)
+    }
+    /// Atomically cancel this generation; a late decoder cannot cancel its successor.
+    pub fn cancel(&self) -> Result<(), CoreError> {
+        let owner = self
+            .workflow
+            .lifecycle
+            .lock()
+            .map_err(|_| CoreError::Storage)?;
+        if *owner == self.generation {
+            self.workflow.cancel_recording_locked()?;
+        }
+        Ok(())
+    }
+    /// A drop guard for the same generation-owned cleanup used by native stop tasks.
+    pub fn cleanup(&self, operation: impl FnOnce() + Send + 'static) -> GenerationCleanup {
+        GenerationCleanup {
+            owner: self.clone(),
+            operation: Some(Box::new(operation)),
+        }
+    }
+}
+
+/// Runs its owned cleanup at most once when the processing future exits or is dropped.
+pub struct GenerationCleanup {
+    owner: GenerationToken,
+    operation: Option<Box<dyn FnOnce() + Send>>,
+}
+impl Drop for GenerationCleanup {
+    fn drop(&mut self) {
+        if let Some(operation) = self.operation.take() {
+            self.owner.run(operation);
+        }
+    }
 }
 
 struct Recording {
@@ -62,6 +112,7 @@ impl Drop for RecordingLease<'_> {
 }
 
 impl DesktopWorkflow {
+    /// Open orchestration over an existing store; notification callbacks must not reenter ownership mutations.
     pub fn new(sessions: SessionService, notify: Arc<dyn Fn() + Send + Sync>) -> Self {
         Self {
             sessions,
@@ -69,6 +120,7 @@ impl DesktopWorkflow {
             recording: Mutex::new(None),
             notify,
             delivery: Arc::new(UnavailableDelivery),
+            lifecycle: Mutex::new(0),
         }
     }
     /// Composition selects a guarded platform adapter; portable callers stay unavailable.
@@ -76,9 +128,19 @@ impl DesktopWorkflow {
         self.delivery = delivery;
         self
     }
+    /// Read/search saved text independently of any active recording or audio buffer.
     pub fn sessions(&self) -> &SessionService {
         &self.sessions
     }
+    /// Capture a platform-operation owner; stale owners are safe no-ops after a restart.
+    pub fn token(self: &Arc<Self>, generation: u64) -> GenerationToken {
+        GenerationToken {
+            workflow: Arc::clone(self),
+            generation,
+        }
+    }
+    /// Begin with a default local recognition profile, cancelling a previous capture.
+    /// The opaque original target belongs only to this new generation.
     pub fn begin(
         &self,
         recognition_mode: RecognitionMode,
@@ -89,13 +151,16 @@ impl DesktopWorkflow {
             original_target,
         )
     }
+    /// Atomically replace the active capture and snapshot its recognition mode/terms.
+    /// Old decoders may finish, but their generation owners cannot mutate this successor.
     pub fn begin_with_profile(
         &self,
         profile: recognition::RecognitionProfile,
         original_target: Option<String>,
     ) -> Result<u64, CoreError> {
+        let mut owner = self.lifecycle.lock().map_err(|_| CoreError::Storage)?;
         let generation = self.generation.fetch_add(1, Ordering::SeqCst) + 1;
-        self.cancel_active()?;
+        self.cancel_recording_locked()?;
         *self.recording.lock().map_err(|_| CoreError::Storage)? = Some(Recording {
             generation,
             options: SessionOptions {
@@ -109,8 +174,11 @@ impl DesktopWorkflow {
             context_captured: false,
             profile,
         });
+        *owner = generation;
         Ok(generation)
     }
+    /// Capture scenario, prompts, translation settings and glossary once, before audio starts.
+    /// Source context must be captured first; later preference changes affect only retry/new captures.
     pub fn capture_processing_snapshot(
         &self,
         generation: u64,
@@ -154,6 +222,8 @@ impl DesktopWorkflow {
             .map(|recording| recording.profile.clone())
             .ok_or(CoreError::InvalidTransition)
     }
+    /// Return the active capture/processing generation, not a platform cleanup permission.
+    /// Use `token` for atomic resource ownership instead of checking this then mutating globals.
     pub fn active_generation(&self) -> Result<Option<u64>, CoreError> {
         Ok(self
             .recording
@@ -162,7 +232,20 @@ impl DesktopWorkflow {
             .as_ref()
             .map(|recording| recording.generation))
     }
+    /// Cancel the current workflow and invalidate late recognition/HTTP results.
+    /// Platform callers should use `cancel_active_with` to serialize their short resource cleanup.
     pub fn cancel_active(&self) -> Result<(), CoreError> {
+        self.cancel_active_with(|_| {}).map(|_| ())
+    }
+    /// Cancel and clean up the current capture atomically with respect to a new begin.
+    /// The callback must be short and must not recursively mutate workflow ownership.
+    pub fn cancel_active_with(&self, cleanup: impl FnOnce(u64)) -> Result<u64, CoreError> {
+        let owner = self.lifecycle.lock().map_err(|_| CoreError::Storage)?;
+        let cancelled = self.cancel_recording_locked();
+        cleanup(*owner);
+        cancelled.map(|_| *owner)
+    }
+    fn cancel_recording_locked(&self) -> Result<(), CoreError> {
         let active = self
             .recording
             .lock()
@@ -177,6 +260,9 @@ impl DesktopWorkflow {
         }
         Ok(())
     }
+    /// Save the original with its captured recognition profile before processing any text.
+    /// A captured processing snapshot wins over fallback arguments. Cancellation/old generations
+    /// cannot create a successor's entry; successful unreviewed output uses the guarded delivery adapter.
     pub async fn finish(
         &self,
         generation: u64,
@@ -238,6 +324,7 @@ impl DesktopWorkflow {
             Ok(result)
         }
     }
+    /// Select saved raw text for later copy/delivery without running a provider or changing focus.
     pub fn choose_original(&self, id: &str) -> Result<SessionEntry, CoreError> {
         let entry = self.sessions.choose_original(id)?;
         (self.notify)();
@@ -274,16 +361,20 @@ impl DesktopWorkflow {
         (self.notify)();
         Ok(entry)
     }
+    /// Cancel a persisted session; in-flight late replies are ignored by the shared core.
     pub fn cancel(&self, id: &str) -> Result<SessionEntry, CoreError> {
         let entry = self.sessions.cancel(id)?;
         (self.notify)();
         Ok(entry)
     }
+    /// Explicitly delete saved text. This never records or retrieves audio.
     pub fn delete(&self, id: &str) -> Result<(), CoreError> {
         self.sessions.delete(id)?;
         (self.notify)();
         Ok(())
     }
+    /// Process saved raw text with the supplied current settings, without ASR or microphone use.
+    /// Script-conversion failures require a new recognition result; optional review still gates delivery.
     pub async fn retry(
         &self,
         id: &str,
@@ -313,6 +404,7 @@ impl DesktopWorkflow {
             Ok(entry)
         }
     }
+    /// Attempt guarded, deduplicated delivery to the captured target; never focus an arbitrary window.
     pub async fn deliver(&self, id: &str) -> Result<SessionEntry, CoreError> {
         let entry = self
             .sessions
@@ -321,11 +413,14 @@ impl DesktopWorkflow {
         (self.notify)();
         Ok(entry)
     }
+    /// Approve exactly the displayed revision without delivering or changing foreground focus.
     pub fn confirm_review(&self, id: &str, revision: i64) -> Result<SessionEntry, CoreError> {
         let entry = self.sessions.confirm_review(id, revision)?;
         (self.notify)();
         Ok(entry)
     }
+    /// Capture application-only metadata once, before the processing snapshot or audio.
+    /// This cannot add websites, page/input contents or overwrite a previous capture.
     pub fn capture_source_context(
         &self,
         generation: u64,

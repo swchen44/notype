@@ -113,6 +113,24 @@ struct FinalizedStreamText {
     text: String,
 }
 
+/// Detached reply for one stopped stream; waiting never touches the global router.
+pub struct StreamFinalization(Option<mpsc::Receiver<Option<FinalizedStreamText>>>);
+impl StreamFinalization {
+    /// Wait outside generation ownership, allowing Esc and a new recording immediately.
+    pub fn wait(self) -> Result<Option<String>> {
+        let Some(reply) = self.0 else {
+            return Ok(None);
+        };
+        match reply.recv_timeout(STREAM_FINALIZE_REPLY_TIMEOUT) {
+            Ok(Some(text)) => Ok(Some(text.text)),
+            Ok(None) | Err(mpsc::RecvTimeoutError::Disconnected) => Ok(None),
+            Err(mpsc::RecvTimeoutError::Timeout) => Err(anyhow::anyhow!(
+                "Timed out waiting for live transcription to finalize"
+            )),
+        }
+    }
+}
+
 /// Routes real-time audio frames to the active streaming worker. Shared between
 /// the [`TranscriptionManager`] (opens/closes the route) and the audio recorder's
 /// per-frame callback (feeds frames). The recorder holds an `Arc<StreamRouter>`
@@ -816,7 +834,12 @@ impl TranscriptionManager {
     /// model can't stream, the worker idles until finalize/cancel and reports
     /// `None` so the caller falls back to batch transcription. Frames sent
     /// before the stream begins queue on the channel and are not lost.
-    pub fn start_stream_with_profile(&self, profile: RecognitionProfile) {
+    /// Worker emissions and engine return remain fenced by the supplied recording owner.
+    pub fn start_stream_with_profile(
+        &self,
+        profile: RecognitionProfile,
+        owner: crate::workflow::GenerationToken,
+    ) {
         if self.router.is_open() || self.active_stream_worker.load(Ordering::Acquire) != 0 {
             warn!("start_stream called while a stream worker is already active");
             return;
@@ -834,7 +857,7 @@ impl TranscriptionManager {
         self.stream_active.store(false, Ordering::Release);
 
         let manager = self.clone();
-        thread::spawn(move || manager.run_stream_worker(rx, worker_id, profile));
+        thread::spawn(move || manager.run_stream_worker(rx, worker_id, profile, owner));
     }
 
     fn run_stream_worker(
@@ -842,6 +865,7 @@ impl TranscriptionManager {
         rx: mpsc::Receiver<StreamCmd>,
         worker_id: u64,
         profile: RecognitionProfile,
+        owner: crate::workflow::GenerationToken,
     ) {
         let _worker = StreamWorkerGuard {
             worker_id,
@@ -875,7 +899,7 @@ impl TranscriptionManager {
             drain_until_finalize(rx);
             return;
         }
-        let mut engine = match self.lock_engine().take() {
+        let mut engine = match owner.run(|| self.lock_engine().take()).flatten() {
             Some(e) => e,
             None => {
                 info!(
@@ -929,7 +953,7 @@ impl TranscriptionManager {
         };
 
         if !supports_streaming || profile.validate_model(&languages).is_err() {
-            self.return_engine(engine, &model_id);
+            self.return_engine(engine, &model_id, Some(&owner));
             self.router.clear();
             drain_until_finalize(rx);
             return;
@@ -1022,7 +1046,7 @@ impl TranscriptionManager {
                                         &text.tentative,
                                         &languages,
                                     );
-                                    self.emit_stream_text(&committed, &tentative);
+                                    owner.run(|| self.emit_stream_text(&committed, &tentative));
                                 }
                                 perf.maybe_log();
                             }
@@ -1083,12 +1107,12 @@ impl TranscriptionManager {
             // failed); drain so the finalize handshake still completes and the
             // caller falls back to batch transcription. Return the engine first
             // so the fallback can immediately use it.
-            self.return_engine(engine, &model_id);
+            self.return_engine(engine, &model_id, Some(&owner));
             drain_until_finalize(rx);
             return;
         }
 
-        self.return_engine(engine, &model_id);
+        self.return_engine(engine, &model_id, Some(&owner));
         if let (Some(reply), Some(result)) = (finalize_reply, finalize_result) {
             let _ = reply.send(result);
         }
@@ -1098,50 +1122,43 @@ impl TranscriptionManager {
 
     /// Return the leased engine to the mutex, unless the model was switched or
     /// unloaded during transcription (in which case the stale engine is dropped).
-    fn return_engine(&self, engine: LoadedEngine, expected_model_id: &str) {
-        let still_current =
-            self.current_model_id.lock().unwrap().as_deref() == Some(expected_model_id);
-        if still_current {
-            *self.lock_engine() = Some(engine);
+    fn return_engine(
+        &self,
+        engine: LoadedEngine,
+        expected_model_id: &str,
+        owner: Option<&crate::workflow::GenerationToken>,
+    ) {
+        let operation = || {
+            let still_current =
+                self.current_model_id.lock().unwrap().as_deref() == Some(expected_model_id);
+            if still_current {
+                *self.lock_engine() = Some(engine);
+            } else {
+                info!(
+                    "Model changed/unloaded during transcription; dropping stale engine (was '{}')",
+                    expected_model_id
+                );
+                // `engine` drops here, freeing its resources.
+            }
+        };
+        if let Some(owner) = owner {
+            owner.run(operation);
         } else {
-            info!(
-                "Model changed/unloaded during transcription; dropping stale engine (was '{}')",
-                expected_model_id
-            );
-            // `engine` drops here, freeing its resources.
+            operation();
         }
     }
 
-    /// Flush the active stream and return its final, post-filtered text.
-    ///
-    /// `Ok(None)` means no usable stream was active and the caller may fall back
-    /// to batch transcription. `Err` means finalize itself failed or timed out.
-    /// A timeout may still leave the worker holding the engine, so callers
-    /// should surface it instead of immediately starting a batch fallback.
-    /// Return untouched ASR text; the workflow applies its captured local profile.
-    pub fn finalize_stream_raw(&self) -> Result<Option<String>> {
+    /// Detach the current stream under its generation gate, then wait outside it.
+    /// A missing reply route allows batch fallback; a timed-out wait does not.
+    pub fn take_stream_finalization(&self) -> StreamFinalization {
         let Some(tx) = self.router.take() else {
-            return Ok(None);
+            return StreamFinalization(None);
         };
         let (reply_tx, reply_rx) = mpsc::channel();
         if tx.send(StreamCmd::Finalize(reply_tx)).is_err() {
-            return Ok(None);
+            return StreamFinalization(None);
         }
-        let finalized = match reply_rx.recv_timeout(STREAM_FINALIZE_REPLY_TIMEOUT) {
-            Ok(Some(finalized)) => finalized,
-            Ok(None) => return Ok(None),
-            Err(mpsc::RecvTimeoutError::Disconnected) => return Ok(None),
-            Err(mpsc::RecvTimeoutError::Timeout) => {
-                self.stream_active.store(false, Ordering::Release);
-                return Err(anyhow::anyhow!(
-                    "Timed out waiting {:?} for live transcription to finalize",
-                    STREAM_FINALIZE_REPLY_TIMEOUT
-                ));
-            }
-        };
-
-        self.maybe_unload_immediately("streaming transcription");
-        Ok(Some(finalized.text))
+        StreamFinalization(Some(reply_rx))
     }
 
     /// Abandon any active stream without producing text (e.g. on cancel).
@@ -1169,11 +1186,34 @@ impl TranscriptionManager {
         .emit(&self.app_handle);
     }
 
-    /// Run the formal engine with the start-time profile, preserving raw ASR output.
+    /// One-shot/headless recognition with its caller's profile and unload preference.
+    /// Live recording tasks must use `transcribe_for_generation` instead.
     pub fn transcribe_raw_with_profile(
         &self,
         audio: Vec<f32>,
         profile: &RecognitionProfile,
+    ) -> Result<String> {
+        let result = self.transcribe_owned(audio, profile, None);
+        if result.is_ok() {
+            self.maybe_unload_immediately("headless transcription");
+        }
+        result
+    }
+
+    /// Decode only this generation's captured audio; late return/panic cannot replace a newer engine.
+    pub fn transcribe_for_generation(
+        &self,
+        audio: Vec<f32>,
+        profile: &RecognitionProfile,
+        owner: crate::workflow::GenerationToken,
+    ) -> Result<String> {
+        self.transcribe_owned(audio, profile, Some(owner))
+    }
+    fn transcribe_owned(
+        &self,
+        audio: Vec<f32>,
+        profile: &RecognitionProfile,
+        owner: Option<crate::workflow::GenerationToken>,
     ) -> Result<String> {
         #[cfg(debug_assertions)]
         if std::env::var("HANDY_FORCE_TRANSCRIPTION_FAILURE").is_ok() {
@@ -1192,7 +1232,6 @@ impl TranscriptionManager {
 
         if audio.is_empty() {
             debug!("Empty audio vector");
-            self.maybe_unload_immediately("empty audio");
             return Ok(String::new());
         }
 
@@ -1262,12 +1301,13 @@ impl TranscriptionManager {
         // We use catch_unwind to prevent engine panics from poisoning the mutex,
         // which would make the app hang indefinitely on subsequent operations.
         let result = {
-            let mut engine_guard = self.lock_engine();
-
-            // Take the engine out so we own it during transcription.
-            // If the engine panics, we simply don't put it back (effectively unloading it)
-            // instead of poisoning the mutex.
-            let mut engine = match engine_guard.take() {
+            let take = || self.lock_engine().take();
+            let engine = if let Some(owner) = &owner {
+                owner.run(take).flatten()
+            } else {
+                take()
+            };
+            let mut engine = match engine {
                 Some(e) => e,
                 None => {
                     return Err(anyhow::anyhow!(
@@ -1276,8 +1316,7 @@ impl TranscriptionManager {
                 }
             };
 
-            // Release the lock before transcribing — no mutex held during the engine call
-            drop(engine_guard);
+            // No ownership gate or engine mutex is held during native decoding.
 
             // Probe live transcribe-cpp capabilities once (cheap GGUF-metadata
             // reads); the loaded session is the source of truth, not the
@@ -1447,7 +1486,7 @@ impl TranscriptionManager {
                 Ok(inner_result) => {
                     // Success or normal error: return the engine unless a model
                     // switch/unload invalidated it while it was in use.
-                    self.return_engine(engine, &active_model);
+                    self.return_engine(engine, &active_model, owner.as_ref());
                     inner_result?
                 }
                 Err(panic_payload) => {
@@ -1460,23 +1499,29 @@ impl TranscriptionManager {
                     );
 
                     // Clear the model ID so it will be reloaded on next attempt
-                    {
+                    let clear = || {
                         let mut current_model = self
                             .current_model_id
                             .lock()
                             .unwrap_or_else(|e| e.into_inner());
                         *current_model = None;
-                    }
+                        drop(current_model);
 
-                    let _ = self.app_handle.emit(
-                        "model-state-changed",
-                        ModelStateEvent {
-                            event_type: "unloaded".to_string(),
-                            model_id: None,
-                            model_name: None,
-                            error: Some(format!("Engine panicked: {}", panic_msg)),
-                        },
-                    );
+                        let _ = self.app_handle.emit(
+                            "model-state-changed",
+                            ModelStateEvent {
+                                event_type: "unloaded".to_string(),
+                                model_id: None,
+                                model_name: None,
+                                error: Some(format!("Engine panicked: {}", panic_msg)),
+                            },
+                        );
+                    };
+                    if let Some(owner) = &owner {
+                        owner.run(clear);
+                    } else {
+                        clear();
+                    }
 
                     return Err(anyhow::anyhow!(
                         "Transcription engine panicked: {}. The model has been unloaded and will reload on next attempt.",
@@ -1530,8 +1575,6 @@ impl TranscriptionManager {
                 crate::utils::redact_text(&final_result)
             );
         }
-
-        self.maybe_unload_immediately("transcription");
 
         Ok(final_result)
     }

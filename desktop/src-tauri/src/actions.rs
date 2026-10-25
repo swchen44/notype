@@ -15,7 +15,9 @@ use log::{debug, warn};
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+#[cfg(debug_assertions)]
+use std::time::Duration;
+use std::time::Instant;
 use tauri::Manager;
 use tauri::{AppHandle, Emitter};
 
@@ -27,20 +29,28 @@ struct RecordingErrorEvent {
 
 /// Drop guard that finishes the transcription pipeline, including immediate
 /// model unloading on early exits.
-struct FinishGuard(AppHandle, Arc<TranscriptionManager>);
+struct FinishGuard {
+    app: AppHandle,
+    owner: crate::workflow::GenerationToken,
+    _cleanup: crate::workflow::GenerationCleanup,
+}
+/// Ownership is rechecked when the queued UI operation actually executes.
+pub(crate) fn generation_ui(
+    app: &AppHandle,
+    owner: crate::workflow::GenerationToken,
+    operation: impl FnOnce(&AppHandle) + Send + 'static,
+) {
+    let handle = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        owner.run(|| operation(&handle));
+    });
+}
 impl Drop for FinishGuard {
     fn drop(&mut self) {
-        shortcut::unregister_cancel_shortcut(&self.0);
-        utils::hide_recording_overlay(&self.0);
-        set_tray_state(&self.0, TrayIconState::Idle);
-        self.1.maybe_unload_immediately("transcription session");
-        if let Some(c) = self.0.try_state::<TranscriptionCoordinator>() {
-            c.notify_processing_finished();
-        }
-        crate::physical_shortcuts::processing_finished(&self.0);
-        // Release transient PCM and engine scratch pages back to the OS so
-        // they don't sit in malloc arenas until they get swapped out (#1792).
-        crate::memory::trim_freed_memory();
+        generation_ui(&self.app, self.owner.clone(), |app| {
+            utils::hide_recording_overlay(app);
+            set_tray_state(app, TrayIconState::Idle);
+        });
     }
 }
 
@@ -95,13 +105,20 @@ impl ShortcutAction for TranscribeAction {
             "ask" => notype_core::Scenario::Ask,
             _ => notype_core::Scenario::Dictation,
         };
-        if let Err(code) = crate::commands::history::begin_captured_scenario(app, scenario) {
-            let _ = app.emit("session-error", code);
-            return;
-        }
+        let generation = match crate::commands::history::begin_captured_scenario(app, scenario) {
+            Ok(generation) => generation,
+            Err(code) => {
+                let _ = app.emit("session-error", code);
+                return;
+            }
+        };
+        let workflow = app.state::<Arc<crate::workflow::DesktopWorkflow>>();
+        let owner = workflow.token(generation);
         let binding_id = binding_id.to_string();
         let tray_started = Instant::now();
-        set_tray_state(app, TrayIconState::Recording);
+        generation_ui(app, owner.clone(), |app| {
+            set_tray_state(app, TrayIconState::Recording)
+        });
         let tray_elapsed = tray_started.elapsed();
 
         // Get the microphone mode to determine audio feedback timing
@@ -128,16 +145,8 @@ impl ShortcutAction for TranscribeAction {
             VadPolicy::Offline
         };
         if model_supports_streaming {
-            if let Ok(Some(generation)) = app
-                .state::<Arc<crate::workflow::DesktopWorkflow>>()
-                .active_generation()
-            {
-                if let Ok(profile) = app
-                    .state::<Arc<crate::workflow::DesktopWorkflow>>()
-                    .recognition_profile(generation)
-                {
-                    tm.start_stream_with_profile(profile);
-                }
+            if let Ok(profile) = workflow.recognition_profile(generation) {
+                owner.run(|| tm.start_stream_with_profile(profile, owner.clone()));
             }
         }
         let plan_elapsed = plan_started.elapsed();
@@ -146,11 +155,15 @@ impl ShortcutAction for TranscribeAction {
         // doesn't stream (or whose capability is not known yet) gets the compact
         // pill instead of an oversized transparent live window.
         let overlay_started = Instant::now();
-        match settings.overlay_style {
-            OverlayStyle::Live if model_supports_streaming => utils::show_streaming_overlay(app),
-            OverlayStyle::Live | OverlayStyle::Minimal => show_recording_overlay(app),
-            OverlayStyle::None => {} // show_overlay_state no-ops on None anyway
-        }
+        generation_ui(app, owner.clone(), move |app| {
+            match settings.overlay_style {
+                OverlayStyle::Live if model_supports_streaming => {
+                    utils::show_streaming_overlay(app)
+                }
+                OverlayStyle::Live | OverlayStyle::Minimal => show_recording_overlay(app),
+                OverlayStyle::None => {} // show_overlay_state no-ops on None anyway
+            }
+        });
         // Everything above runs before capture can begin, so each span here is
         // added keypress->capture latency.
         debug!(
@@ -164,7 +177,10 @@ impl ShortcutAction for TranscribeAction {
 
         let mut recording_error: Option<String> = None;
         let recording_start_time = Instant::now();
-        match rm.try_start_recording(&binding_id, vad_policy) {
+        let Some(started) = owner.run(|| rm.try_start_recording(&binding_id, vad_policy)) else {
+            return;
+        };
+        match started {
             Ok(readiness) => {
                 debug!(
                     "Recording request accepted in {:?}; waiting for first microphone samples",
@@ -173,6 +189,7 @@ impl ShortcutAction for TranscribeAction {
                 let generation = readiness.generation();
                 let app_clone = app.clone();
                 let rm_clone = Arc::clone(&rm);
+                let ready_owner = owner.clone();
                 std::thread::spawn(move || {
                     if !readiness.wait() {
                         debug!("Microphone readiness wait ended without receiving samples");
@@ -200,17 +217,18 @@ impl ShortcutAction for TranscribeAction {
                     }
 
                     debug!("Microphone is receiving samples; recording is ready");
-                    utils::emit_recording_ready(&app_clone);
+                    ready_owner.run(|| utils::emit_recording_ready(&app_clone));
 
                     // The start chime is a readiness cue, so it must follow the
                     // first real input callback rather than Stream::play() or a
                     // fixed delay. The helper returns immediately when feedback
                     // is disabled; mute still follows the same readiness point.
                     if rm_clone.is_recording_readiness_current(generation) {
-                        play_feedback_sound_blocking(&app_clone, SoundType::Start);
+                        ready_owner
+                            .run(|| play_feedback_sound_blocking(&app_clone, SoundType::Start));
                     }
                     if rm_clone.is_recording_readiness_current(generation) {
-                        rm_clone.apply_mute();
+                        ready_owner.run(|| rm_clone.apply_mute());
                     }
                 });
             }
@@ -222,16 +240,16 @@ impl ShortcutAction for TranscribeAction {
 
         if recording_error.is_none() {
             // Dynamically register the cancel shortcut in a separate task to avoid deadlock
-            shortcut::register_cancel_shortcut(app);
+            owner.run(|| shortcut::register_cancel_shortcut(app));
         } else {
-            let _ = app
-                .state::<Arc<crate::workflow::DesktopWorkflow>>()
-                .cancel_active();
+            let _ = owner.cancel();
             // Starting failed (for example due to blocked microphone permissions).
             // Revert UI state so we don't stay stuck in the recording overlay.
-            tm.cancel_stream();
-            utils::hide_recording_overlay(app);
-            set_tray_state(app, TrayIconState::Idle);
+            owner.run(|| tm.cancel_stream());
+            generation_ui(app, owner.clone(), |app| {
+                utils::hide_recording_overlay(app);
+                set_tray_state(app, TrayIconState::Idle);
+            });
             if let Some(err) = recording_error {
                 let error_type = if is_microphone_access_denied(&err) {
                     "microphone_permission_denied"
@@ -250,7 +268,7 @@ impl ShortcutAction for TranscribeAction {
             }
         }
 
-        crate::physical_shortcuts::processing_finished(app);
+        owner.run(|| crate::physical_shortcuts::processing_finished(app));
         debug!(
             "TranscribeAction::start completed in {:?}",
             start_time.elapsed()
@@ -258,96 +276,140 @@ impl ShortcutAction for TranscribeAction {
     }
 
     fn stop(&self, app: &AppHandle, binding_id: &str, _shortcut_str: &str) {
-        crate::physical_shortcuts::processing_started();
         let ah = app.clone();
         let rm = Arc::clone(&app.state::<Arc<AudioRecordingManager>>());
         let tm = Arc::clone(&app.state::<Arc<TranscriptionManager>>());
         let workflow = Arc::clone(&app.state::<Arc<crate::workflow::DesktopWorkflow>>());
-        rm.invalidate_recording_readiness();
         let Some(generation) = workflow.active_generation().ok().flatten() else {
-            tm.cancel_stream();
             return;
         };
+        let owner = workflow.token(generation);
         let Ok(profile) = workflow.recognition_profile(generation) else {
             return;
         };
-        set_tray_state(app, TrayIconState::Transcribing);
         let streaming =
             should_use_streaming_overlay(get_settings(app).overlay_style, tm.is_streaming());
-        if streaming {
-            tm.emit_stream_working(StreamWorkKind::Transcribing);
-        } else {
-            show_transcribing_overlay(app);
-        }
-        rm.remove_mute();
-        play_feedback_sound(app, SoundType::Stop);
+        let Some(cancel_generation) = owner.run(|| {
+            crate::physical_shortcuts::processing_started();
+            rm.invalidate_recording_readiness();
+            rm.remove_mute();
+            play_feedback_sound(app, SoundType::Stop);
+            rm.cancel_generation()
+        }) else {
+            return;
+        };
+        generation_ui(app, owner.clone(), move |app| {
+            set_tray_state(app, TrayIconState::Transcribing);
+            if streaming {
+                app.state::<Arc<TranscriptionManager>>()
+                    .emit_stream_working(StreamWorkKind::Transcribing);
+            } else {
+                show_transcribing_overlay(app);
+            }
+        });
         let binding_id = binding_id.to_string();
-        let cancel_generation = rm.cancel_generation();
         // Esc remains registered through STT and HTTP, until FinishGuard drops.
         tauri::async_runtime::spawn(async move {
-            let _guard = FinishGuard(ah.clone(), Arc::clone(&tm));
-            let Some(samples) = rm.stop_recording(&binding_id, cancel_generation) else {
-                tm.cancel_stream();
-                let _ = workflow.cancel_active();
+            let cleanup_app = ah.clone();
+            let cleanup_tm = Arc::clone(&tm);
+            let cleanup_owner = owner.clone();
+            let _guard = FinishGuard {
+                app: ah.clone(),
+                owner: owner.clone(),
+                _cleanup: owner.cleanup(move || {
+                    shortcut::unregister_cancel_shortcut(&cleanup_app);
+                    cleanup_tm.maybe_unload_immediately("transcription session");
+                    if let Some(c) = cleanup_app.try_state::<TranscriptionCoordinator>() {
+                        c.notify_processing_finished(cleanup_owner);
+                    }
+                    crate::physical_shortcuts::processing_finished(&cleanup_app);
+                    crate::memory::trim_freed_memory();
+                }),
+            };
+            let Some(samples) = rm.stop_recording(&binding_id, cancel_generation, &owner) else {
+                owner.run(|| tm.cancel_stream());
+                let _ = owner.cancel();
                 return;
             };
             if rm.was_cancelled_since(cancel_generation) {
-                tm.cancel_stream();
-                let _ = workflow.cancel_active();
+                owner.run(|| tm.cancel_stream());
+                let _ = owner.cancel();
                 return;
             }
             if samples.is_empty() {
-                tm.cancel_stream();
-                let _ = workflow.cancel_active();
-                let _ = ah.emit("session-error", "no-speech");
+                owner.run(|| {
+                    tm.cancel_stream();
+                    let _ = ah.emit("session-error", "no-speech");
+                });
+                let _ = owner.cancel();
                 return;
             }
             // PCM belongs only to this attempt. No persistent WAV or audio gate.
             let transcriber = Arc::clone(&tm);
-            let transcription = tauri::async_runtime::spawn_blocking(move || {
-                match transcriber.finalize_stream_raw() {
+            // Detach this stream under the owner gate; the background wait can
+            // never take a newer recording's global stream route.
+            let Some(finalization) = owner.run(|| tm.take_stream_finalization()) else {
+                return;
+            };
+            let decoder_owner = owner.clone();
+            let transcription =
+                tauri::async_runtime::spawn_blocking(move || match finalization.wait() {
                     Ok(Some(text)) if !text.trim().is_empty() => Ok(text),
-                    Ok(_) => transcriber.transcribe_raw_with_profile(samples, &profile),
+                    Ok(_) => {
+                        transcriber.transcribe_for_generation(samples, &profile, decoder_owner)
+                    }
                     Err(error) => Err(error),
-                }
-            })
-            .await;
+                })
+                .await;
             if rm.was_cancelled_since(cancel_generation) {
-                let _ = workflow.cancel_active();
+                let _ = owner.cancel();
                 return;
             }
             match transcription {
                 Ok(Ok(text)) if !text.trim().is_empty() => {
-                    if streaming {
-                        tm.emit_stream_working(StreamWorkKind::Polishing);
-                    } else {
-                        show_processing_overlay(&ah);
-                    }
+                    generation_ui(&ah, owner.clone(), move |app| {
+                        if streaming {
+                            app.state::<Arc<TranscriptionManager>>()
+                                .emit_stream_working(StreamWorkKind::Polishing);
+                        } else {
+                            show_processing_overlay(app);
+                        }
+                    });
                     match crate::commands::history::finish_recognized(&ah, generation, &text).await
                     {
                         Ok(entry) => {
-                            let _ = ah.emit(
-                                "session-outcome",
-                                serde_json::json!({"status":entry.status,"error":entry.error}),
-                            );
+                            owner.run(|| {
+                                let _ = ah.emit(
+                                    "session-outcome",
+                                    serde_json::json!({"status":entry.status,"error":entry.error}),
+                                );
+                            });
                         }
                         Err(error) if !rm.was_cancelled_since(cancel_generation) => {
-                            let _ = ah.emit("session-error", error);
+                            owner.run(|| {
+                                let _ = ah.emit("session-error", error);
+                            });
                         }
                         Err(_) => {}
                     }
                 }
                 Ok(Ok(_)) => {
-                    let _ = workflow.cancel_active();
-                    let _ = ah.emit("session-error", "no-speech");
+                    let _ = owner.cancel();
+                    owner.run(|| {
+                        let _ = ah.emit("session-error", "no-speech");
+                    });
                 }
                 Ok(Err(error)) if error.to_string() == "recognition-model-incompatible" => {
-                    let _ = workflow.cancel_active();
-                    let _ = ah.emit("session-error", "recognition-model-incompatible");
+                    let _ = owner.cancel();
+                    owner.run(|| {
+                        let _ = ah.emit("session-error", "recognition-model-incompatible");
+                    });
                 }
                 _ => {
-                    let _ = workflow.cancel_active();
-                    let _ = ah.emit("session-error", "transcription-failed");
+                    let _ = owner.cancel();
+                    owner.run(|| {
+                        let _ = ah.emit("session-error", "transcription-failed");
+                    });
                 }
             }
         });

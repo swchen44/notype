@@ -84,35 +84,39 @@ fn native_windows_machine() -> Option<u16> {
 /// Handles cancelling both recording and transcription operations and updates UI state.
 pub fn cancel_current_operation(app: &AppHandle) {
     info!("Initiating operation cancellation...");
-    if let Some(workflow) = app.try_state::<Arc<crate::workflow::DesktopWorkflow>>() {
-        if workflow.cancel_active().is_err() {
-            log::error!("session-cancellation-storage-failed");
+    let workflow = app.state::<Arc<crate::workflow::DesktopWorkflow>>();
+    let mut cancelled_owner = None;
+    let generation = workflow.cancel_active_with(|generation| {
+        cancelled_owner = Some(workflow.token(generation));
+        // Unregister the cancel shortcut asynchronously
+        shortcut::unregister_cancel_shortcut(app);
+
+        // Cancel any ongoing recording
+        let audio_manager = app.state::<Arc<AudioRecordingManager>>();
+        let recording_was_active = audio_manager.is_recording();
+        audio_manager.cancel_recording();
+
+        // Abandon any live streaming transcription
+        let tm = app.state::<Arc<TranscriptionManager>>();
+        tm.cancel_stream();
+        crate::physical_shortcuts::processing_finished(app);
+
+        // Unload model if immediate unload is enabled
+        tm.maybe_unload_immediately("cancellation");
+
+        // Notify coordinator so it can keep lifecycle state coherent.
+        if let Some(coordinator) = app.try_state::<TranscriptionCoordinator>() {
+            coordinator.notify_cancel(recording_was_active, workflow.token(generation));
         }
+    });
+    if let Some(owner) = cancelled_owner {
+        crate::actions::generation_ui(app, owner, |app| {
+            set_tray_state(app, crate::tray::TrayIconState::Idle);
+            hide_recording_overlay(app);
+        });
     }
-
-    // Unregister the cancel shortcut asynchronously
-    shortcut::unregister_cancel_shortcut(app);
-
-    // Cancel any ongoing recording
-    let audio_manager = app.state::<Arc<AudioRecordingManager>>();
-    let recording_was_active = audio_manager.is_recording();
-    audio_manager.cancel_recording();
-
-    // Abandon any live streaming transcription
-    let tm = app.state::<Arc<TranscriptionManager>>();
-    tm.cancel_stream();
-    crate::physical_shortcuts::processing_finished(app);
-
-    // Update tray icon and hide overlay
-    set_tray_state(app, crate::tray::TrayIconState::Idle);
-    hide_recording_overlay(app);
-
-    // Unload model if immediate unload is enabled
-    tm.maybe_unload_immediately("cancellation");
-
-    // Notify coordinator so it can keep lifecycle state coherent.
-    if let Some(coordinator) = app.try_state::<TranscriptionCoordinator>() {
-        coordinator.notify_cancel(recording_was_active);
+    if generation.is_err() {
+        log::error!("session-cancellation-storage-failed");
     }
 
     info!("Operation cancellation completed - returned to idle state");

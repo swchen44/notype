@@ -5,6 +5,131 @@ use std::sync::Arc;
 use workflow::{DesktopWorkflow, TextConfiguration};
 
 #[tokio::test]
+async fn esc_then_new_recording_survives_old_stop_and_decoder_cleanup_and_saves_original() {
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Mutex,
+    };
+    for old_stop_already_ran in [false, true] {
+        let workflow = Arc::new(DesktopWorkflow::new(
+            SessionService::in_memory().unwrap(),
+            Arc::new(|| {}),
+        ));
+        let old = workflow
+            .begin(RecognitionMode::TraditionalEnglish, None)
+            .unwrap();
+        let owner = workflow.token(old);
+        let queued_ui_owner = owner.clone();
+        let ui = Arc::new(Mutex::new("recording A"));
+        let cleanup_count = Arc::new(AtomicUsize::new(0));
+        let stop_count = Arc::new(AtomicUsize::new(0));
+        let commit_count = Arc::new(AtomicUsize::new(0));
+        let (release, gate) = tokio::sync::oneshot::channel();
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let task = {
+            let ui = ui.clone();
+            let cleanup_count = cleanup_count.clone();
+            let stop_count = stop_count.clone();
+            let commit_count = commit_count.clone();
+            tokio::spawn(async move {
+                let _guard = owner.cleanup(move || {
+                    *ui.lock().unwrap() = "idle / engine unloaded / cancel removed";
+                    cleanup_count.fetch_add(1, Ordering::SeqCst);
+                });
+                if old_stop_already_ran {
+                    owner.run(|| {
+                        stop_count.fetch_add(1, Ordering::SeqCst);
+                    });
+                }
+                ready_tx.send(()).unwrap();
+                gate.await.unwrap();
+                if !old_stop_already_ran {
+                    owner.run(|| {
+                        stop_count.fetch_add(1, Ordering::SeqCst);
+                    });
+                }
+                // A delayed stop commit (including an extra-buffer wait) must
+                // revalidate ownership before draining or closing any recorder.
+                owner.run(|| {
+                    commit_count.fetch_add(1, Ordering::SeqCst);
+                });
+                // Actual native late-decoder cancellation uses this public owner.
+                owner.cancel().unwrap();
+            })
+        };
+        ready_rx.await.unwrap();
+        workflow.cancel_active().unwrap(); // Esc A; no need to await the uncancellable decoder.
+        let current = workflow
+            .begin(RecognitionMode::TraditionalEnglish, None)
+            .unwrap();
+        *ui.lock().unwrap() = "recording B / engine retained / cancel installed";
+        release.send(()).unwrap();
+        task.await.unwrap();
+        queued_ui_owner.run(|| {
+            *ui.lock().unwrap() = "stale queued overlay hide";
+        });
+        assert_eq!(workflow.active_generation().unwrap(), Some(current));
+        assert_eq!(
+            *ui.lock().unwrap(),
+            "recording B / engine retained / cancel installed"
+        );
+        assert_eq!(cleanup_count.load(Ordering::SeqCst), 0);
+        assert_eq!(commit_count.load(Ordering::SeqCst), 0);
+        assert_eq!(
+            stop_count.load(Ordering::SeqCst),
+            usize::from(old_stop_already_ran)
+        );
+        let entry = workflow
+            .finish(current, "保留B的录音", TextConfiguration::default(), vec![])
+            .await
+            .unwrap();
+        assert_eq!(
+            workflow.sessions().get(&entry.id).unwrap().transcript,
+            "保留B的錄音"
+        );
+        let cleanup_b = Arc::new(AtomicUsize::new(0));
+        let completed = cleanup_b.clone();
+        let guard_b = workflow.token(current).cleanup(move || {
+            completed.fetch_add(1, Ordering::SeqCst);
+        });
+        drop(guard_b);
+        assert_eq!(
+            cleanup_b.load(Ordering::SeqCst),
+            1,
+            "B's own cleanup still runs exactly once"
+        );
+    }
+}
+
+#[tokio::test]
+async fn original_history_preserves_unquoted_paths_while_converting_adjacent_prose() {
+    for (mode, raw, expected) in [
+        (
+            RecognitionMode::TraditionalEnglish,
+            r"请打开\\server\头发\log.txt，然后发展。 /tmp/头发/log.txt； ./头发/log.txt ../头发/log.txt 头发/log.txt 头发\log.txt",
+            r"請打開\\server\头发\log.txt，然後發展。 /tmp/头发/log.txt； ./头发/log.txt ../头发/log.txt 头发/log.txt 头发\log.txt",
+        ),
+        (
+            RecognitionMode::SimplifiedEnglish,
+            r"請打開\\server\頭髮\log.txt，然後發展。 /tmp/頭髮/log.txt； ./頭髮/log.txt ../頭髮/log.txt 頭髮/log.txt 頭髮\log.txt",
+            r"请打开\\server\頭髮\log.txt，然后发展。 /tmp/頭髮/log.txt； ./頭髮/log.txt ../頭髮/log.txt 頭髮/log.txt 頭髮\log.txt",
+        ),
+    ] {
+        let workflow = DesktopWorkflow::new(SessionService::in_memory().unwrap(), Arc::new(|| {}));
+        let generation = workflow.begin(mode, None).unwrap();
+        let entry = workflow
+            .finish(generation, raw, TextConfiguration::default(), vec![])
+            .await
+            .unwrap();
+        assert_eq!(entry.transcript, expected);
+        assert_eq!(
+            workflow.sessions().get(&entry.id).unwrap().transcript,
+            expected
+        );
+    }
+}
+
+#[tokio::test]
 async fn captured_target_delivery_uses_one_adapter_and_never_retries_uncertain_write() {
     use notype_core::{
         DeliveryAdapter, DeliveryFuture, DeliveryOutcome, DeliveryRequest, SessionOptions,

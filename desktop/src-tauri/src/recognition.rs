@@ -63,6 +63,16 @@ fn normalize_transcript(
         .find_iter(raw)
         .map(|m| (m.start(), m.end()))
         .collect();
+    static PATHS: OnceLock<Regex> = OnceLock::new();
+    let paths = PATHS.get_or_init(|| Regex::new(
+        r###"(?P<absolute>\\\\[^\s"`，。！？；]+|(?:/|~/|\.{1,2}[\\/])[^\s"`，。！？；]+)|(?:\A|[\s(\[{:：])(?P<relative>(?:[\p{L}\p{N}_.-]+[\\/])+[\p{L}\p{N}_.-]+)"###,
+    ).expect("static path expression"));
+    spans.extend(paths.captures_iter(raw).filter_map(|capture| {
+        capture
+            .name("absolute")
+            .or_else(|| capture.name("relative"))
+            .map(|path| (path.start(), path.end()))
+    }));
     for term in protected_terms.iter().filter(|term| !term.is_empty()) {
         spans.extend(
             raw.match_indices(term)
