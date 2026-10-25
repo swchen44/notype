@@ -2,7 +2,7 @@
 
 日期：2026-10-25。固定比較起點 `be6f0a596a9bac16ae6e9d5d35d4ac991c3fd369`，審查整合點 `37f5bdae8cbd8974ae99fb837908716ef9bbad24`。兩個獨立 reviewer 同時檢查 Standards 與 Spec，未互讀對方結果，也未執行 App、Cargo 或修改程式。這次審查涵蓋使用者已確認的本機錄音／辨識／歷史／複製里程碑；公司 API／Proxy、其他 App 自動輸入、公開發布、人聲品質與完整 p95 明確留待後續。
 
-以下保留原審查結果。**修正正在獨立 worktree 進行，尚未列為全部解決。** 完整套件／離線啟動／升級資料保留結果另列 artifact receipt，不從 source review 推定通過。
+以下保留原審查結果；當時修正尚未完成。最終修正與獨立複審結果追加於文末。完整套件／離線啟動／升級資料保留結果另列 artifact receipt，不從 source review 推定通過。
 
 ## Standards
 
@@ -29,3 +29,32 @@ Four findings: three documented-rule findings and one heuristic judgment. No bui
 Reviewed pinned head `37f5bda` against `be6f0a5`; static source review only. No apps, builds, tests or native caches were changed. Artifact/cold-launch/upgrade proof remains in progress; company API, five-app insertion, human quality, p95 and public release remain explicitly deferred. No additional scope creep identified.
 
 Standards：4 項（3 項文件規則、1 項啟發式判斷），主要使用者影響為複製失敗未顯示提示。Spec：3 項，最嚴重為已取消的舊辨識任務可能取消新錄音。兩軸結果分開回報；後續修正／重新檢查會補上實際 commit 與測試。
+
+## 修正與最終獨立複審
+
+同一個 `ticket/local-review-fixes` 分支完成修正：`06c7e04` 處理原始七項 findings，`dd40397c4b44d6ccda5b16cc23ce50457b0cc373` 處理後續複審發現的兩項行為問題與兩項 Standards 殘留。分支已包含整合點 `fca6a65d206166a6db446840b6c102d21e2e1043`；以 no-ff 合入 `8c5fb86b81867c889fe6571f09fe39e401b1568b`。逐項對照、RED 證據與命令見 [修正紀錄](local-review-fixes.md)。
+
+原始取消競態改以 generation owner 隔離音訊、辨識、UI 與清理；native 資料位置政策涵蓋 sibling npm roles；字形轉換保護 UNC／POSIX／相對路徑。複製失敗顯示既有翻譯提示、公開生命週期介面補上文件、產品回歸移至根目錄測試邊界，快捷鍵預設值由共同定義提供。
+
+對 `e3e27468883dbc55236145e9daf0210b4c120e75` 的後續檢查另發現：slash prose 被過度視為路徑，以及開始音效持有 ownership lock 而阻塞取消；Standards 則仍缺 coordinator 通知文件，且 tray 私有 helper 有測試耦合。最終修正讓普通 slash prose 正常轉換、保留真正路徑；播放音效移至 lock 外，之後再檢查 owner／readiness 才能靜音；補齊通知與 readiness 介面文件，移除私有 helper 測試，以公開 session 選擇／恢復測試覆蓋行為。原始與後續失敗證據均保留，沒有改寫為一次全綠。
+
+兩位獨立 reviewer 在乾淨的固定 HEAD `dd40397c4b44d6ccda5b16cc23ce50457b0cc373` 完成最後限定範圍的唯讀複審，未執行測試、App 或 Cargo：
+
+| 審查軸 | 最終結果 |
+| --- | --- |
+| Standards | 兩項後續殘留已解決；此前原始修正結論維持。**0 項剩餘文件規則 findings、0 項可執行的啟發式 findings** |
+| Spec | slash prose 與播放阻塞取消兩項已解決；此前原始修正結論維持。**0 項剩餘 findings／blockers（限本次複審範圍）** |
+
+獨立報告保存在 repo 外的 `agent-notes/review-standards-final.md` 與 `agent-notes/review-spec-final.md`。這是原始及後續 findings 的結案判斷，不擴張為未執行的 runtime／artifact 驗收。
+
+實際執行者測試結果分開記錄：
+
+| 驗證 | 結果與適用範圍 |
+| --- | --- |
+| 最終四個 desktop Release 契約 targets | **33 passed，0 failed／ignored**：14 workflow、12 provider、6 gestures、1 native token；包含 slash prose 及播放期間 stop／Esc→B 回歸 |
+| 最終公開 core-session target | **9 passed，0 failed／ignored**；涵蓋結果交付、明確選擇原稿與缺少結果後的恢復，未操作 clipboard |
+| 前段 native platform target | **4 passed**；沒有在只涉及後續修正時重跑 |
+| 前段 native Release tray filter | **7 passed，250 filtered** 為歷史結果；移除兩個私有 helper 測試後沒有重跑該 filter，現在剩五項，不宣稱最新七項通過 |
+| 前端與格式 | 初次修正的 ESLint、TypeScript／Vite（2031 modules）、變更檔案 Prettier 通過；後續沒有前端變更。最終變更 Rustfmt／diff check 通過 |
+
+Merger 僅驗證固定 SHA、乾淨狀態、祖先關係與合併 diff check；未重跑上述測試、原生建置、C++ 或 App，避免與 #14 的唯一建置 target 衝突。最終 App／helper relink、完整套件、離線冷啟動、模型與歷史升級保留仍由 artifact 驗證接續。公司 API／Proxy、其他 App 自動輸入、公開發布、人聲品質與完整 p95 仍屬後續範圍；此次沒有關閉 GitHub Issues 或建立 PR。
