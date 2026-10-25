@@ -1,3 +1,4 @@
+use crate::audio_toolkit::audio::CapturedAudio;
 use crate::audio_toolkit::{
     list_input_devices,
     vad::{
@@ -233,8 +234,6 @@ fn restore_mute(prev_muted: Option<bool>) {
         set_mute(false);
     }
 }
-
-const WHISPER_SAMPLE_RATE: usize = 16000;
 
 /* ──────────────────────────────────────────────────────────────── */
 
@@ -1004,7 +1003,7 @@ impl AudioRecordingManager {
         binding_id: &str,
         cancel_generation: u64,
         owner: &crate::workflow::GenerationToken,
-    ) -> Option<Vec<f32>> {
+    ) -> Option<CapturedAudio> {
         let claimed = owner.run(|| {
             let mut state = self.state.lock().unwrap();
             if self.was_cancelled_since(cancel_generation) {
@@ -1058,16 +1057,22 @@ impl AudioRecordingManager {
                     return None;
                 }
                 let samples = if let Some(rec) = self.recorder.lock().unwrap().as_ref() {
-                    match rec.stop() {
+                    match rec.stop_observed() {
                         Ok(buf) => buf,
                         Err(e) => {
                             error!("stop() failed: {e}");
-                            Vec::new()
+                            CapturedAudio {
+                                samples: Vec::new(),
+                                observation: None,
+                            }
                         }
                     }
                 } else {
                     error!("Recorder not available");
-                    Vec::new()
+                    CapturedAudio {
+                        samples: Vec::new(),
+                        observation: None,
+                    }
                 };
 
                 *self.is_recording.lock().unwrap() = false;
@@ -1087,16 +1092,8 @@ impl AudioRecordingManager {
                     return None;
                 }
 
-                // Pad if very short
-                let s_len = samples.len();
-                // debug!("Got {} samples", s_len);
-                if s_len < WHISPER_SAMPLE_RATE && s_len > 0 {
-                    let mut padded = samples;
-                    padded.resize(WHISPER_SAMPLE_RATE * 5 / 4, 0.0);
-                    Some(padded)
-                } else {
-                    Some(samples)
-                }
+                // Preserve the observation while retaining existing decoder-only padding.
+                Some(samples.with_decoder_padding())
             })
             .flatten()
     }

@@ -8,6 +8,28 @@ use std::{
     time::{Duration, Instant},
 };
 
+use notype_core::observations::RecordingObservation;
+
+/// Decoder PCM and native-rate received-frame observation from the same capture.
+/// Padding/VAD affect only samples; duration never derives from this vector.
+pub struct CapturedAudio {
+    /// Existing 16 kHz VAD-filtered decoder input.
+    pub samples: Vec<f32>,
+    /// Unknown when the recorder could not prove a capture result.
+    pub observation: Option<RecordingObservation>,
+}
+
+impl CapturedAudio {
+    /// Retain existing short-input silence padding solely in the decoder PCM.
+    pub fn with_decoder_padding(mut self) -> Self {
+        let rate = constants::WHISPER_SAMPLE_RATE as usize;
+        if !self.samples.is_empty() && self.samples.len() < rate {
+            self.samples.resize(rate * 5 / 4, 0.0);
+        }
+        self
+    }
+}
+
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
     Device, Sample, SizedSample,
@@ -25,7 +47,7 @@ enum Cmd {
     /// Begin capturing. Carries the send timestamp so the consumer can log how
     /// long the command sat in the channel, plus a one-shot first-sample acknowledgement.
     Start(VadPolicy, Instant, ReadySignal),
-    Stop(mpsc::Sender<Vec<f32>>),
+    Stop(mpsc::Sender<CapturedAudio>),
     Shutdown,
 }
 
@@ -412,6 +434,11 @@ impl AudioRecorder {
     }
 
     pub fn stop(&self) -> Result<Vec<f32>, Box<dyn std::error::Error>> {
+        self.stop_observed().map(|capture| capture.samples)
+    }
+
+    /// Stop using the existing handshake and preserve pre-transform audio provenance.
+    pub fn stop_observed(&self) -> Result<CapturedAudio, Box<dyn std::error::Error>> {
         let tx = self
             .cmd_tx
             .as_ref()
@@ -737,6 +764,7 @@ struct CaptureProcessor {
     awaiting_first_captured_chunk: Option<Instant>,
     capture_ready_tx: Option<ReadySignal>,
     total_dropped_samples: u64,
+    received_frames: u64,
     overrun_warning_logged: bool,
 }
 
@@ -788,6 +816,7 @@ impl CaptureProcessor {
             awaiting_first_captured_chunk: None,
             capture_ready_tx: None,
             total_dropped_samples: 0,
+            received_frames: 0,
             overrun_warning_logged: false,
         }
     }
@@ -802,6 +831,7 @@ impl CaptureProcessor {
         self.awaiting_first_captured_chunk = Some(Instant::now());
         self.capture_ready_tx = Some(ready_tx);
         self.total_dropped_samples = 0;
+        self.received_frames = 0;
         self.overrun_warning_logged = false;
         self.vad_policy = policy;
         self.processed_samples.clear();
@@ -847,6 +877,7 @@ impl CaptureProcessor {
             return;
         }
 
+        self.received_frames = self.received_frames.saturating_add(raw.len() as u64);
         let mut signal = self.capture_ready_tx.take();
         process_captured_chunk(&mut signal, raw, |raw| {
             if let Some(buckets) = self.visualizer.feed(raw) {
@@ -1020,7 +1051,20 @@ fn run_consumer(
                         // Include drops that raced with the pause request.
                         processor
                             .observe_overrun(transport.overrun_samples.swap(0, Ordering::AcqRel));
-                        let samples = processor.finish_recording();
+                        let observation = RecordingObservation::new(
+                            processor.received_frames,
+                            processor.in_sample_rate,
+                            if pause_timed_out || stream_error.load(Ordering::Acquire) {
+                                None
+                            } else {
+                                Some(processor.total_dropped_samples)
+                            },
+                        )
+                        .ok();
+                        let samples = CapturedAudio {
+                            samples: processor.finish_recording(),
+                            observation,
+                        };
                         if !pause_timed_out {
                             // Resume before stop() returns so an immediate recording
                             // cannot lose its first callback to this pause request.
@@ -1070,3 +1114,7 @@ fn run_consumer(
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+#[path = "../../../../../tests/unittest/recording_metrics.rs"]
+mod recording_metrics_tests;

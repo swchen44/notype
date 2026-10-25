@@ -839,6 +839,7 @@ pub fn run(cli_args: CliArgs) {
             commands::transcription::get_model_load_status,
             commands::transcription::unload_model_manually,
             commands::history::get_history_entries,
+            commands::history::export_history_csv,
             commands::history::get_text_configuration,
             commands::history::set_text_configuration,
             commands::history::save_scenario_prompt,

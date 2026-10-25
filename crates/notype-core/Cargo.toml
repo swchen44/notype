@@ -36,6 +36,14 @@ path = "../../tests/integration/core_http.rs"
 name = "core-review"
 path = "../../tests/integration/core_review.rs"
 
+[[test]]
+name = "core-observations"
+path = "../../tests/unittest/core_observations.rs"
+
+[[test]]
+name = "core-observation-store"
+path = "../../tests/integration/core_observations.rs"
+
 [profile.dev]
 debug = 0
 incremental = false

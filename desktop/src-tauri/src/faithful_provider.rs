@@ -1,4 +1,8 @@
 //! Explicit OpenAI-compatible chat transport, not a company API assertion.
+use notype_core::observations::{
+    ApiCallDescriptor, ApiCallGuard, ApiCallObserver, ApiOutcome, ApiProviderProfile, ApiPurpose,
+    ApiReceipt,
+};
 use notype_core::{
     BackTranslationRequest, CancellationToken, GenerationFuture, Scenario, TextFailure, TextFuture,
     TextOutput, TextProcessor, TextRequest,
@@ -25,6 +29,18 @@ pub enum TextAuthentication {
     Bearer,
 }
 
+/// Explicit option vocabulary. Generic never silently receives DeepSeek keys.
+#[derive(Clone, Copy, Default, Serialize, Deserialize, specta::Type, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TextProviderProfile {
+    /// Provider-default compatible fields; support is server-specific.
+    #[default]
+    Generic,
+    /// Documented DeepSeek thinking/effort/output-limit controls.
+    #[serde(rename = "deepseek")]
+    DeepSeek,
+}
+
 // Deliberately no Debug: configuration contains a locally stored credential.
 #[derive(Clone, Serialize, Deserialize, specta::Type)]
 #[serde(default)]
@@ -37,6 +53,12 @@ pub struct TextConfiguration {
     pub authentication: TextAuthentication,
     pub api_key: String,
     pub timeout_ms: u64,
+    /// Explicit option profile, independent of endpoint text/credential.
+    pub provider_profile: TextProviderProfile,
+    /// Omitted/provider-default or explicit bounded provider-supported effort.
+    pub effort: Option<String>,
+    /// Optional request output limit; None preserves provider default.
+    pub max_output_tokens: Option<u32>,
     pub prompts: ScenarioPrompts,
     pub translation: TranslationSettings,
 }
@@ -49,6 +71,9 @@ impl Default for TextConfiguration {
             authentication: TextAuthentication::Unspecified,
             api_key: String::new(),
             timeout_ms: 30_000,
+            provider_profile: TextProviderProfile::Generic,
+            effort: None,
+            max_output_tokens: None,
             prompts: ScenarioPrompts::default(),
             translation: TranslationSettings::default(),
         }
@@ -100,6 +125,24 @@ impl Default for TranslationSettings {
     }
 }
 impl TextConfiguration {
+    /// Validate explicit option spellings/bounds without a request or settings I/O.
+    pub fn options_valid(&self) -> bool {
+        let effort = self
+            .effort
+            .as_deref()
+            .is_none_or(|value| match self.provider_profile {
+                TextProviderProfile::Generic => notype_core::observations::valid_effort(value),
+                TextProviderProfile::DeepSeek => matches!(value, "none" | "low" | "high" | "max"),
+            });
+        let maximum = match self.provider_profile {
+            TextProviderProfile::Generic => 1_000_000,
+            TextProviderProfile::DeepSeek => 393_216,
+        };
+        effort
+            && self
+                .max_output_tokens
+                .is_none_or(|limit| (1..=maximum).contains(&limit))
+    }
     /// Return only the selected scenario's saved prompt.
     pub fn prompt(&self, scenario: Scenario) -> &str {
         match scenario {
@@ -204,12 +247,30 @@ fn messages(
 
 struct NotConfigured;
 impl TextProcessor for NotConfigured {
+    fn generate_observed(
+        &self,
+        request: TextRequest,
+        cancellation: CancellationToken,
+        _: Arc<dyn ApiCallObserver>,
+    ) -> GenerationFuture {
+        self.generate(request, cancellation)
+    }
+    fn back_translate_observed(
+        &self,
+        request: BackTranslationRequest,
+        cancellation: CancellationToken,
+        _: Arc<dyn ApiCallObserver>,
+    ) -> TextFuture {
+        self.back_translate(request, cancellation)
+    }
     fn polish(&self, _: TextRequest, _: CancellationToken) -> TextFuture {
         Box::pin(async { Err(TextFailure::ConfigurationRequired) })
     }
 }
 
-pub(super) fn processor(configuration: TextConfiguration) -> Arc<dyn TextProcessor> {
+/// Construct the actual configured transport for workflow or an owned observer wrapper.
+/// No request is sent until its returned processing future is polled.
+pub fn processor(configuration: TextConfiguration) -> Arc<dyn TextProcessor> {
     match ChatProcessor::new(configuration) {
         Ok(processor) => Arc::new(processor),
         Err(_) => Arc::new(NotConfigured),
@@ -231,11 +292,15 @@ struct ChatProcessor {
     deadline: Duration,
     prompts: ScenarioPrompts,
     translation: TranslationSettings,
+    provider_profile: TextProviderProfile,
+    effort: Option<String>,
+    max_output_tokens: Option<u32>,
 }
 impl ChatProcessor {
     fn new(configuration: TextConfiguration) -> Result<Self, TextFailure> {
         let invalid = TextFailure::ConfigurationRequired;
         if configuration.transport != TextTransport::OpenAiChat
+            || !configuration.options_valid()
             || configuration.authentication == TextAuthentication::Unspecified
             || configuration.model.trim().is_empty()
             || configuration.timeout_ms == 0
@@ -287,6 +352,9 @@ impl ChatProcessor {
             deadline,
             prompts: configuration.prompts,
             translation: configuration.translation,
+            provider_profile: configuration.provider_profile,
+            effort: configuration.effort,
+            max_output_tokens: configuration.max_output_tokens,
         })
     }
 }
@@ -300,6 +368,43 @@ fn failure(error: reqwest::Error) -> TextFailure {
 }
 impl TextProcessor for ChatProcessor {
     fn polish(&self, request: TextRequest, cancellation: CancellationToken) -> TextFuture {
+        let future = self.generate_inner(request, cancellation, None);
+        Box::pin(async move { future.await.map(|output| output.text) })
+    }
+    fn generate(&self, request: TextRequest, cancellation: CancellationToken) -> GenerationFuture {
+        self.generate_inner(request, cancellation, None)
+    }
+    fn generate_observed(
+        &self,
+        request: TextRequest,
+        cancellation: CancellationToken,
+        observer: Arc<dyn ApiCallObserver>,
+    ) -> GenerationFuture {
+        self.generate_inner(request, cancellation, Some(observer))
+    }
+    fn back_translate(
+        &self,
+        request: BackTranslationRequest,
+        cancellation: CancellationToken,
+    ) -> TextFuture {
+        self.back_inner(request, cancellation, None)
+    }
+    fn back_translate_observed(
+        &self,
+        request: BackTranslationRequest,
+        cancellation: CancellationToken,
+        observer: Arc<dyn ApiCallObserver>,
+    ) -> TextFuture {
+        self.back_inner(request, cancellation, Some(observer))
+    }
+}
+impl ChatProcessor {
+    fn generate_inner(
+        &self,
+        request: TextRequest,
+        cancellation: CancellationToken,
+        observer: Option<Arc<dyn ApiCallObserver>>,
+    ) -> GenerationFuture {
         let prompt = match request.scenario {
             Scenario::Dictation => self.prompts.dictation.clone(),
             Scenario::Translation => self.prompts.translation.clone(),
@@ -308,65 +413,25 @@ impl TextProcessor for ChatProcessor {
         if !valid_prompt(&prompt) {
             return Box::pin(async { Err(TextFailure::InvalidPrompt) });
         }
+        let envelope = request.back_translation;
+        let mut wire = messages(request, prompt, self.translation.clone());
+        if envelope {
+            wire.insert(2,Message{role:"system",content:"Transport requirement for the enabled independent back-translation review: in this SAME response identify the original source language and encode the selected prompt's translated output as a JSON object with exactly text (translated text string) and source_language (BCP-47 language tag, or null if unknown). For mixed input use its primary natural language, not code identifiers. This envelope is removed locally; the displayed and delivered text is only text. Do not guess unknown source language or add quality claims.".into()});
+        }
+
         self.send(
-            messages(request, prompt, self.translation.clone()),
+            wire,
             cancellation,
+            observer,
+            ApiPurpose::Generation,
+            envelope,
         )
     }
-    fn generate(&self, request: TextRequest, cancellation: CancellationToken) -> GenerationFuture {
-        if !request.back_translation {
-            let future = self.polish(request, cancellation);
-            return Box::pin(async move {
-                future.await.map(|text| TextOutput {
-                    text,
-                    source_language: None,
-                })
-            });
-        }
-        let prompt = self.prompts.translation.clone();
-        if !valid_prompt(&prompt) {
-            return Box::pin(async { Err(TextFailure::InvalidPrompt) });
-        }
-        let mut wire = messages(request, prompt, self.translation.clone());
-        // This is a transport envelope, not another writing preset or hidden example.
-        wire.insert(2,Message{role:"system",content:"Transport requirement for the enabled independent back-translation review: in this SAME response identify the original source language and encode the selected prompt's translated output as a JSON object with exactly text (translated text string) and source_language (BCP-47 language tag, or null if unknown). For mixed input use its primary natural language, not code identifiers. This envelope is removed locally; the displayed and delivered text is only text. Do not guess unknown source language or add quality claims.".into()});
-        let future = self.send(wire, cancellation);
-        Box::pin(async move {
-            let content = future.await?;
-            let value: Value =
-                serde_json::from_str(&content).map_err(|_| TextFailure::InvalidResponse)?;
-            let text = value["text"]
-                .as_str()
-                .filter(|s| !s.trim().is_empty())
-                .ok_or(TextFailure::InvalidResponse)?
-                .to_owned();
-            let source_language = value["source_language"]
-                .as_str()
-                .filter(|s| {
-                    !s.is_empty()
-                        && s.len() <= 35
-                        && !["und", "mul", "zxx"].contains(&s.to_ascii_lowercase().as_str())
-                        && s.split('-').next().is_some_and(|language| {
-                            (2..=3).contains(&language.len())
-                                && language.chars().all(|c| c.is_ascii_alphabetic())
-                        })
-                        && s.split('-').all(|p| {
-                            !p.is_empty()
-                                && p.len() <= 8
-                                && p.chars().all(|c| c.is_ascii_alphanumeric())
-                        })
-                })
-                .map(str::to_owned);
-            Ok(TextOutput {
-                text,
-                source_language,
-            })
-        })
-    }
-    fn back_translate(
+    fn back_inner(
         &self,
         request: BackTranslationRequest,
         cancellation: CancellationToken,
+        observer: Option<Arc<dyn ApiCallObserver>>,
     ) -> TextFuture {
         if !valid_prompt(&self.prompts.translation) {
             return Box::pin(async { Err(TextFailure::InvalidPrompt) });
@@ -394,31 +459,81 @@ impl TextProcessor for ChatProcessor {
             source_context: Default::default(),
             back_translation: false,
         };
-        self.send(
+        let future = self.send(
             messages(request, self.prompts.translation.clone(), settings),
             cancellation,
-        )
+            observer,
+            ApiPurpose::BackTranslation,
+            false,
+        );
+        Box::pin(async move { future.await.map(|output| output.text) })
     }
-}
-impl ChatProcessor {
-    fn send(&self, messages: Vec<Message>, cancellation: CancellationToken) -> TextFuture {
+
+    fn send(
+        &self,
+        messages: Vec<Message>,
+        cancellation: CancellationToken,
+        observer: Option<Arc<dyn ApiCallObserver>>,
+        purpose: ApiPurpose,
+        envelope: bool,
+    ) -> GenerationFuture {
         let client = self.client.clone();
         let endpoint = self.endpoint.clone();
         let model = self.model.clone();
         let authorization = self.authorization.clone();
         let deadline = self.deadline;
+        let profile = self.provider_profile;
+        let effort = self.effort.clone();
+        let max_output_tokens = self.max_output_tokens;
         Box::pin(async move {
-            let operation = async move {
-                let mut request = client
-                    .post(endpoint)
-                    .json(&json!({"model":model,"messages":messages}));
-                if let Some(authorization) = authorization {
-                    request = request.header(reqwest::header::AUTHORIZATION, authorization);
+            if cancellation.is_cancelled() {
+                return Err(TextFailure::Cancelled);
+            }
+            let mut body = json!({"model":model,"messages":messages});
+            let thinking = if profile == TextProviderProfile::DeepSeek {
+                effort.as_ref().map(|value| value != "none")
+            } else {
+                None
+            };
+            if let Some(enabled) = thinking {
+                body["thinking"] = json!({"type":if enabled {"enabled"}else{"disabled"}});
+            }
+            if let Some(value) = &effort {
+                body["reasoning_effort"] = json!(value);
+            }
+            if let Some(value) = max_output_tokens {
+                body["max_tokens"] = json!(value);
+            }
+            let wire = serde_json::to_vec(&body).map_err(|_| TextFailure::ConfigurationRequired)?;
+            let descriptor = ApiCallDescriptor {
+                purpose,
+                profile: match profile {
+                    TextProviderProfile::Generic => ApiProviderProfile::Generic,
+                    TextProviderProfile::DeepSeek => ApiProviderProfile::DeepSeek,
+                },
+                requested_model: Some(model),
+                requested_effort: effort,
+                max_output_tokens,
+                wire_bytes: wire.len() as u64,
+                thinking,
+                non_streaming: true,
+            };
+            let mut guard = observer
+                .map(|observer| ApiCallGuard::begin(observer, descriptor))
+                .transpose()?;
+            let mut request = client
+                .post(endpoint)
+                .header(reqwest::header::CONTENT_TYPE, "application/json")
+                .body(wire);
+            if let Some(authorization) = authorization {
+                request = request.header(reqwest::header::AUTHORIZATION, authorization);
+            }
+            let operation = async {
+                if let Some(guard) = &mut guard {
+                    guard.mark_sent()?;
                 }
                 let mut response = request.send().await.map_err(failure)?;
-                if !response.status().is_success() {
-                    return Err(TextFailure::Failed);
-                }
+                let success = response.status().is_success();
                 let mut bytes = Vec::new();
                 while let Some(chunk) = response.chunk().await.map_err(failure)? {
                     if bytes.len().saturating_add(chunk.len()) > 1_048_576 {
@@ -426,28 +541,78 @@ impl ChatProcessor {
                     }
                     bytes.extend_from_slice(&chunk);
                 }
-                let value: Value =
-                    serde_json::from_slice(&bytes).map_err(|_| TextFailure::InvalidResponse)?;
+                let value: Value = serde_json::from_slice(&bytes).map_err(|_| {
+                    if success {
+                        TextFailure::InvalidResponse
+                    } else {
+                        TextFailure::Failed
+                    }
+                })?;
+                if let Some(guard) = &mut guard {
+                    guard.response(ApiReceipt::from_chat_json(&value));
+                }
+                if !success {
+                    return Err(TextFailure::Failed);
+                }
                 let choice = &value["choices"][0];
                 if choice["finish_reason"] != "stop"
                     || choice["message"]["role"] != "assistant"
                     || choice["message"]["refusal"]
                         .as_str()
-                        .is_some_and(|refusal| !refusal.is_empty())
+                        .is_some_and(|s| !s.is_empty())
                 {
                     return Err(TextFailure::InvalidResponse);
                 }
-                let text = choice["message"]["content"]
+                let content = choice["message"]["content"]
                     .as_str()
-                    .filter(|text| !text.trim().is_empty())
+                    .filter(|s| !s.trim().is_empty())
                     .ok_or(TextFailure::InvalidResponse)?;
-                Ok(text.to_owned())
+                decode_output(content, envelope)
             };
-            tokio::select! {
-                biased;
-                _=cancellation.cancelled()=>Err(TextFailure::Cancelled),
-                result=tokio::time::timeout(deadline,operation)=>result.unwrap_or(Err(TextFailure::Timeout)),
+            let result = tokio::select! {biased; _=cancellation.cancelled()=>Err(TextFailure::Cancelled),result=tokio::time::timeout(deadline,operation)=>result.unwrap_or(Err(TextFailure::Timeout))};
+            if let Some(guard) = guard {
+                guard.finish(match &result {
+                    Ok(_) => ApiOutcome::Success,
+                    Err(TextFailure::Cancelled) => ApiOutcome::Cancelled,
+                    Err(TextFailure::Timeout) => ApiOutcome::Timeout,
+                    Err(TextFailure::InvalidResponse) => ApiOutcome::InvalidResponse,
+                    Err(_) => ApiOutcome::Failed,
+                });
             }
+            result
         })
     }
+}
+fn decode_output(content: &str, envelope: bool) -> Result<TextOutput, TextFailure> {
+    if !envelope {
+        return Ok(TextOutput {
+            text: content.to_owned(),
+            source_language: None,
+        });
+    }
+    let value: Value = serde_json::from_str(&content).map_err(|_| TextFailure::InvalidResponse)?;
+    let text = value["text"]
+        .as_str()
+        .filter(|s| !s.trim().is_empty())
+        .ok_or(TextFailure::InvalidResponse)?
+        .to_owned();
+    let source_language = value["source_language"]
+        .as_str()
+        .filter(|s| {
+            !s.is_empty()
+                && s.len() <= 35
+                && !["und", "mul", "zxx"].contains(&s.to_ascii_lowercase().as_str())
+                && s.split('-').next().is_some_and(|language| {
+                    (2..=3).contains(&language.len())
+                        && language.chars().all(|c| c.is_ascii_alphabetic())
+                })
+                && s.split('-').all(|p| {
+                    !p.is_empty() && p.len() <= 8 && p.chars().all(|c| c.is_ascii_alphanumeric())
+                })
+        })
+        .map(str::to_owned);
+    Ok(TextOutput {
+        text,
+        source_language,
+    })
 }

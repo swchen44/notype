@@ -1,5 +1,6 @@
 //! Desktop session orchestration; platform capture and Tauri events stay outside.
 use crate::diagnostics::{record as diagnose, Outcome, Phase};
+use notype_core::observations::{ModelIdentity, RecordingObservation, SessionObservations};
 use notype_core::{
     CancellationToken, CoreError, DeliveryAdapter, DeliveryFuture, DeliveryOutcome,
     DeliveryRequest, RecognitionMode, Scenario, SessionEntry, SessionOptions, SessionService,
@@ -13,8 +14,8 @@ use std::sync::{
 #[path = "faithful_provider.rs"]
 mod faithful_provider;
 pub use faithful_provider::{
-    ScenarioPrompts, TextAuthentication, TextConfiguration, TextTransport, TranslationSettings,
-    TranslationTerm,
+    processor as text_processor, ScenarioPrompts, TextAuthentication, TextConfiguration,
+    TextProviderProfile, TextTransport, TranslationSettings, TranslationTerm,
 };
 #[path = "recognition.rs"]
 pub mod recognition;
@@ -117,6 +118,8 @@ struct Recording {
     entry: Option<String>,
     processing_snapshot: Option<(TextConfiguration, Vec<String>)>,
     context_captured: bool,
+    observations: SessionObservations,
+    stopped_at: Option<std::time::Instant>,
     profile: recognition::RecognitionProfile,
 }
 
@@ -199,10 +202,61 @@ impl DesktopWorkflow {
             entry: None,
             processing_snapshot: None,
             context_captured: false,
+            observations: SessionObservations::default(),
+            stopped_at: None,
             profile,
         });
         *owner = generation;
         Ok(generation)
+    }
+    /// Snapshot only the configured model identifier before capture, never credentials.
+    pub fn capture_requested_model(&self, generation: u64, model: String) -> Result<(), CoreError> {
+        let mut recording = self.recording.lock().map_err(|_| CoreError::Storage)?;
+        let recording = recording
+            .as_mut()
+            .filter(|r| {
+                r.generation == generation && r.entry.is_none() && !r.cancellation.is_cancelled()
+            })
+            .ok_or(CoreError::InvalidTransition)?;
+        recording.observations.requested_asr_model = (!model.trim().is_empty()).then_some(model);
+        recording.observations.validate()
+    }
+    /// Stamp accepted stop before feedback/UI/buffer/scheduling, independent of diagnostics.
+    pub fn accept_stop(
+        &self,
+        generation: u64,
+        stopped_at: std::time::Instant,
+    ) -> Result<(), CoreError> {
+        let mut recording = self.recording.lock().map_err(|_| CoreError::Storage)?;
+        let recording = recording
+            .as_mut()
+            .filter(|r| {
+                r.generation == generation && r.entry.is_none() && !r.cancellation.is_cancelled()
+            })
+            .ok_or(CoreError::InvalidTransition)?;
+        if recording.stopped_at.is_some() {
+            return Err(CoreError::InvalidTransition);
+        }
+        recording.stopped_at = Some(stopped_at);
+        Ok(())
+    }
+    /// Attach accepted native frames and the identity returned by the actual producer lease.
+    pub fn capture_recognition_observation(
+        &self,
+        generation: u64,
+        recording_audio: Option<RecordingObservation>,
+        model: Option<ModelIdentity>,
+    ) -> Result<(), CoreError> {
+        let mut recording = self.recording.lock().map_err(|_| CoreError::Storage)?;
+        let recording = recording
+            .as_mut()
+            .filter(|r| {
+                r.generation == generation && r.entry.is_none() && !r.cancellation.is_cancelled()
+            })
+            .ok_or(CoreError::InvalidTransition)?;
+        recording.observations.recording = recording_audio;
+        recording.observations.actual_asr_model = model;
+        recording.observations.validate()
     }
     /// Capture scenario, prompts, translation settings and glossary once, before audio starts.
     /// Source context must be captured first; later preference changes affect only retry/new captures.
@@ -297,7 +351,7 @@ impl DesktopWorkflow {
         configuration: TextConfiguration,
         glossary: Vec<String>,
     ) -> Result<SessionEntry, CoreError> {
-        let (entry, cancellation, processing_snapshot) = {
+        let (entry, cancellation, processing_snapshot, stopped_at) = {
             let mut recording = self.recording.lock().map_err(|_| CoreError::Storage)?;
             let recording = recording
                 .as_mut()
@@ -312,10 +366,16 @@ impl DesktopWorkflow {
             let save_started = std::time::Instant::now();
             diagnose(Phase::HistorySave, Outcome::Started, None);
             let saved = match normalized {
-                Ok(original) => self.sessions.create(&original, recording.options.clone()),
-                Err(_) => self
-                    .sessions
-                    .create_recognition_failure(transcript, recording.options.clone()),
+                Ok(original) => self.sessions.create_observed(
+                    &original,
+                    recording.options.clone(),
+                    recording.observations.clone(),
+                ),
+                Err(_) => self.sessions.create_recognition_failure_observed(
+                    transcript,
+                    recording.options.clone(),
+                    recording.observations.clone(),
+                ),
             };
             diagnose(
                 Phase::HistorySave,
@@ -327,11 +387,18 @@ impl DesktopWorkflow {
                 Some(save_started.elapsed().as_millis().min(u64::MAX as u128) as u64),
             );
             let entry = saved?;
+            let entry = if let Some(stopped_at) = recording.stopped_at {
+                self.sessions
+                    .observe_original_ready(&entry.id, stopped_at)?
+            } else {
+                entry
+            };
             recording.entry = Some(entry.id.clone());
             (
                 entry,
                 recording.cancellation.clone(),
                 recording.processing_snapshot.clone(),
+                recording.stopped_at,
             )
         };
         let (configuration, glossary) = processing_snapshot.unwrap_or((configuration, glossary));
@@ -348,7 +415,7 @@ impl DesktopWorkflow {
         let result = tokio::select! {
             biased;
             _ = cancellation.cancelled() => self.sessions.cancel(&entry.id),
-            result = self.sessions.process_with_review(&entry.id,glossary,faithful_provider::processor(configuration.clone()),configuration.translation.back_translation) => result,
+            result = self.sessions.process_with_stop(&entry.id,glossary,text_processor(configuration.clone()),configuration.translation.back_translation,stopped_at) => result,
         };
         diagnose(
             Phase::TextProcessing,
@@ -448,7 +515,7 @@ impl DesktopWorkflow {
             .process_with_review(
                 id,
                 glossary,
-                faithful_provider::processor(configuration.clone()),
+                text_processor(configuration.clone()),
                 configuration.translation.back_translation,
             )
             .await?;

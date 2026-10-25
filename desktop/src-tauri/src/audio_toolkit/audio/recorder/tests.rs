@@ -290,7 +290,8 @@ fn repeated_start_stop_cycles_resume_capture_without_leaking_samples() {
 
     let first_samples = reply_rx
         .recv_timeout(Duration::from_secs(1))
-        .expect("first stop reply");
+        .expect("first stop reply")
+        .samples;
     let first_expected = [0.25f32, -0.5, 1.0, 99.0];
     assert_eq!(&first_samples[..first_expected.len()], &first_expected);
     assert!(first_samples[first_expected.len()..]
@@ -327,7 +328,8 @@ fn repeated_start_stop_cycles_resume_capture_without_leaking_samples() {
 
     let second_samples = reply_rx
         .recv_timeout(Duration::from_secs(1))
-        .expect("second stop reply");
+        .expect("second stop reply")
+        .samples;
     let second_expected = [0.75f32, -0.25, 0.5, 199.0];
     assert_eq!(&second_samples[..second_expected.len()], &second_expected);
     assert!(second_samples[second_expected.len()..]
@@ -386,7 +388,8 @@ fn missing_callback_at_stop_marks_stream_for_rebuild_and_returns_samples() {
     let samples = reply_rx
         .recv_timeout(Duration::from_secs(3))
         .expect("pause timeout still returns captured samples");
-    assert!(samples.is_empty());
+    assert!(samples.samples.is_empty());
+    assert_eq!(samples.observation.unwrap().quality(), "unknown");
     worker.join().expect("consumer exits after pause timeout");
     assert!(observed_error.load(Ordering::Acquire));
 }

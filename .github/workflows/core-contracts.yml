@@ -10,6 +10,8 @@ on:
       - tests/unittest/**
       - tests/integration/core_*.rs
       - tests/integration/desktop-contracts/**
+      - tests/integration/history_metrics_dto.rs
+      - desktop/src-tauri/src/commands/history_metrics.rs
       - tests/integration/desktop_provider.rs
       - tests/integration/desktop_diagnostics.rs
       - tests/integration/capture_readiness.rs
@@ -68,7 +70,7 @@ jobs:
       - name: Lint the core
         run: cargo +1.99.1 clippy --locked --manifest-path crates/notype-core/Cargo.toml --all-targets -- -D warnings
       - name: Exercise desktop orchestration and HTTP contracts without Tauri
-        run: cargo +1.99.1 test --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test desktop-workflow --test desktop-provider --test physical-gestures --test native-delivery --test desktop-diagnostics --test diagnostics-export --test diagnostic-service --test diagnostic-privacy --test diagnostic-control --test model-storage --test window-lifecycle --test overlay-lifecycle --test capture-startup --test capture-readiness
+        run: cargo +1.99.1 test --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test desktop-workflow --test desktop-provider --test history-metrics-dto --test physical-gestures --test native-delivery --test desktop-diagnostics --test diagnostics-export --test diagnostic-service --test diagnostic-privacy --test diagnostic-control --test model-storage --test window-lifecycle --test overlay-lifecycle --test capture-startup --test capture-readiness
       - name: Exercise independent offline probe policy without HTTP or credentials
         run: |
           rustc +1.99.1 --edition=2021 -A dead_code --test tests/unittest/deepseek_probe_policy.rs -o /tmp/notype-probe-policy

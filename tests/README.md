@@ -147,6 +147,40 @@ rejected-closure cases in the existing `overlay-lifecycle` target. The report/AC
 integration also verifies Settings uses that outer revision gate before dedup.
 These are synthetic attribution tests; native hardware delay is not reproduced.
 
+
+## History metrics, API observations and CSV (#22)
+
+Approved [P22-v1](https://github.com/swchen44/notype/issues/22#issuecomment-6399288240),
+[GPT-6-Astra APPROVED / zero unresolved](https://github.com/swchen44/notype/issues/22#issuecomment-6399333180).
+
+- `core-observations` runs the public `mixed_count` function under `zh-en-v1`.
+- `core-observation-store` uses public SessionService with owned real SQLite, observed
+  calls and actual CSV files. It covers received duration/model snapshots, both counts,
+  retries, independent partial/zero usage, exact money by currency, deletion fencing,
+  independent export snapshot during concurrent writes, destination preservation,
+  cancellation/low space/rename failure and a 1,200-row fixture. CSV is parsed by the
+  existing Python 3 standard-library `csv` module, independently of the Rust encoder;
+  `NOTYPE_TEST_PYTHON` may select an installed interpreter. No package install is needed.
+- `desktop-provider` runs the actual ChatProcessor over loopback HTTP with SessionService.
+  It checks effort/limits/defaults, returned model/usage before invalid-output validation,
+  retry/back-translation calls, known disabled API, cancellation and owned SQLite faults
+  before/after send. SQLite fault setup uses installed Python's standard-library sqlite3.
+- `desktop-workflow` verifies source observations, producer versus requested model,
+  accepted-stop scheduling and original-only availability through the actual public workflow.
+- `history-metrics-dto` checks the pure native IPC projections without Tauri/engines.
+- `tests/unittest/recording_metrics.rs` is included by the native recorder module. It
+  exercises public `AudioRecorder::stop_observed` and decoder padding over the production
+  ring consumer/resampler/VAD with an owned hardware-channel fixture. It opens no device.
+  This requires the separately budgeted native library build; portable tests do not prove it.
+
+```powershell
+cargo test --locked --manifest-path crates/notype-core/Cargo.toml
+cargo test --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test desktop-workflow --test desktop-provider --test history-metrics-dto
+```
+
+These are deterministic owned fixtures, not native App/microphone or paid API acceptance.
+Native compilation, rendered UI and live DeepSeek have separate receipts/gates.
+
 ## Independent DeepSeek probe preparation (#23)
 
 Approved [offline addendum](https://github.com/swchen44/notype/issues/23#issuecomment-6399793622)

@@ -371,6 +371,10 @@ impl ShortcutAction for TranscribeAction {
             return;
         };
         let owner = workflow.token(generation);
+        let stopped_at = Instant::now();
+        if workflow.accept_stop(generation, stopped_at).is_err() {
+            return;
+        }
         let Ok(profile) = workflow.recognition_profile(generation) else {
             return;
         };
@@ -395,7 +399,6 @@ impl ShortcutAction for TranscribeAction {
             set_tray_state(app, TrayIconState::Transcribing);
         });
         let binding_id = binding_id.to_string();
-        let stopped_at = Instant::now();
         record(Phase::RecordingStopped, Outcome::Started, None);
         // Esc remains registered through STT and HTTP, until FinishGuard drops.
         tauri::async_runtime::spawn(async move {
@@ -415,7 +418,7 @@ impl ShortcutAction for TranscribeAction {
                     crate::memory::trim_freed_memory();
                 }),
             };
-            let Some(samples) = rm.stop_recording(&binding_id, cancel_generation, &owner) else {
+            let Some(captured) = rm.stop_recording(&binding_id, cancel_generation, &owner) else {
                 record(
                     Phase::RecordingStopped,
                     Outcome::Cancelled,
@@ -435,7 +438,7 @@ impl ShortcutAction for TranscribeAction {
                 let _ = owner.cancel();
                 return;
             }
-            if samples.is_empty() {
+            if captured.samples.is_empty() {
                 owner.run(|| {
                     tm.cancel_stream();
                     let _ = ah.emit("session-error", "no-speech");
@@ -451,9 +454,10 @@ impl ShortcutAction for TranscribeAction {
                 return;
             };
             let decoder_owner = owner.clone();
+            let samples = captured.samples;
             let transcription =
-                tauri::async_runtime::spawn_blocking(move || match finalization.wait() {
-                    Ok(Some(text)) if !text.trim().is_empty() => Ok(text),
+                tauri::async_runtime::spawn_blocking(move || match finalization.wait_observed() {
+                    Ok(Some(text)) if !text.text.trim().is_empty() => Ok(text),
                     Ok(_) => {
                         transcriber.transcribe_for_generation(samples, &profile, decoder_owner)
                     }
@@ -465,7 +469,18 @@ impl ShortcutAction for TranscribeAction {
                 return;
             }
             match transcription {
-                Ok(Ok(text)) if !text.trim().is_empty() => {
+                Ok(Ok(text)) if !text.text.trim().is_empty() => {
+                    if workflow
+                        .capture_recognition_observation(
+                            generation,
+                            captured.observation,
+                            text.model,
+                        )
+                        .is_err()
+                    {
+                        return;
+                    }
+                    let text = text.text;
                     if streaming {
                         tm.emit_stream_working(generation, StreamWorkKind::Polishing);
                     } else {

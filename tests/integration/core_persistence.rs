@@ -27,7 +27,7 @@ fn translation_scene_and_target_survive_sqlite_restart_as_immutable_entry_metada
 }
 
 #[test]
-fn core_v2_history_migrates_to_dictation_without_changing_raw_result_or_recognition_mode() {
+fn old_pre_release_history_requires_an_explicit_reset_without_rewriting_text() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("core-v2.db");
     let fixture = rusqlite::Connection::open(&path).unwrap();
@@ -37,23 +37,16 @@ fn core_v2_history_migrates_to_dictation_without_changing_raw_result_or_recognit
         selection TEXT NOT NULL DEFAULT 'polished',attempt INTEGER NOT NULL DEFAULT 0
     ); INSERT INTO sessions VALUES ('legacy-id','不要删除 API 42','不要删除 API 42。','2026-10-24T00:00:00.000Z','2026-10-24T00:01:00.000Z','pending',NULL,'simplified_english','old-target','polished',1); PRAGMA user_version=2;").unwrap();
     drop(fixture);
-    let service = SessionService::open(&path).unwrap();
-    let entry = service.get("legacy-id").unwrap();
-    assert_eq!(entry.scenario, notype_core::Scenario::Dictation);
-    assert_eq!(entry.translation_target, None);
-    assert_eq!(entry.transcript, "不要删除 API 42");
-    assert_eq!(entry.result.as_deref(), Some("不要删除 API 42。"));
-    assert_eq!(entry.created_at, "2026-10-24T00:00:00.000Z");
-    assert_eq!(entry.updated_at, "2026-10-24T00:01:00.000Z");
-    assert_eq!(
-        entry.recognition_mode,
-        Some(RecognitionMode::SimplifiedEnglish)
-    );
-    assert_eq!(entry.original_target.as_deref(), Some("old-target"));
+    let before = std::fs::read(&path).unwrap();
+    assert!(matches!(
+        SessionService::open(&path),
+        Err(CoreError::ResetRequired)
+    ));
+    assert_eq!(std::fs::read(&path).unwrap(), before);
 }
 
 #[test]
-fn earlier_context_metadata_remains_readable_but_exposes_only_application_name() {
+fn stored_context_exposes_only_the_allowed_application_name() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("earlier-v3.db");
     let service = SessionService::open(&path).unwrap();
@@ -135,45 +128,32 @@ fn database_ownership_is_exclusive_and_lasts_until_the_last_service_clone_drops(
     assert!(SessionService::open(&path).is_ok());
 }
 
-#[test]
-fn node_v1_history_migrates_without_losing_text_and_recovers_interrupted_states() {
+#[tokio::test]
+async fn fresh_history_reopens_interrupted_work_without_losing_the_saved_original() {
     let directory = tempfile::tempdir().unwrap();
-    let path = directory.path().join("prototype.db");
-    let fixture = rusqlite::Connection::open(&path).unwrap();
-    fixture
-        .execute_batch(
-            "CREATE TABLE sessions (
-        id TEXT PRIMARY KEY,transcript TEXT NOT NULL,result TEXT,
-        created_at TEXT NOT NULL,updated_at TEXT NOT NULL,status TEXT NOT NULL,error TEXT
-    ); PRAGMA user_version=1;",
-        )
-        .unwrap();
-    for (id, status, result) in [
-        ("processing", "processing", None),
-        ("delivery", "delivering", Some("整理後文字")),
-        ("finished", "delivered", Some("已送文字")),
-    ] {
-        fixture.execute("INSERT INTO sessions VALUES (?1,'原稿 API 42',?2,'2026-10-24T00:00:00.000Z','2026-10-24T00:01:00.000Z',?3,NULL)", rusqlite::params![id,result,status]).unwrap();
-    }
-    drop(fixture);
+    let path = directory.path().join("fresh.db");
     let service = SessionService::open(&path).unwrap();
-    let recovered = service.get("processing").unwrap();
+    let entry = service
+        .create("原稿 API 42", SessionOptions::default())
+        .unwrap();
+    let started = std::sync::Arc::new(tokio::sync::Notify::new());
+    let processor = std::sync::Arc::new(WaitForCancellation(started.clone()));
+    let worker = service.clone();
+    let id = entry.id.clone();
+    let task = tokio::spawn(async move { worker.process(&id, vec![], processor).await });
+    started.notified().await;
+    task.abort();
+    assert!(task.await.unwrap_err().is_cancelled());
+    drop(service);
+    let reopened = SessionService::open(&path).unwrap();
+    let recovered = reopened.get(&entry.id).unwrap();
     assert_eq!(recovered.transcript, "原稿 API 42");
-    assert_eq!(recovered.created_at, "2026-10-24T00:00:00.000Z");
+    assert_eq!(recovered.created_at, entry.created_at);
     assert_eq!(recovered.status, SessionStatus::Failed);
     assert_eq!(recovered.error.as_deref(), Some("interrupted"));
-    assert_eq!(recovered.recognition_mode, None);
     assert_eq!(
-        service.get("delivery").unwrap().status,
-        SessionStatus::DeliveryUnknown
-    );
-    assert_eq!(
-        service.get("delivery").unwrap().result.as_deref(),
-        Some("整理後文字")
-    );
-    assert_eq!(
-        service.get("finished").unwrap().status,
-        SessionStatus::Delivered
+        recovered.recognition_mode,
+        Some(RecognitionMode::TraditionalEnglish)
     );
 }
 
