@@ -6,7 +6,9 @@
 
 ## 目前 checkpoint
 
-implement-spec 進度：#9～#11、#12 功能／詞級轉換修正及 #17 已合入 `implement/notype-mvp`，最新合併點 `2a1044e`。合併檢查通過 core 27、portable harness 21、Node 16、前端 lint/build 及繁簡各 559 keys；38 份新增授權檔原始 bytes／hash 與來源 manifest 一致。本機轉換的詞界及 URL 邊界修正已合併，仍待最新 native binary 補驗。#13 正在完成快捷鍵與原目標交付；Windows 拒絕背景測試視窗取得前景，人工點擊前只觀察到正確保留 Pending，不冒稱實際插入通過。原生結果分列 [三場景 receipt](docs/verification/scenarios-prompts.md)、[語言 receipt](docs/verification/languages.md) 與 [桌面流程 receipt](docs/verification/desktop-workflow.md)。Qwen 候選 6 組／12 次推論已完成，正式品質／延遲 receipt 尚待合入，不宣稱人聲或端到端 p95 通過。公司 API／五個 App／完整配送尚未驗收，#8～#17 未結案。
+implement-spec 進度：#9～#13 功能、#17 及 #14 啟動器基礎已合入 `implement/notype-mvp`，最新合併點 `6d5fc99`。Core 27、桌面 Rust contracts 30、Node 20 unit +9 integration、前端 lint/build 及繁簡各 569 keys 通過；各版本的原生／品質證據分列 [三場景](docs/verification/scenarios-prompts.md)、[語言](docs/verification/languages.md)、[Qwen](docs/verification/qwen3-quality.md)、[原生輸入](docs/verification/guarded-input.md) 及 [套件基礎](docs/verification/portable-launcher-foundation.md)。Qwen 固定 6 cases／12 次推論與新版 converter 的 3 個 native 保存案例已完成；首次 normalization 1176 ms、重用 0 ms 為階段測量，未宣稱完整 session p95。人工原生 suite 保留 1 次完整通過／2 次 Pending 斷言失敗，兩次精確焦點差異未知；後續已強制 QA 只操作自己的 fixture，舊入口停用、新入口保持未啟用，不要求使用者盲目重跑。整體規格仍未結案。
+
+**使用者最新確認的本輪交付**：先完成「錄音 → 繁／簡中英本機 STT → 本機歷史 → 複製」。其他 App 自動輸入下一階段再補。使用者目前不在公司網路，公司 API／Proxy 與三場景真實文字品質驗收延後，現在不需 key；不另選 provider 或假造生成結果。本機 pilot 使用 Qwen3-ASR 0.6B Q6_K，完整 artifact/hash／Apache-2.0 LICENSE／NOTICE 見 Qwen receipt。#14 的正式 Release／完整私有 tarball、離線安裝、冷啟動與升級資料保留正在完成；公開發布及五個 App／人聲／p95 仍未驗收。此里程碑已同步 #8，不代表刪除完整規格的後續驗收。
 
 2026-10-25 最新需求：口述、翻譯、隨便問三場景，提示詞獨立可編輯／保存／還原；使用者只要還原預設提示詞。開始鍵依序 Right Alt、Right Alt + Right Shift、Right Alt + Space；改為點按開始，錄音中以獨立可設定停止鍵結束（預設 Right Alt），Esc 取消，取代舊按住／放開。公司 API 格式已確認為 OpenAI 相容 Chat Completions。隨便問依意圖回答或代寫；**使用者已取消網域擷取，情境只保留 App 名稱，不讀頁面／輸入內容／標題或網址**。回譯可選且預設關閉，啟用時先顯示譯文及回譯，明確確認後才嘗試受保護交付。詳見 [設計紀錄](docs/research/11-scenario-prompt-design.md)。本輪產品選項已回答，不重問；新未定案行為仍須詢問。
 
