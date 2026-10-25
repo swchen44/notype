@@ -1,6 +1,6 @@
 # #12 語系、辨識 profile 與實際品質
 
-2026-10-25。功能程式已接上，**混合語言品質驗收仍未達成，尚未選定配送模型**。本文件不關閉 #12；Breeze ASR 25 的後續實驗另記。未使用公司 key、雲端辨識、LLM 修補或真實工作錄音。
+2026-10-25。功能程式已接上，**整體品質／速度驗收仍未達成，尚未選定配送模型**。Breeze 在固定合成語音上的混語結果改善，但 CPU 耗時未達預期；本文件不關閉 #12。未使用公司 key、雲端辨識、LLM 修補或真實工作錄音。
 
 ## 功能邊界
 
@@ -23,12 +23,23 @@
 | Whisper Small FP16／MIT | 3,563–4,088 ms | 44.4–87.5% | 英文片段被省略；英文開頭時中文片段被譯為英文，未通過 |
 | 本機量化 Small Q5_1／MIT derivative | 5,284–7,934 ms | 44.4–87.5% | 相同混語損失，這台機器也較慢，未通過 |
 | SenseVoice int8／僅私人比較 | 948–1,481 ms | 1.6–8.3% | 保留雙語，但 API→AP、Visual 被省略、GitHub 分詞與 髮→法 仍錯；授權詮釋待釐清，未選作公開配送 |
+| Breeze ASR 25 Q5_K／Apache-2.0 candidate | 28,284–33,385 ms | 0–1.67% | 六個 mode／WAV cases 都保留中英、名稱、否定與髮／發；殘差為兩／2及發布／發佈。速度未達預期，未選作配送預設 |
 
 CER 定義是 NFKC／小寫後移除標點／空白的 Levenshtein，**未修補英文、未將中文數字當阿拉伯數字**。required literal 是另列的大小寫不敏感 exact substring 診斷；`兩`／`2`、`Git hub`／`GitHub` 應人工分辨，不把 literal diagnostic 當完整品質分數。沒有從這個小樣本宣稱 p95／人聲／公司通過；RAM 尚未量測。cold 指 fresh process/model load，沒有清除 OS file cache；warm 指同 process 第二次 decode。
 
 參考勘誤：最初簡體 numbers gold 把來源語音的「測試資料」寫成「测试数据」，現人工修正為只轉字形的「测试资料」；這使該簡體 case 的 CER 降低 3.3 個百分點。另修正 numeric literal 邊界，讓 required `2` 不再誤匹配 `42`。原始模型輸出完全保留，JSON 的 `originalDiagnostic` 保存舊 gold／分數／literal 診斷，`referenceErrata` 記錄理由；外部原始 receipts 不覆寫。這些修正沒有讓 Small 的英文省略／翻譯通過。
 
 另以已核對的 whisper.cpp v1.8.6 CLI、同一 FP16、`-l zh -t 4` 作診斷，numbers WAV 仍完整省略兩個英文句子，因此未以固定中文 language 掩蓋 auto 的失敗，也沒有改成靜默翻譯。這個診斷不是正式 app 的品質通過證據。
+
+### Breeze 實測
+
+完整觀察在 `breeze-quality.json`，來源／完整 hash／授權 snapshots 在 `breeze-provenance.json`。使用同一批 WAV、已勘誤的獨立 gold、正式 retained app CLI，六個 cases 各 fresh process load＋兩次 inference。task=transcribe、language=auto、translate=false、manual terms 空、CPU device index0／四執行緒；#17 明確暫停 Cargo／native／Vite／lint，只有低 CPU 的 UI／HTTP 檢查可繼續。沒有清 OS cache 或控制溫度／所有背景工作。
+
+實測 process peak working set 1,449.8–1,457.2 MiB，以 Windows `GetProcessMemoryInfo` 的 `PeakWorkingSetSize` 每50ms觀察，只含 native CLI process。code-switching、API／Visual Studio Code／GitHub、否定、髮／發上下文在這三個合成錄音保留；`兩` 對 gold `2` 是數字書寫形式，`發布`／`發佈` 是字形變體，原始分數不因此改成零。這不是人聲／公司／p95 驗收；約14秒音訊需要約30秒 CPU inference，不能宣稱達成5秒目標。
+
+模型 1,080,732,108 bytes，完整 SHA256 `8efbf0ce8a3f50fe332b7617da787fb81354b358c288b008d3bdef8359df64c6`，同固定 Handy catalog 與 [immutable mirror LFS metadata](https://huggingface.co/coco-research/coco-voice-models/blob/3cb3e6de7c20f58fe5beaaab3d5159384feff3f0/breeze-asr/breeze-asr-q5_k.bin)。原始 [MediaTek weights revision](https://huggingface.co/MediaTek-Research/Breeze-ASR-25/blob/cffe7ccb404d025296a00758d0a33468bec3a9d0/README.md) 宣告 Apache-2.0；mirror publisher 的 [attribution](https://huggingface.co/coco-research/coco-voice-models/blob/3cb3e6de7c20f58fe5beaaab3d5159384feff3f0/breeze-asr/ATTRIBUTION.md) 說明是 unchanged Handy ggml／Q5_K conversion，並保留 base OpenAI Whisper MIT 與 converter Handy MIT notices。這是來源方聲明及 exact hash mapping，沒有宣稱自己重做 bit-reproducible conversion。另一個同名 shdennlin Q5_K 的大小／hash 不同，沒有混用。
+
+下載是單一 in-place 檔案、exact206 ranges＋完整 SHA 後才執行；只在外部 cache，benchmark data dir 是同 volume hard link，沒有複製大型權重。retained runner 37個 regular files／111,066,246 bytes，DirectML symlink 已解引用，exe SHA256 `86ec70cdac8f54547f886a715acec9b27ab0d2bfb360da3ec580cfaec7e69dba`。它未含 fixed WebView2，僅是獨立 benchmark snapshot，沒有被當作 portable payload closure。對應 product source 是功能 commit `8ef71e7`／文件 merge `0bd8ed54`；後續 URL/path delimiter 修正不在這個 binary，三個 WAV 都沒有這類 literal。
 
 ## 模型與來源
 

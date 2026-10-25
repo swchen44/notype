@@ -1,0 +1,108 @@
+{
+  "purpose": "Verified Breeze ASR25 Q5_K model, primary-source provenance and exact immutable mirror mapping; no public publication or reproduced conversion claim",
+  "catalog": {
+    "project": "fixed Handy fork",
+    "url": "https://blob.handy.computer/breeze-asr-q5_k.bin",
+    "bytes": 1080732108,
+    "sha256": "8efbf0ce8a3f50fe332b7617da787fb81354b358c288b008d3bdef8359df64c6"
+  },
+  "original": {
+    "repository": "MediaTek-Research/Breeze-ASR-25",
+    "revision": "cffe7ccb404d025296a00758d0a33468bec3a9d0",
+    "license": "Apache-2.0 per original publisher model metadata and saved LICENSE, base openai/whisper-large-v2 MIT"
+  },
+  "exactArtifactMirror": {
+    "repository": "coco-research/coco-voice-models",
+    "revision": "3cb3e6de7c20f58fe5beaaab3d5159384feff3f0",
+    "path": "breeze-asr/breeze-asr-q5_k.bin",
+    "lfsSha256": "8efbf0ce8a3f50fe332b7617da787fb81354b358c288b008d3bdef8359df64c6",
+    "bytes": 1080732108,
+    "attribution": "Mirror publisher states unchanged Handy conversion/quantization; this is publisher provenance evidence, not our reproduced conversion chain"
+  },
+  "differentArtifact": {
+    "repository": "shdennlin/breeze-asr-25-ggml",
+    "revision": "36c726093efe1760d1dd39c3cfe8b6a7282437d1",
+    "bytes": 1080732091,
+    "sha256": "37d2574613cc92c38e54cca156fab132e83fa10ce79c32e6fbe393f4b52912d9",
+    "note": "DIFFERENT bytes/hash; not the Handy candidate"
+  },
+  "snapshots": [
+    {
+      "file": "coco-research--coco-voice-models--breeze-asr--ATTRIBUTION.md.snapshot",
+      "bytes": 1643,
+      "sha256": "247442eaed9d5fb09bec2e0c95e8788c68db51f6f2c73164757d743a5249aa7c"
+    },
+    {
+      "file": "coco-research--coco-voice-models--breeze-asr--LICENSE.snapshot",
+      "bytes": 15317,
+      "sha256": "8e839aae3b9852b8edcb825aa0253553927f4592592055d71e28598fae38b791"
+    },
+    {
+      "file": "coco-research--coco-voice-models.model.json",
+      "bytes": 12880,
+      "sha256": "807d514c9fd82de68ea7eb6cddb61cf092474ff0ce369587d9252805f6666121"
+    },
+    {
+      "file": "coco-research--coco-voice-models.tree.json",
+      "bytes": 693,
+      "sha256": "91f2e2778098102c98d15aebe04a21f08bbd67c5b8aae4acfb3ca2bb3eb84a62"
+    },
+    {
+      "file": "MediaTek-Research--Breeze-ASR-25--LICENSE.snapshot",
+      "bytes": 12624,
+      "sha256": "609e2cb599f84aaa41d8ef29d8fdb04d164fab22e8d9292ca34a599d0f56a338"
+    },
+    {
+      "file": "MediaTek-Research--Breeze-ASR-25--README.md.snapshot",
+      "bytes": 8442,
+      "sha256": "a724bfb427e2475086b7a40dd9be3403be063d98eda4b5c8ae6c97a18b77f5a2"
+    },
+    {
+      "file": "MediaTek-Research--Breeze-ASR-25.model.json",
+      "bytes": 3335,
+      "sha256": "8f0ae0cfec6a277874e7fc9260676850125185b5788f04472d0e2cbc4baa2609"
+    },
+    {
+      "file": "MediaTek-Research--Breeze-ASR-25.tree.json",
+      "bytes": 6878,
+      "sha256": "1cb2bf73d2bccb0339208b7a7a6b06e2138733b11128310ee7fcff203cd4b954"
+    },
+    {
+      "file": "shdennlin--breeze-asr-25-ggml--README.md.snapshot",
+      "bytes": 4962,
+      "sha256": "58b6b3a3c81d6735a8736ddaccf30db17966f8c2ac3ccbd7c2333e045c50e3a9"
+    },
+    {
+      "file": "shdennlin--breeze-asr-25-ggml.model.json",
+      "bytes": 2469,
+      "sha256": "290cf368a115b919d4138eba30c0152803c5ad42f2506e711e4c89a67f664398"
+    },
+    {
+      "file": "shdennlin--breeze-asr-25-ggml.tree.json",
+      "bytes": 3206,
+      "sha256": "83b3cff7b1313e0f6164ce6c8c70eb1c4247b5f37b3abe8bfe33185e129ed722"
+    },
+    {
+      "file": "MediaTek-generation_config.json.snapshot",
+      "bytes": 4289,
+      "sha256": "8cd24239c76189ae8125d09f92bf883d7d7aa0893039462b0413ee19a088c1cc"
+    }
+  ],
+  "observed": {
+    "bytes": 1080732108,
+    "sha256": "8efbf0ce8a3f50fe332b7617da787fb81354b358c288b008d3bdef8359df64c6",
+    "fullFileVerified": true,
+    "rangeRequests": 129,
+    "freeBytesBefore": 8587444224,
+    "freeBytesAfter": 7177105408,
+    "newModelBytes": 1080732108,
+    "noDuplicateModelData": "One inplace verified model; benchmark directories use same-volume hard links"
+  },
+  "licenseSources": {
+    "originalCard": "https://huggingface.co/MediaTek-Research/Breeze-ASR-25/blob/cffe7ccb404d025296a00758d0a33468bec3a9d0/README.md",
+    "originalLicense": "https://huggingface.co/MediaTek-Research/Breeze-ASR-25/blob/cffe7ccb404d025296a00758d0a33468bec3a9d0/LICENSE",
+    "exactMirrorAttribution": "https://huggingface.co/coco-research/coco-voice-models/blob/3cb3e6de7c20f58fe5beaaab3d5159384feff3f0/breeze-asr/ATTRIBUTION.md",
+    "exactMirrorCombinedNotices": "https://huggingface.co/coco-research/coco-voice-models/blob/3cb3e6de7c20f58fe5beaaab3d5159384feff3f0/breeze-asr/LICENSE",
+    "note": "Preserve original Apache2, base OpenAI Whisper MIT and converter Handy MIT notices; describe conversion/quantization. Exact mirror publisher asserts unchanged Handy conversion; no independent bit-reproducible conversion chain verified."
+  }
+}
