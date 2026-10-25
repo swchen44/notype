@@ -98,6 +98,8 @@
       "delivery-unknown": "交付结果不明"
     },
     "errors": {
+      "provider-auth": "认证失败，请检查文字服务密钥。原稿已保存。",
+      "back-provider-auth": "回译：认证失败，请检查文字服务密钥。主翻译已保留，审阅尚未完成。",
       "configuration-required": "请先完成文字整理设置，再从原稿重试；也可明确选用或复制原稿。",
       "llm-timeout": "文字整理超时，原稿已保存。",
       "llm-invalid-response": "整理服务返回无效结果，原稿已保存。",

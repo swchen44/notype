@@ -44,6 +44,10 @@ path = "../../tests/unittest/core_observations.rs"
 name = "core-observation-store"
 path = "../../tests/integration/core_observations.rs"
 
+[[test]]
+name = "gateway-errors"
+path = "../../tests/unittest/gateway_errors.rs"
+
 [profile.dev]
 debug = 0
 incremental = false

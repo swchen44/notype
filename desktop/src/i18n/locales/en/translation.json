@@ -145,6 +145,8 @@
       "delivery-unknown": "Delivery uncertain"
     },
     "errors": {
+      "provider-auth": "Authentication failed. Check the service key. The original is saved.",
+      "back-provider-auth": "Back-translation: authentication failed. Check the service key. The primary translation is retained; review is incomplete.",
       "configuration-required": "Complete text-service settings and retry the saved original, or explicitly choose or copy the original.",
       "llm-timeout": "Editing timed out. The original is saved.",
       "llm-invalid-response": "The service returned an invalid result. The original is saved.",

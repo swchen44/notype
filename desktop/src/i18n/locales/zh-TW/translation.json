@@ -145,6 +145,8 @@
       "delivery-unknown": "交付結果不明"
     },
     "errors": {
+      "provider-auth": "認證失敗，請檢查文字服務金鑰。原稿已保存。",
+      "back-provider-auth": "回譯：認證失敗，請檢查文字服務金鑰。主翻譯已保留，審閱尚未完成。",
       "configuration-required": "請先完成文字整理設定，再從原稿重試；也可明確選用或複製原稿。",
       "llm-timeout": "文字整理逾時，原稿已保存。",
       "llm-invalid-response": "整理服務回傳無效結果，原稿已保存。",
