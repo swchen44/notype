@@ -6,6 +6,10 @@
 
 ## 目前 checkpoint
 
+2026-10-25 本機試用回饋正在處理：#18 模型資訊／Anthropic 風格、#19 收音等待／系統匣、#20 安全診斷，首輪 source 已合入 `735b571`；尚未更新使用者正在執行的正式包。獨立 source review 為 Spec 0、Standards 4 項；單一修正 worktree 的前置進度保留，後續產品修改已因新計畫審查門檻停止。#21 錄音數字 `00:12` 尚未實作。
+
+使用者已確認右 Alt 短按有效，但很久才看到收音提示；不是長按模式。原 `notype.log` 為 0 bytes，不能推定沒有錯誤。最新要求包括 diagnostics 預設開啟／可關閉／可清除，以及敏感 token/key 中段遮罩。**所有新實作須先通過 [GPT-6-Astra issue 計畫審查](docs/agents/plan-review.md)。** P0-v1 流程文件已核准；P20-v2、P21-v2、P19-latency-v2 被要求修訂，對應 issue 保留審查結果，尚未授權其後續實作。下一步先完成新版本計畫並複審，勿直接沿舊 source 審查通過狀態開始新增功能。
+
 正式功能與審查修正已合入 `implement/notype-mvp`。#9 桌面基線、#10 共用核心、#11 文字流程、#17 三場景／提示詞已依各自 receipt 結案；#12／#13 的功能已合入，品質／實際操作仍有未驗收項目。兩個獨立 reviewer 的 Standards／Spec findings 均已修正，最終限定複核各 0 項，見 [完整審查紀錄](docs/verification/local-code-review.md) 及 [修正與 RED→GREEN](docs/verification/local-review-fixes.md)。
 
 正式 Release 建置來源 `239d6f05cdf7883032889b8d25042a7a427d72d9`，App SHA256 `7a70d5abe3558c2b12d2c8a16c0ed583bf0a231d3cbe8ba14fa89300b74257ab`，host helper SHA256 `6cd855cb408ccee695d800ce70de8c94ddd76e4d38e510a50c68976aac5bd38d`。其後 `a2d2328` 只有平台 Rustfmt 換行；[Linux CI 40162614988](https://github.com/swchen44/notype/actions/runs/40162614988) 通過核心 27、桌面 34（debug）、平台 4、Node 23 unit +16 integration、fmt／clippy。Windows Release 桌面契約為 33 項（native token target 的條件編譯數量不同），另有 9 項核心 session 與 4 項平台檢查。繁簡各 570 keys、前端 lint/build 通過。
@@ -52,7 +56,7 @@ Qwen 固定 6 cases／12 次推論與新版 converter 的 3 個 native 保存案
 
 使用者已確認目前不在公司網路，先完成本機版本。公司 API／Proxy 維持未驗收，現在不需要 key，也不另選公開 provider。
 
-八個已合入的實作／修正 worktrees 均已清理，branch commits 與外部證據保留；目前只剩主整合 worktree。後續實作從最新整合分支建立新 worktree。唯一 native target 為 `D:/git/notype-build`，舊 debug／core target 已退役，不能重建第二份來迴避 cache 使用權。獨立 C++ prefix 是 `%LOCALAPPDATA%/notype-study/build-cache/native-prebuilt/transcribe-cpp-0.2.4-win64-cpu-release-E4b0TR`；舊 tcs 是指向已刪 debug 的 junction，不能當作獨立備份。清理只限確認 idle、驗證絕對範圍且不跟隨 reparse point 的 task-owned derived files；不得清除模型、歷史、來源 registry、系統或 pagefile。完整本機包與失敗／成功細節見 [套件驗證](docs/verification/portable-local-assembly.md)。
+上一輪八個已合入 worktrees 已清理，branch commits 與外部證據保留；第二輪另建 `model-interface`、`input-tray`、`diagnostics` 與待實作的 `recording-elapsed` worktrees。後續從最新整合分支接續並遵守新計畫 gate。唯一 native target 為 `D:/git/notype-build`，舊 debug／core target 已退役，不能重建第二份來迴避 cache 使用權。獨立 C++ prefix 是 `%LOCALAPPDATA%/notype-study/build-cache/native-prebuilt/transcribe-cpp-0.2.4-win64-cpu-release-E4b0TR`；舊 tcs 是指向已刪 debug 的 junction，不能當作獨立備份。清理只限確認 idle、驗證絕對範圍且不跟隨 reparse point 的 task-owned derived files；不得清除使用者模型、歷史、來源 registry、系統或 pagefile。完整本機包與失敗／成功細節見 [套件驗證](docs/verification/portable-local-assembly.md)。
 
 ## 接手時特別保留的邊界
 
