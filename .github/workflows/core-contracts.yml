@@ -66,7 +66,15 @@ jobs:
       - name: Install existing locked frontend dependencies
         working-directory: desktop
         run: bun install --frozen-lockfile --ignore-scripts
-      - run: node desktop/node_modules/playwright/cli.js install --with-deps chromium
+      - name: Select and verify an actual browser
+        run: |
+          if command -v google-chrome >/dev/null 2>&1; then
+            browser="$(command -v google-chrome)"
+            "$browser" --version
+            echo "NOTYPE_TEST_BROWSER=$browser" >> "$GITHUB_ENV"
+          else
+            node desktop/node_modules/playwright/cli.js install --with-deps chromium
+          fi
       - name: Exercise provider connection rendered contracts when present
         run: |
           if test -f tests/integration/provider-connections.ui.mjs; then
