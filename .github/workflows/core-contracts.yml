@@ -11,12 +11,15 @@ on:
       - tests/integration/desktop-contracts/**
       - tests/integration/desktop_provider.rs
       - tests/integration/text-flow.test.mjs
+      - tests/integration/portable-*.test.mjs
+      - tests/integration/fixtures/portable-package.mjs
       - desktop/src-tauri/src/workflow.rs
       - desktop/src-tauri/src/faithful_provider.rs
       - desktop/src-tauri/src/recognition.rs
       - src/**
       - package.json
       - package-lock.json
+      - packages/**
   workflow_dispatch:
 
 permissions:
