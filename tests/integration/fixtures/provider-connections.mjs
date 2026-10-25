@@ -6,6 +6,7 @@ export async function providerConnectionsFixture(
   language = "en",
   connections = [],
   activeId = null,
+  initialMode = "ok",
 ) {
   const page = await uiFixture(t, {
     cacheName: "provider-connections",
@@ -16,9 +17,10 @@ export async function providerConnectionsFixture(
   page.on("pageerror", (error) => errors.push(error.message));
   t.after(() => assert.deepEqual(errors, []));
   await page.evaluate(
-    async ({ language, connections, activeId }) => {
+    async ({ language, connections, activeId, initialMode }) => {
       window.calls = [];
       window.modelMode = "ok";
+      window.mode = initialMode;
       window.configuration = {
         schema_version: 2,
         revision: 0,
@@ -44,14 +46,20 @@ export async function providerConnectionsFixture(
           window.calls.push({ cmd, args });
           if (cmd === "plugin:event|listen") return 1;
           if (cmd === "plugin:event|unlisten") return null;
-          if (cmd === "get_text_configuration") return window.configuration;
-          if (cmd === "get_workflow_readiness")
+          if (cmd === "get_text_configuration") {
+            if (window.mode === "get-error") throw "Bearer read-secret";
+            return window.configuration;
+          }
+          if (cmd === "get_workflow_readiness") {
+            if (window.mode === "readiness-error")
+              throw "Bearer readiness-secret";
             return {
               text_configured:
                 window.configuration.active_connection_id !== null,
               delivery_available: false,
               legacy_import_error: null,
             };
+          }
           if (cmd === "get_app_settings" || cmd === "get_default_settings")
             return { custom_words: [], app_language: language };
           if (cmd === "check_custom_sounds")
@@ -66,7 +74,7 @@ export async function providerConnectionsFixture(
               status:
                 window.modelMode === "unsupported"
                   ? "unsupported"
-                  : window.modelMode === "error"
+                  : ["error", "auth-error"].includes(window.modelMode)
                     ? "error"
                     : "ok",
               models:
@@ -74,7 +82,11 @@ export async function providerConnectionsFixture(
                   ? []
                   : [{ id: "catalog/model-a" }, { id: "catalog/model-b" }],
               error_code:
-                window.modelMode === "error" ? "Bearer upstream-secret" : null,
+                window.modelMode === "error"
+                  ? "Bearer upstream-secret"
+                  : window.modelMode === "auth-error"
+                    ? "provider-auth"
+                    : null,
               retry_after_seconds: null,
               credential_source: "none",
               cache_hit: false,
@@ -149,7 +161,7 @@ export async function providerConnectionsFixture(
         window.uiRoot.render(React.createElement(PostProcessingSettings));
       window.render();
     },
-    { language, connections, activeId },
+    { language, connections, activeId, initialMode },
   );
   return page;
 }

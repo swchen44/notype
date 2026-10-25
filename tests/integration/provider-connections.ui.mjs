@@ -149,3 +149,45 @@ test("model IDs are queried and copied only on user action without changing the 
     0,
   );
 });
+
+test("failed configuration loading can be retried without exposing the rejection", async (t) => {
+  const page = await providerConnectionsFixture(t, "en", [], null, "get-error");
+  await page.getByRole("alert").waitFor();
+  await page.evaluate(() => (window.mode = "ok"));
+  await page
+    .getByRole("button", { name: "Reload connections", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Add connection", exact: true })
+    .waitFor();
+  assert.doesNotMatch(
+    await page.locator("body").innerText(),
+    /read-secret|Bearer/,
+  );
+});
+
+test("model-list authentication errors are actionable while manual input stays available", async (t) => {
+  const page = await providerConnectionsFixture(t, "en", [savedConnection]);
+  await page
+    .getByRole("button", { name: "Edit Company writing", exact: true })
+    .click();
+  await page.evaluate(() => (window.modelMode = "auth-error"));
+  await page
+    .getByRole("button", { name: "View model ID list", exact: true })
+    .click();
+  await page
+    .getByRole("alert")
+    .getByText("Model-list authentication failed. Check the connection key.", {
+      exact: true,
+    })
+    .waitFor();
+  await page
+    .getByLabel("Model ID (manual entry)", { exact: true })
+    .fill("still-manual");
+  assert.equal(
+    await page
+      .getByLabel("Model ID (manual entry)", { exact: true })
+      .inputValue(),
+    "still-manual",
+  );
+});
