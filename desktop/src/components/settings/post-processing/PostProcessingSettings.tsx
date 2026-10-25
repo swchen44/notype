@@ -10,6 +10,7 @@ import { Input } from "../../ui/Input";
 import { Button } from "../../ui/Button";
 import { CustomWords } from "../CustomWords";
 import { ScenarioSettings } from "./ScenarioSettings";
+import { ConnectionEditor } from "./ConnectionEditor";
 
 type SettingsResult = Awaited<ReturnType<typeof commands.createTextConnection>>;
 
@@ -25,6 +26,8 @@ export const PostProcessingSettings = () => {
   const [message, setMessage] = useState("");
   const [failed, setFailed] = useState(false);
   const [ready, setReady] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [editorVersion, setEditorVersion] = useState(0);
   const requestEpoch = useRef(0);
 
   const apply = (updated: ConnectionSettingsView) => {
@@ -58,13 +61,13 @@ export const PostProcessingSettings = () => {
   }, [t]);
 
   const mutate = async (operation: () => Promise<SettingsResult>) => {
-    if (busy) return;
+    if (busy) return null;
     const epoch = ++requestEpoch.current;
     setBusy(true);
     setMessage("");
     try {
       const result = await operation();
-      if (requestEpoch.current !== epoch) return;
+      if (requestEpoch.current !== epoch) return null;
       if (result.status !== "ok") {
         setFailed(true);
         setMessage(
@@ -74,7 +77,7 @@ export const PostProcessingSettings = () => {
               : "notype.connections.failed",
           ),
         );
-        return;
+        return null;
       }
       apply(result.data);
       setCreating(false);
@@ -83,10 +86,12 @@ export const PostProcessingSettings = () => {
       setMessage(t("notype.connections.saved"));
       const readiness = await commands.getWorkflowReadiness();
       if (requestEpoch.current === epoch) setReady(readiness.text_configured);
+      return result.data;
     } catch {
-      if (requestEpoch.current !== epoch) return;
+      if (requestEpoch.current !== epoch) return null;
       setFailed(true);
       setMessage(t("notype.connections.failed"));
+      return null;
     } finally {
       if (requestEpoch.current === epoch) setBusy(false);
     }
@@ -102,6 +107,9 @@ export const PostProcessingSettings = () => {
     );
   const nameValid =
     name.trim().length > 0 && Array.from(name.trim()).length <= 128;
+  const selected = configuration.connections.find(
+    (connection) => connection.id === selectedId,
+  );
   return (
     <section className="max-w-3xl w-full mx-auto space-y-4">
       <h2 className="font-semibold">{t("notype.connections.title")}</h2>
@@ -211,6 +219,15 @@ export const PostProcessingSettings = () => {
                 <div className="flex flex-wrap gap-2">
                   <Button
                     variant="secondary"
+                    aria-label={t("notype.connections.editNamed", {
+                      name: connection.display_name,
+                    })}
+                    onClick={() => setSelectedId(connection.id)}
+                  >
+                    {t("notype.connections.edit")}
+                  </Button>
+                  <Button
+                    variant="secondary"
                     disabled={
                       configuration.active_connection_id === connection.id
                     }
@@ -247,6 +264,24 @@ export const PostProcessingSettings = () => {
           <p>{t("notype.connections.noActive")}</p>
         )}
       </fieldset>
+      {selected && (
+        <ConnectionEditor
+          key={selected.id + ":" + editorVersion}
+          connection={selected}
+          busy={busy}
+          onSave={async (draft, keyAction) => {
+            const updated = await mutate(() =>
+              commands.saveTextConnection(
+                configuration.revision,
+                draft,
+                keyAction,
+              ),
+            );
+            if (updated) setEditorVersion((value) => value + 1);
+            return !!updated;
+          }}
+        />
+      )}
       {message && <p role={failed ? "alert" : "status"}>{message}</p>}
       <ScenarioSettings configuration={configuration} onChange={apply} />
       <CustomWords descriptionMode="tooltip" />

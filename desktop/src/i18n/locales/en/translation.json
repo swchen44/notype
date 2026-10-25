@@ -188,6 +188,12 @@
       "back-translation-timeout": "Back-translation unavailable. The primary translation is retained for copying or retry."
     },
     "connections": {
+      "edit": "Edit",
+      "editNamed": "Edit {{name}}",
+      "editor": "Connection settings",
+      "save": "Save connection",
+      "endpointPreview": "Request URL preview",
+      "invalidEndpoint": "Enter a valid API address",
       "title": "AI connections",
       "description": "Save separate provider, custom or local API connections, then explicitly activate one. Each connection keeps its own model and options.",
       "add": "Add connection",

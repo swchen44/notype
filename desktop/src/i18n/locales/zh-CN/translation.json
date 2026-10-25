@@ -141,6 +141,12 @@
       "back-translation-timeout": "回译尚未完成；主翻译仍保留，可复制或重试。"
     },
     "connections": {
+      "edit": "编辑",
+      "editNamed": "编辑 {{name}}",
+      "editor": "连接设置",
+      "save": "保存连接",
+      "endpointPreview": "请求网址预览",
+      "invalidEndpoint": "请输入有效的 API 地址",
       "title": "AI 连接",
       "description": "分别保存 Provider、自定义或本机 API 连接，再明确选择一条启用。每条连接分别保存模型与参数。",
       "add": "新增连接",
