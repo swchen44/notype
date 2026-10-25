@@ -1,5 +1,122 @@
 use notype_core::{CoreError, RecognitionMode, SessionOptions, SessionService, SessionStatus};
 
+#[cfg(unix)]
+#[test]
+fn last_service_owner_releases_store_while_inherited_pre_exec_child_is_held() {
+    use std::{
+        io::{Read, Write},
+        net::Shutdown,
+        os::unix::{net::UnixStream, process::CommandExt},
+        process::{Command, ExitStatus, Stdio},
+        thread::JoinHandle,
+        time::Duration,
+    };
+    const CHILD: &str = "NOTYPE_CORE_OWNED_PREEXEC_CHILD";
+    if std::env::var_os(CHILD).as_deref() == Some(std::ffi::OsStr::new("1")) {
+        return; // Only this selected helper body executes after the owned exec.
+    }
+    struct HeldChild {
+        release: UnixStream,
+        worker: Option<JoinHandle<std::io::Result<ExitStatus>>>,
+    }
+    impl HeldChild {
+        fn finish(&mut self) -> std::thread::Result<std::io::Result<ExitStatus>> {
+            let _ = self.release.write(&[1]);
+            let _ = self.release.shutdown(Shutdown::Both);
+            self.worker
+                .take()
+                .map(|worker| worker.join())
+                .unwrap_or_else(|| Ok(Err(std::io::Error::from_raw_os_error(5))))
+        }
+    }
+    impl Drop for HeldChild {
+        fn drop(&mut self) {
+            if self.worker.is_some() {
+                let _ = self.finish();
+            }
+        }
+    }
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("fork-owned.db");
+    let first = SessionService::open(&path).unwrap();
+    let held = first.clone();
+    assert!(matches!(
+        SessionService::open(&path),
+        Err(CoreError::AlreadyOwned)
+    ));
+    drop(first);
+    let (parent_stream, child_stream) = UnixStream::pair().unwrap();
+    // Configure both child and parent deadlines before fork. Drop always releases
+    // the byte gate and joins/reaps the owned child, including setup/assert errors.
+    for stream in [&parent_stream, &child_stream] {
+        stream
+            .set_read_timeout(Some(Duration::from_secs(10)))
+            .unwrap();
+        stream
+            .set_write_timeout(Some(Duration::from_secs(10)))
+            .unwrap();
+    }
+    let executable = std::env::current_exe().unwrap();
+    let worker = std::thread::spawn(move || {
+        let mut command = Command::new(executable);
+        command
+            .args([
+                "--exact",
+                "last_service_owner_releases_store_while_inherited_pre_exec_child_is_held",
+            ])
+            .env(CHILD, "1")
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        // SAFETY: all allocation, socket creation and timeout configuration happen
+        // before fork. The child closure only borrows its precreated socket and
+        // performs bounded one-byte read/write syscalls. It takes no locks, uses
+        // no SQLite/async/logging/environment/formatting, and creates only stack
+        // bytes or an allocation-free OS error. Captured streams stay alive until
+        // exec/error; the parent owns the matching release endpoint and cleanup.
+        unsafe {
+            command.pre_exec(move || {
+                let mut stream = &child_stream;
+                let mut byte = [0];
+                if stream.write(&[1])? != 1 || stream.read(&mut byte)? != 1 || byte != [1] {
+                    return Err(std::io::Error::from_raw_os_error(5));
+                }
+                Ok(())
+            });
+        }
+        command.spawn()?.wait()
+    });
+    let mut child = HeldChild {
+        release: parent_stream,
+        worker: Some(worker),
+    };
+    let mut byte = [0];
+    let handshake = child.release.read_exact(&mut byte);
+    // Store every result until AFTER cleanup. Reopen happens before release,
+    // while the forked child necessarily still retains the original descriptor.
+    let clone_blocks = matches!(SessionService::open(&path), Err(CoreError::AlreadyOwned));
+    drop(held);
+    let reopened = SessionService::open(&path);
+    let completed = child.finish();
+    assert!(
+        handshake.is_ok() && byte == [1],
+        "owned pre-exec handshake failed: {handshake:?}"
+    );
+    assert!(
+        completed.unwrap().unwrap().success(),
+        "owned child did not exit successfully"
+    );
+    assert!(
+        clone_blocks,
+        "a live service clone must retain exclusive ownership"
+    );
+    assert!(
+        reopened.is_ok(),
+        "final service owner must release before child exec; got {:?}",
+        reopened.err()
+    );
+}
+
 #[test]
 fn translation_scene_and_target_survive_sqlite_restart_as_immutable_entry_metadata() {
     let directory = tempfile::tempdir().unwrap();
