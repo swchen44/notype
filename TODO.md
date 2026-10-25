@@ -2,6 +2,10 @@
 
 更新日期：2026-10-26。這份文件是接手順序與狀態快照；live [GitHub Issues](https://github.com/swchen44/notype/issues) 是工作追蹤入口。先讀 [HANDOFF.md](HANDOFF.md)。
 
+最新 #23 frontier：bridge checkpoint bfecf99／da7d1cc 完成 6 integration cases／固定8次離線呼叫／取消retry／6列CSV，兩段來源雙軸0；shared console late interrupt 7/7。native console／helper source 尚在完成，binary未就緒、沒有key／付費呼叫。新 Windows feature cache cascade 的成本無法證明能放入剩餘額，native build已停止等待資源；曾誤profile造成135MB新cache，工具拒絕精確刪除且零檔案被刪，不重試。現採已Astra核准192MiB累積cap／160stop不刪檔方案，不resetledger。使用者新的空間問題是C至少500MB、D至少2GB，尚待回覆；其餘native App／公司／五App／品質項目仍保留。
+
+最新 frontier：#22 backend／#24 UI 及 readiness／owner-release 修正已合入 `ac69eb1`，frontend-only #24 已結案；core43＋doc1、provider20／workflow15／DTO1、UI36＋1、Clippy及獨立來源雙軸0；Linux完整CI40216512564通過產品來源fb4，後續receipt-only8214來源相同。#23 portable helper 已獲補充計畫核准並進入獨立實作，未取得key／未付費。#22／#14原生建置與安裝驗收未做，D約1.51GB不足native起始2GiB，使用者釋放空間回覆仍待；現用App／資料未動。所有其他未完項目留在#8。下列舊狀態由本段取代。
+
 最新進度以 HANDOFF 開頭的 2026-10-26 快照為準：root `1dfedea`；P19 來源複核兩軸 0；#23 離線 guards／修正已整合並複核 0；#22 backend 收尾、#24 UI 完成待整合。P23 live 與 P14 build/delivery-v2 已 Astra 核准，仍須各自資源、完整來源、binary 與 runtime gate。D 槽空間不足以開始新版 native App 建置；尚未輸入 key／呼叫付費 API，也未更新或移除使用者現用 App。所有未完 item 仍保留於 #8，不只歷史／CSV。
 
 所有未結案項目已補入 [主規格#8](https://github.com/swchen44/notype/issues/8) 剩餘工作表。Source 已推送89d239c，使用者包未更新；P19兩項review修正待最終複核，#22歷史／彙總CSV／effort已Astra核准並實作中。#23 US$0.10 DeepSeek live計畫及P14新版建置／乾淨安裝計畫草擬中，未取得key／未呼叫付費API。使用者取消本輪舊版相容要求，尚未移除任何現用資料；公司API與五App驗收仍保留。確切核准與限制見HANDOFF；所有新實作仍須 [GPT-6-Astra 計畫gate](docs/agents/plan-review.md)。
