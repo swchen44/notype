@@ -7,7 +7,7 @@ installation guide; this feature never reads or removes the old user profile.
 
 ## Sources and units
 
-- `recording.audio_ms` is native-rate accepted mono frames ? 1000 / input rate, floored to
+- `recording.audio_ms` is `native-rate accepted mono frames * 1000 / input rate`, floored to
   milliseconds. It includes received silence before VAD/resampling/decoder padding. Known
   dropped frames mark incomplete; unavailable loss/boundary information marks unknown.
   This is neither microphone wall time nor overlay elapsed or padded decoder input length.
@@ -25,6 +25,10 @@ installation guide; this feature never reads or removes the old user profile.
   selected-result commit, including optional reverse translation, before human review/delivery.
   Timings are recorded after the respective durable availability through fenced metadata
   updates. Original-only uses original availability and does not fabricate an API result.
+  A retained forward translation does not complete review when reverse translation fails,
+  times out or is cancelled: initial readiness remains unknown, while its text/count and
+  terminal processing/API observations remain available. Retry never replaces the first
+  initial-readiness measurement or invents one for an incomplete initial result.
   Latest processing starts at acceptance; retry excludes time since the old stop/human waiting.
   API stage spans first possibly-sent dispatch through its last observed terminal boundary;
   pre-stop streaming work overlaps capture and is not added serially. Unknown endpoints stay
@@ -51,12 +55,12 @@ The compatible chat/DeepSeek response adapter currently has no documented moneta
 its actual fee is unknown even if an arbitrary response `cost`/`price` field exists. A trial
 reservation is a spending guard, never an actual history charge.
 
-Generic profile defaults omit effort/max_tokens. Explicit effort is 1?32 ASCII lowercase,
+Generic profile defaults omit effort/max_tokens. Explicit effort is 1..32 ASCII lowercase,
 digits, underscore/hyphen, sent unchanged; support depends on the server. DeepSeek offers
 omitted default / none / low / high / max. None sends disabled thinking; low/high/max enable
 thinking, with the same reasoning_effort value. Requested/reported effort remain separate;
-missing reported effort is unknown. Optional max_tokens is 1?393216 for DeepSeek and
-1?1000000 for Generic; omitted means provider default. No automatic retries are added.
+missing reported effort is unknown. Optional max_tokens is 1..393216 for DeepSeek and
+1..1000000 for Generic; omitted means provider default. No automatic retries are added.
 
 ## Export contract
 

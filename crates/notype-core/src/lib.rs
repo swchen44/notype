@@ -948,7 +948,7 @@ impl SessionService {
         observations.latest_processing_ms = Some(elapsed_ms(processing_started));
         observations.latest_api_ms = api_observer.stage_ms();
         if observations.latest_processing_kind.as_deref() == Some("initial") {
-            if result.is_some() {
+            if result.is_some() && error.is_none() && (!review || back_translation.is_some()) {
                 observations.initial_stop_to_result_ms = stopped_at.map(elapsed_ms);
             } else if original_only {
                 observations.initial_stop_to_result_ms = observations.asr_after_stop_ms;
