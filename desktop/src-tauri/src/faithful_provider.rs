@@ -358,9 +358,11 @@ impl ChatProcessor {
         let deadline = Duration::from_millis(configuration.timeout_ms);
         let mut client = reqwest::Client::builder()
             .timeout(deadline)
+            .connect_timeout(deadline.min(Duration::from_secs(5)))
+            .retry(reqwest::retry::never())
             .redirect(reqwest::redirect::Policy::none());
         if probe_network {
-            client = client.no_proxy().connect_timeout(Duration::from_secs(5));
+            client = client.no_proxy();
         }
         let client = client.build().map_err(|_| invalid)?;
         Ok(Self {
@@ -383,7 +385,7 @@ fn failure(error: reqwest::Error) -> TextFailure {
     if error.is_timeout() {
         TextFailure::Timeout
     } else {
-        TextFailure::Failed
+        TextFailure::Provider(GatewayError::Transport)
     }
 }
 impl TextProcessor for ChatProcessor {
@@ -580,11 +582,16 @@ impl ChatProcessor {
                 }
                 let mut response = request.send().await.map_err(failure)?;
                 let success = response.status().is_success();
-                let status_error = GatewayError::from_status(response.status().as_u16());
+                let status = response.status().as_u16();
+                let status_error = GatewayError::from_status(status);
                 let mut bytes = Vec::new();
-                while let Some(chunk) = response.chunk().await.map_err(failure)? {
+                while let Some(chunk) = response.chunk().await.map_err(|error| {
+                    status_error.map_or_else(|| failure(error), TextFailure::Provider)
+                })? {
                     if bytes.len().saturating_add(chunk.len()) > 1_048_576 {
-                        return Err(TextFailure::InvalidResponse);
+                        return Err(TextFailure::Provider(
+                            status_error.unwrap_or(GatewayError::Oversize),
+                        ));
                     }
                     bytes.extend_from_slice(&chunk);
                 }
@@ -600,12 +607,17 @@ impl ChatProcessor {
                 if let Some(guard) = &mut guard {
                     guard.response(ApiReceipt::from_chat_json(&value));
                 }
-                if !success {
-                    return Err(status_error.map_or(TextFailure::Failed, TextFailure::Provider));
+                if let Some(error) = GatewayError::classify(status, Some(&value)) {
+                    return Err(TextFailure::Provider(error));
                 }
                 let choice = &value["choices"][0];
                 if choice["finish_reason"] != "stop"
                     || choice["message"]["role"] != "assistant"
+                    || ["tool_calls", "function_call"].iter().any(|field| {
+                        choice["message"]
+                            .get(field)
+                            .is_some_and(|value| !value.is_null())
+                    })
                     || choice["message"]["refusal"]
                         .as_str()
                         .is_some_and(|s| !s.is_empty())
@@ -624,6 +636,12 @@ impl ChatProcessor {
                     Ok(_) => ApiOutcome::Success,
                     Err(TextFailure::Cancelled) => ApiOutcome::Cancelled,
                     Err(TextFailure::Timeout) => ApiOutcome::Timeout,
+                    Err(TextFailure::Provider(GatewayError::ProviderTimeout)) => {
+                        ApiOutcome::Timeout
+                    }
+                    Err(TextFailure::Provider(GatewayError::Protocol | GatewayError::Oversize)) => {
+                        ApiOutcome::InvalidResponse
+                    }
                     Err(TextFailure::InvalidResponse) => ApiOutcome::InvalidResponse,
                     Err(_) => ApiOutcome::Failed,
                 });

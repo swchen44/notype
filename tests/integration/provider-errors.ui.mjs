@@ -41,3 +41,63 @@ for (const [language, forward, reverse] of [
     );
   });
 }
+
+for (const [language, labels] of [
+  [
+    "en",
+    [
+      "Rate limited",
+      "Insufficient balance",
+      "Service timed out",
+      "Editing did not complete. The original is saved.",
+    ],
+  ],
+  [
+    "zh-TW",
+    [
+      "請求過於頻繁",
+      "服務餘額不足",
+      "文字服務逾時",
+      "整理未完成，原稿已保存。",
+    ],
+  ],
+  [
+    "zh-CN",
+    [
+      "请求过于频繁",
+      "服务余额不足",
+      "文字服务超时",
+      "整理未完成，原稿已保存。",
+    ],
+  ],
+]) {
+  test(`history ${language} distinguishes actionable provider categories and safely falls back`, async (t) => {
+    const page = await historyApiFixture(t, "HistorySettings", language);
+    const entries = [
+      "provider-rate-limit",
+      "provider-balance",
+      "provider-timeout",
+      "Bearer unknown-secret https://private.invalid/?token=secret",
+    ].map((error, index) => ({
+      ...structuredClone(historyEntry),
+      id: `category-${index}`,
+      error,
+      status: "failed",
+    }));
+    await page.evaluate((entries) => {
+      window.entries = entries;
+      window.render();
+    }, entries);
+    for (const label of labels.slice(0, 3)) {
+      await page.getByRole("note").filter({ hasText: label }).waitFor();
+    }
+    assert.equal(
+      await page.getByRole("note").filter({ hasText: labels[3] }).count(),
+      1,
+    );
+    assert.doesNotMatch(
+      await page.locator("body").innerText(),
+      /unknown-secret|private\.invalid|notype\.errors/,
+    );
+  });
+}
