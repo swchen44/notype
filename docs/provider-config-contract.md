@@ -34,6 +34,7 @@ type ConnectionDraft = {
   temperature: number | null; top_p: number | null; max_output_tokens: number | null;
 };
 type RequestResolutionView = {
+  supported_efforts: string[];
   capability: "non_reasoning" | "optional" | "mandatory" | "unknown";
   provenance: "documented" | "provider_metadata" | "user_declared" | "unknown";
   effective_thinking: boolean | null; effective_effort: string | null;
