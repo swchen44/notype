@@ -134,14 +134,25 @@ pub fn get_workflow_readiness(
 }
 
 pub(crate) fn begin_recording(app: &AppHandle) -> Result<u64, String> {
-    let mode = match settings::get_settings(app).chinese_script {
-        settings::ChineseScript::Simplified => RecognitionMode::SimplifiedEnglish,
-        settings::ChineseScript::Traditional | settings::ChineseScript::AsTranscribed => {
-            RecognitionMode::TraditionalEnglish
+    let preferences = settings::get_settings(app);
+    let profile = crate::workflow::recognition::RecognitionProfile::new(
+        preferences.recognition_mode.into(),
+        preferences.custom_words,
+    );
+    if let Some(model) = app
+        .state::<Arc<crate::managers::model::ModelManager>>()
+        .get_model_info(&preferences.selected_model)
+    {
+        // Custom model capabilities can remain unknown until loading; the
+        // engine validates its actual capabilities before decoding as well.
+        if !model.supported_languages.is_empty() {
+            profile
+                .validate_model(&model.supported_languages)
+                .map_err(str::to_string)?;
         }
-    };
+    }
     app.state::<Arc<DesktopWorkflow>>()
-        .begin(mode, None)
+        .begin_with_profile(profile, None)
         .map_err(|error| error.to_string())
 }
 
@@ -276,12 +287,22 @@ pub fn update_recording_retention_period(_period: String) -> Result<(), String> 
 #[cfg(debug_assertions)]
 #[tauri::command]
 pub fn debug_begin_session(
+    app: AppHandle,
     workflow: State<'_, Arc<DesktopWorkflow>>,
-    recognition_mode: RecognitionMode,
+    recognition_mode: Option<RecognitionMode>,
 ) -> Result<u64, String> {
-    workflow
-        .begin(recognition_mode, None)
-        .map_err(|error| error.to_string())
+    match recognition_mode {
+        Some(mode) => workflow
+            .begin_with_profile(
+                crate::workflow::recognition::RecognitionProfile::new(
+                    mode,
+                    settings::get_settings(&app).custom_words,
+                ),
+                None,
+            )
+            .map_err(|error| error.to_string()),
+        None => begin_recording(&app),
+    }
 }
 #[cfg(debug_assertions)]
 #[tauri::command]

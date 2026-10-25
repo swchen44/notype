@@ -24,7 +24,16 @@ function getLanguages(): string[] {
     .sort();
 }
 
-const LANGUAGES = getLanguages();
+const availableLanguages = getLanguages();
+const requestedLanguages = process.argv.slice(2);
+for (const language of requestedLanguages) {
+  if (!availableLanguages.includes(language)) {
+    throw new Error(`Unknown translation locale: ${language}`);
+  }
+}
+const LANGUAGES = requestedLanguages.length
+  ? requestedLanguages
+  : availableLanguages;
 
 // Colors for terminal output
 const colors: Record<string, string> = {

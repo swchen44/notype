@@ -1,6 +1,5 @@
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
-import { locale } from "@tauri-apps/plugin-os";
 import { LANGUAGE_METADATA } from "./languages";
 import { commands } from "@/bindings";
 import {
@@ -74,9 +73,11 @@ export const getSupportedLanguage = (
     let fallback = language;
     if (language === "zh" && (isHant || (!isHans && isTraditionalRegion))) {
       fallback = "zh-tw";
+    } else if (language === "zh") {
+      fallback = "zh-cn";
     } else if (language === "yue") {
       // Cantonese uses Traditional Chinese unless explicitly tagged as Hans.
-      fallback = isHans ? "zh" : "zh-tw";
+      fallback = isHans ? "zh-cn" : "zh-tw";
     }
     supported = SUPPORTED_LANGUAGES.find(
       (lang) => lang.code.toLowerCase() === fallback,
@@ -85,12 +86,12 @@ export const getSupportedLanguage = (
   return supported ? supported.code : null;
 };
 
-// Initialize i18n with English as default
-// Language will be synced from settings after init
+// Default and unsupported preferences use Traditional Chinese.
 i18n.use(initReactI18next).init({
   resources,
-  lng: "en",
+  lng: "zh-TW",
   fallbackLng: "zh-TW",
+  parseMissingKeyHandler: () => "目前無法顯示這段文字，請稍後重試。",
   interpolation: {
     escapeValue: false, // React already escapes values
   },
@@ -103,21 +104,15 @@ i18n.use(initReactI18next).init({
 export const syncLanguageFromSettings = async () => {
   try {
     const result = await commands.getAppSettings();
-    if (result.status === "ok" && result.data.app_language) {
-      const supported = getSupportedLanguage(result.data.app_language);
-      if (supported && supported !== i18n.language) {
-        await i18n.changeLanguage(supported);
-      }
-    } else {
-      // Fall back to system locale detection if no saved preference
-      const systemLocale = await locale();
-      const supported = getSupportedLanguage(systemLocale);
-      if (supported && supported !== i18n.language) {
-        await i18n.changeLanguage(supported);
-      }
+    const supported =
+      result.status === "ok"
+        ? (getSupportedLanguage(result.data.app_language) ?? "zh-TW")
+        : "zh-TW";
+    if (supported !== i18n.language) {
+      await i18n.changeLanguage(supported);
     }
-  } catch (e) {
-    console.warn("Failed to sync language from settings:", e);
+  } catch {
+    await i18n.changeLanguage("zh-TW");
   }
 };
 

@@ -26,7 +26,7 @@ include!(concat!(env!("OUT_DIR"), "/tray_translations.rs"));
 pub fn get_tray_translations(locale: Option<String>) -> TrayStrings {
     let normalized = locale
         .as_deref()
-        .unwrap_or("en")
+        .unwrap_or("zh-TW")
         .to_lowercase()
         .replace('_', "-");
     let language = normalized.split('-').next().unwrap_or("en");
@@ -36,15 +36,15 @@ pub fn get_tray_translations(locale: Option<String>) -> TrayStrings {
         .find_map(|(code, strings)| code.eq_ignore_ascii_case(&normalized).then_some(strings));
     let fallback = match chinese_script_for_locale(&normalized) {
         Some(ChineseScript::Traditional) => "zh-TW",
-        Some(_) => "zh",
+        Some(_) => "zh-CN",
         None => language,
     };
 
     exact_match
         .or_else(|| TRANSLATIONS.get(fallback))
-        .or_else(|| TRANSLATIONS.get("en"))
+        .or_else(|| TRANSLATIONS.get("zh-TW"))
         .cloned()
-        .expect("English translations must exist")
+        .expect("Traditional Chinese translations must exist")
 }
 
 #[cfg(test)]
@@ -60,11 +60,11 @@ mod tests {
             ("zh-MO", "zh-TW"),
             ("ZH-TW", "zh-TW"),
             ("zh_Hant_TW", "zh-TW"),
-            ("zh-Hans-CN", "zh"),
+            ("zh-Hans-CN", "zh-CN"),
             ("yue-Hant-HK", "zh-TW"),
-            ("yue-Hans-CN", "zh"),
+            ("yue-Hans-CN", "zh-CN"),
             ("fr-FR", "fr"),
-            ("xx-YY", "en"),
+            ("xx-YY", "zh-TW"),
         ] {
             assert_eq!(
                 format!("{:?}", get_tray_translations(Some(locale.into()))),

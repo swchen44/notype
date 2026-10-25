@@ -1,0 +1,96 @@
+{
+  "purpose": "Non-secret synthetic smoke inputs only; not human code-switching quality acceptance",
+  "format": {
+    "sampleRate": 16000,
+    "bitsPerSample": 16,
+    "channels": 1,
+    "encoding": "PCM"
+  },
+  "fixtures": [
+    {
+      "id": "numbers-negation-switch",
+      "rate": 0,
+      "segments": [
+        {
+          "voice": "Microsoft Hanhan Desktop",
+          "text": "今天請保留四十二筆測試資料，不要刪除。"
+        },
+        {
+          "voice": "Microsoft Zira Desktop",
+          "text": "The API is not ready."
+        },
+        {
+          "voice": "Microsoft Hanhan Desktop",
+          "text": "等驗證完成後，再送出兩筆請求。"
+        },
+        {
+          "voice": "Microsoft Zira Desktop",
+          "text": "Keep the test data."
+        }
+      ],
+      "goldTraditional": "今天請保留42筆測試資料，不要刪除。The API is not ready. 等驗證完成後，再送出2筆請求。Keep the test data.",
+      "goldSimplified": "今天请保留42笔测试数据，不要删除。The API is not ready. 等验证完成后，再送出2笔请求。Keep the test data.",
+      "mustPreserve": [
+        "42",
+        "2",
+        "API",
+        "not ready",
+        "Keep the test data"
+      ],
+      "notes": "Numeric references use expected inverse-text normalization. Score lexical/negation, script and punctuation separately."
+    },
+    {
+      "id": "technical-names",
+      "rate": 0,
+      "segments": [
+        {
+          "voice": "Microsoft Zira Desktop",
+          "text": "Check the API and session underscore id."
+        },
+        {
+          "voice": "Microsoft Hanhan Desktop",
+          "text": "這是測試用的設定，請保留英文名稱，不要改成中文。"
+        },
+        {
+          "voice": "Microsoft Zira Desktop",
+          "text": "Use Visual Studio Code, then check GitHub."
+        }
+      ],
+      "goldTraditional": "Check the API and session underscore id. 這是測試用的設定，請保留英文名稱，不要改成中文。Use Visual Studio Code, then check GitHub.",
+      "goldSimplified": "Check the API and session underscore id. 这是测试用的设定，请保留英文名称，不要改成中文。Use Visual Studio Code, then check GitHub.",
+      "mustPreserve": [
+        "API",
+        "Visual Studio Code",
+        "GitHub"
+      ],
+      "spokenIdentifier": "session underscore id",
+      "intendedCodeIdentifier": "session_id",
+      "notes": "Speech recognition spelling of the spoken identifier must be scored separately from identifier formatting. This audio does not prove a formatter maps underscore words to code. Add text-level protected-span tests for literal session_id."
+    },
+    {
+      "id": "script-context-version",
+      "rate": 0,
+      "segments": [
+        {
+          "voice": "Microsoft Hanhan Desktop",
+          "text": "頭髮的髮和發展的發意思不同，今天不要發布正式版本。"
+        },
+        {
+          "voice": "Microsoft Zira Desktop",
+          "text": "This is a test build, version two point zero."
+        },
+        {
+          "voice": "Microsoft Hanhan Desktop",
+          "text": "請檢查後再送出，不要自動執行命令。"
+        }
+      ],
+      "goldTraditional": "頭髮的髮和發展的發意思不同，今天不要發布正式版本。This is a test build, version 2.0. 請檢查後再送出，不要自動執行命令。",
+      "goldSimplified": "头发的发和发展的发意思不同，今天不要发布正式版本。This is a test build, version 2.0. 请检查后再送出，不要自动执行命令。",
+      "mustPreserve": [
+        "This is a test build",
+        "2.0"
+      ],
+      "notes": "Includes one-to-many script context for 發/髮. Gold references are independently authored, not generated using the conversion implementation."
+    }
+  ]
+}

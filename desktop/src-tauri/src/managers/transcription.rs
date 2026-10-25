@@ -1,7 +1,8 @@
+#[cfg(test)]
 use crate::audio_toolkit::{
-    apply_custom_words, detect_output_language, normalize_transcription_output,
-    remove_filler_words, OutputLanguageEvidence,
+    apply_custom_words, normalize_transcription_output, remove_filler_words,
 };
+use crate::audio_toolkit::{detect_output_language, OutputLanguageEvidence};
 use crate::chinese_script::{convert_chinese_script, ChineseVariety};
 use crate::managers::audio::AudioRecordingManager;
 use crate::managers::model::{EngineType, ModelManager};
@@ -9,6 +10,7 @@ use crate::settings::{
     get_settings, AppSettings, ChineseScript, ModelUnloadTimeout, OrtAcceleratorSetting,
     TranscribeAcceleratorSetting,
 };
+use crate::workflow::recognition::{RecognitionProfile, CPU_THREADS};
 use anyhow::Result;
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
@@ -109,9 +111,6 @@ enum StreamCmd {
 
 struct FinalizedStreamText {
     text: String,
-    output_language: OutputLanguageEvidence,
-    /// The streaming model's supported languages, for text-based detection.
-    supported_languages: Vec<String>,
 }
 
 /// Routes real-time audio frames to the active streaming worker. Shared between
@@ -598,14 +597,19 @@ impl TranscriptionManager {
                 // The bound backend may differ from the request (e.g. CPU
                 // fallback under Auto); log what actually loaded.
                 let bound_backend = model.backend();
-                let session = model.session().map_err(|e| {
-                    let error_msg = format!(
-                        "Failed to create session for whisper model {}: {}",
-                        model_id, e
-                    );
-                    emit_loading_failed(&error_msg);
-                    anyhow::anyhow!(error_msg)
-                })?;
+                let session = model
+                    .session_with(&transcribe_cpp::SessionOptions {
+                        n_threads: CPU_THREADS,
+                        ..Default::default()
+                    })
+                    .map_err(|e| {
+                        let error_msg = format!(
+                            "Failed to create session for whisper model {}: {}",
+                            model_id, e
+                        );
+                        emit_loading_failed(&error_msg);
+                        anyhow::anyhow!(error_msg)
+                    })?;
                 // Reconcile the registry's advertised capabilities with the
                 // loaded model's real ones (GGUF metadata) so badges/gating
                 // reflect runtime truth, not the pre-download probe. The
@@ -812,7 +816,7 @@ impl TranscriptionManager {
     /// model can't stream, the worker idles until finalize/cancel and reports
     /// `None` so the caller falls back to batch transcription. Frames sent
     /// before the stream begins queue on the channel and are not lost.
-    pub fn start_stream(&self) {
+    pub fn start_stream_with_profile(&self, profile: RecognitionProfile) {
         if self.router.is_open() || self.active_stream_worker.load(Ordering::Acquire) != 0 {
             warn!("start_stream called while a stream worker is already active");
             return;
@@ -830,10 +834,15 @@ impl TranscriptionManager {
         self.stream_active.store(false, Ordering::Release);
 
         let manager = self.clone();
-        thread::spawn(move || manager.run_stream_worker(rx, worker_id));
+        thread::spawn(move || manager.run_stream_worker(rx, worker_id, profile));
     }
 
-    fn run_stream_worker(&self, rx: mpsc::Receiver<StreamCmd>, worker_id: u64) {
+    fn run_stream_worker(
+        &self,
+        rx: mpsc::Receiver<StreamCmd>,
+        worker_id: u64,
+        profile: RecognitionProfile,
+    ) {
         let _worker = StreamWorkerGuard {
             worker_id,
             active_stream_worker: Arc::clone(&self.active_stream_worker),
@@ -919,7 +928,7 @@ impl TranscriptionManager {
             }
         };
 
-        if !supports_streaming {
+        if !supports_streaming || profile.validate_model(&languages).is_err() {
             self.return_engine(engine, &model_id);
             self.router.clear();
             drain_until_finalize(rx);
@@ -928,7 +937,11 @@ impl TranscriptionManager {
 
         // Build run options mirroring the offline transcribe-cpp path: task +
         // language gated against what the model actually advertises.
-        let settings = get_settings(&self.app_handle);
+        let mut settings = get_settings(&self.app_handle);
+        settings.translate_to_english = false;
+        settings.selected_language = "auto".into();
+        settings.chinese_script = ChineseScript::AsTranscribed;
+        settings.custom_words = profile.protected_terms;
         let effective_language =
             effective_language_for_model(&settings, self.model_manager.as_ref(), &model_id);
         let run_plan = transcribe_cpp_run_plan(
@@ -1032,22 +1045,8 @@ impl TranscriptionManager {
                                     update.audio_committed_ms,
                                     update.buffered_ms,
                                 );
-                                // In auto mode the model's own LID is the best
-                                // remaining evidence; the snapshot is only
-                                // materialized when it can change the outcome.
-                                let output_language = match &output_language {
-                                    OutputLanguageEvidence::Unknown => {
-                                        with_model_detected_language(
-                                            OutputLanguageEvidence::Unknown,
-                                            stream.snapshot().language,
-                                        )
-                                    }
-                                    resolved => resolved.clone(),
-                                };
                                 Some(FinalizedStreamText {
                                     text: stream.text().full,
-                                    output_language,
-                                    supported_languages: languages.clone(),
                                 })
                             }
                             Err(e) => {
@@ -1119,7 +1118,8 @@ impl TranscriptionManager {
     /// to batch transcription. `Err` means finalize itself failed or timed out.
     /// A timeout may still leave the worker holding the engine, so callers
     /// should surface it instead of immediately starting a batch fallback.
-    pub fn finalize_stream(&self) -> Result<Option<String>> {
+    /// Return untouched ASR text; the workflow applies its captured local profile.
+    pub fn finalize_stream_raw(&self) -> Result<Option<String>> {
         let Some(tx) = self.router.take() else {
             return Ok(None);
         };
@@ -1140,19 +1140,8 @@ impl TranscriptionManager {
             }
         };
 
-        let settings = get_settings(&self.app_handle);
-        // Streaming models do not receive a decode prompt, so custom words
-        // always go through the shared fuzzy post-correction path.
-        let filtered = post_process_transcription_text(
-            finalized.text,
-            &settings,
-            false,
-            &finalized.output_language,
-            &finalized.supported_languages,
-        );
-
         self.maybe_unload_immediately("streaming transcription");
-        Ok(Some(filtered))
+        Ok(Some(finalized.text))
     }
 
     /// Abandon any active stream without producing text (e.g. on cancel).
@@ -1180,7 +1169,12 @@ impl TranscriptionManager {
         .emit(&self.app_handle);
     }
 
-    pub fn transcribe(&self, audio: Vec<f32>) -> Result<String> {
+    /// Run the formal engine with the start-time profile, preserving raw ASR output.
+    pub fn transcribe_raw_with_profile(
+        &self,
+        audio: Vec<f32>,
+        profile: &RecognitionProfile,
+    ) -> Result<String> {
         #[cfg(debug_assertions)]
         if std::env::var("HANDY_FORCE_TRANSCRIPTION_FAILURE").is_ok() {
             return Err(anyhow::anyhow!(
@@ -1217,7 +1211,10 @@ impl TranscriptionManager {
         }
 
         // Get current settings for configuration
-        let settings = get_settings(&self.app_handle);
+        let mut settings = get_settings(&self.app_handle);
+        settings.selected_language = "auto".into();
+        settings.translate_to_english = false;
+        settings.custom_words = profile.protected_terms.clone();
 
         // Validate selected language against the model's supported languages.
         // If the language isn't supported, fall back to "auto" to prevent errors.
@@ -1228,6 +1225,14 @@ impl TranscriptionManager {
         let active_model = self
             .get_current_model()
             .unwrap_or_else(|| settings.selected_model.clone());
+        let languages = self
+            .model_manager
+            .get_model_info(&active_model)
+            .map(|info| info.supported_languages)
+            .unwrap_or_default();
+        profile
+            .validate_model(&languages)
+            .map_err(|code| anyhow::anyhow!(code))?;
         // Resolve the persisted language *intent* into the language this model
         // will actually use. The coercion is capability-aware (a must-pick model
         // never receives "auto") and computed fresh here — it is never written
@@ -1246,7 +1251,6 @@ impl TranscriptionManager {
         // run extension and the fuzzy-correction skip are gated on
         // `model_is_whisper` instead, since non-whisper archs can advertise
         // the feature while rejecting the whisper-kind extension.
-        let mut model_takes_initial_prompt = false;
         // Whether the loaded model is actually whisper-family (arch string).
         // Non-whisper archs (e.g. Voxtral Small) can advertise
         // Feature::InitialPrompt yet reject the whisper-kind run extension
@@ -1257,7 +1261,7 @@ impl TranscriptionManager {
         // Perform transcription with the appropriate engine.
         // We use catch_unwind to prevent engine panics from poisoning the mutex,
         // which would make the app hang indefinitely on subsequent operations.
-        let (result, output_language, model_languages) = {
+        let result = {
             let mut engine_guard = self.lock_engine();
 
             // Take the engine out so we own it during transcription.
@@ -1292,7 +1296,7 @@ impl TranscriptionManager {
             if let LoadedEngine::TranscribeCpp(session) = &engine {
                 let model = session.model();
                 let caps = model.capabilities();
-                model_takes_initial_prompt = model.supports(Feature::InitialPrompt);
+                let model_takes_initial_prompt = model.supports(Feature::InitialPrompt);
                 model_is_whisper = model.arch() == "whisper";
                 model_supports_translate = caps.supports_translate;
                 model_languages = caps.languages;
@@ -1492,21 +1496,12 @@ impl TranscriptionManager {
             );
             debug!("Output language evidence: {:?}", output_language);
 
-            (text, output_language, model_languages)
+            text
         };
 
-        // Apply fuzzy word correction if custom words are configured — UNLESS the
-        // words were already handed to the model as an initial prompt (whisper
-        // family). We don't pass a prompt to non-whisper models (it requires the
-        // whisper-kind run extension), so they still get fuzzy correction here,
-        // same as the ONNX engines.
-        let filtered_result = post_process_transcription_text(
-            result,
-            &settings,
-            model_is_whisper,
-            &output_language,
-            &model_languages,
-        );
+        // Preserve the engine output. Script conversion happens at the workflow
+        // boundary using the profile captured before recording.
+        let filtered_result = result;
 
         let et = std::time::Instant::now();
         let translation_note = if settings.translate_to_english {
@@ -1766,6 +1761,7 @@ fn transcribe_cpp_run_plan(
     }
 }
 
+#[cfg(test)]
 fn post_process_transcription_text(
     raw: String,
     settings: &AppSettings,
@@ -1892,6 +1888,7 @@ impl PreviewScript {
 /// Optional text cleanup must never discard a successful model result. The
 /// transform is pure and owns its input, so recovering the untouched text is
 /// safe even if a bug in custom-word or filler filtering unwinds.
+#[cfg(test)]
 fn fail_open_text_transform<F>(raw: String, transform: F) -> String
 where
     F: FnOnce(String) -> String,

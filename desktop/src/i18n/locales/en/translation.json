@@ -1,5 +1,12 @@
 {
   "notype": {
+    "recognition": {
+      "title": "Speech recognition",
+      "mode": "Recognition profile",
+      "traditional": "Traditional Chinese + English",
+      "simplified": "Simplified Chinese + English",
+      "description": "Mix Chinese and English within one recording. Choose the Chinese writing script while preserving English and literals. Interface language is independent."
+    },
     "history": {
       "title": "Text history",
       "search": "Search text history",
@@ -50,7 +57,9 @@
       "delivery-unknown": "Delivery is uncertain. Do not resend automatically.",
       "no-speech": "No speech was recognized. No text history was created.",
       "transcription-failed": "Local speech recognition failed. Please record again.",
-      "history-storage-failed": "The original could not be saved. No editing or delivery was attempted."
+      "history-storage-failed": "The original could not be saved. No editing or delivery was attempted.",
+      "recognition-model-incompatible": "Choose a multilingual model that supports Chinese and English. Recording has not been processed.",
+      "recognition-script-failed": "The writing script could not be prepared. The available original is saved; copy it or record again."
     },
     "text": {
       "title": "Text editing",
