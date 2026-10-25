@@ -6,6 +6,7 @@ on:
     paths:
       - .github/workflows/core-contracts.yml
       - crates/notype-core/**
+      - crates/notype-platform/**
       - tests/unittest/**
       - tests/integration/core_*.rs
       - tests/integration/desktop-contracts/**
@@ -14,6 +15,8 @@ on:
       - tests/integration/text-flow.test.mjs
       - tests/integration/portable-*.test.mjs
       - tests/integration/fixtures/portable-package.mjs
+      - tests/integration/fixtures/activate-model-worker.mjs
+      - tests/integration/portable_native.rs
       - desktop/src-tauri/src/workflow.rs
       - desktop/src-tauri/src/faithful_provider.rs
       - desktop/src-tauri/src/recognition.rs
@@ -39,6 +42,12 @@ jobs:
         run: rustup toolchain install 1.99.1 --profile minimal --component rustfmt --component clippy
       - name: Check core formatting
         run: cargo +1.99.1 fmt --manifest-path crates/notype-core/Cargo.toml -- --check
+      - name: Check platform adapter formatting
+        run: cargo +1.99.1 fmt --manifest-path crates/notype-platform/Cargo.toml -- --check
+      - name: Exercise the native launch policy without Tauri or speech engines
+        run: cargo +1.99.1 test --locked --manifest-path crates/notype-platform/Cargo.toml --test portable-native
+      - name: Lint the platform adapter
+        run: cargo +1.99.1 clippy --locked --manifest-path crates/notype-platform/Cargo.toml --all-targets -- -D warnings
       - name: Exercise the public core contracts without Windows or Tauri
         run: cargo +1.99.1 test --locked --manifest-path crates/notype-core/Cargo.toml
       - name: Lint the core
