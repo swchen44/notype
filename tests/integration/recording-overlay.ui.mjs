@@ -75,6 +75,7 @@ async function fixture(
       const disposed = [];
       window.overlayFixture = {
         now: 10000,
+        observations: [],
         deferSettings: false,
         emit(event, payload) {
           for (const [id, item] of listeners)
@@ -145,6 +146,10 @@ async function fixture(
             listeners.delete(args.eventId);
             disposed.push(args.eventId);
             return Promise.resolve();
+          }
+          if (command === "report_capture_observation") {
+            window.overlayFixture.observations.push(args);
+            return Promise.resolve(true);
           }
           if (command === "get_app_settings")
             return window.overlayFixture.deferSettings
@@ -526,4 +531,68 @@ test("compact processing and every terminal reason clear the timer without reviv
     "100:00",
     "decimal identity preserves u64 precision",
   );
+});
+
+test("production overlay observations separate delayed delivery, local commit and independent settings resolution", async (t) => {
+  const { page, emit, advance, errors } = await fixture(t);
+  await page.waitForFunction(
+    () => window.overlayFixture.counts().listeners.length === 6,
+  );
+  await page.evaluate(() => {
+    window.overlayFixture.deferSettings = true;
+  });
+  await emit("show-overlay", show());
+  await advance(110);
+  assert.equal(
+    (await page.evaluate(() => window.overlayFixture.observations)).length,
+    0,
+  );
+  await page.evaluate(() => {
+    window.overlayFixture.emit("recording-ready", {
+      captureId: "1",
+      captureRevision: "1",
+    });
+    window.overlayFixture.advance(75);
+  });
+  await page.locator(".stimer").waitFor();
+  assert.equal(
+    await page.locator(".stimer").textContent(),
+    "00:00",
+    "display origin is receipt, not the delayed backend clock",
+  );
+  await advance(315);
+  await page.evaluate(() => window.overlayFixture.settleSettings("bottom"));
+  await page.waitForFunction(() =>
+    window.overlayFixture.observations.some(
+      (event) => event.observation === "settings",
+    ),
+  );
+  const observed = await page.evaluate(
+    () => window.overlayFixture.observations,
+  );
+  assert.deepEqual(
+    observed.find((event) => event.observation === "received"),
+    {
+      captureId: "1",
+      captureRevision: "1",
+      observation: "received",
+      durationMs: 0,
+    },
+  );
+  assert.equal(
+    observed.find((event) => event.observation === "committed").durationMs,
+    75,
+  );
+  assert.equal(
+    observed.find((event) => event.observation === "settings").durationMs,
+    500,
+  );
+  await emit("recording-ready", ready());
+  assert.equal(
+    (await page.evaluate(() => window.overlayFixture.observations)).filter(
+      (event) => event.observation === "received",
+    ).length,
+    1,
+  );
+  assert.deepEqual(errors, []);
 });

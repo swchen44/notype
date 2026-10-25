@@ -124,6 +124,21 @@ impl OverlayLifecycle {
         }
         self.commit(ticket, operation)
     }
+    /// Validates a read-only observation against the original capture envelope.
+    pub fn observe<T>(
+        &self,
+        capture: CaptureId,
+        revision: u64,
+        operation: impl FnOnce() -> T,
+    ) -> Option<T> {
+        self.current
+            .filter(|current| {
+                current.capture == capture
+                    && current.revision == revision
+                    && current.presentation.capturing()
+            })
+            .map(|_| operation())
+    }
     pub fn text<T>(&self, capture: CaptureId, operation: impl FnOnce() -> T) -> Option<T> {
         self.current
             .filter(|current| {

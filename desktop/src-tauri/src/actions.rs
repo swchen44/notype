@@ -1,5 +1,6 @@
 use crate::audio_feedback::{play_feedback_sound, play_feedback_sound_blocking, SoundType};
 use crate::audio_toolkit::{is_microphone_access_denied, is_no_input_device_error, VadPolicy};
+use crate::capture_startup::{AcceptedAttempt, CaptureOutcome, CaptureSpan};
 use crate::diagnostics::{record, Outcome, Phase};
 use crate::managers::audio::AudioRecordingManager;
 use crate::managers::model::ModelManager;
@@ -61,6 +62,16 @@ impl Drop for FinishGuard {
 pub trait ShortcutAction: Send + Sync {
     fn start(&self, app: &AppHandle, binding_id: &str, shortcut_str: &str);
     fn stop(&self, app: &AppHandle, binding_id: &str, shortcut_str: &str);
+    /// Carries a real shortcut acceptance boundary without changing tap semantics.
+    fn start_with_attempt(
+        &self,
+        app: &AppHandle,
+        binding_id: &str,
+        shortcut: &str,
+        _accepted: AcceptedAttempt,
+    ) {
+        self.start(app, binding_id, shortcut);
+    }
 }
 
 // Transcribe Action
@@ -71,7 +82,17 @@ fn should_use_streaming_overlay(style: OverlayStyle, is_streaming: bool) -> bool
 }
 
 impl ShortcutAction for TranscribeAction {
-    fn start(&self, app: &AppHandle, binding_id: &str, _shortcut_str: &str) {
+    fn start(&self, app: &AppHandle, binding_id: &str, shortcut: &str) {
+        self.start_with_attempt(app, binding_id, shortcut, AcceptedAttempt::now());
+    }
+    fn start_with_attempt(
+        &self,
+        app: &AppHandle,
+        binding_id: &str,
+        _shortcut: &str,
+        accepted: AcceptedAttempt,
+    ) {
+        let trace = crate::capture_observations::begin(accepted);
         let start_time = Instant::now();
         record(Phase::RecordingStart, Outcome::Started, None);
         debug!("TranscribeAction::start called for binding: {}", binding_id);
@@ -82,7 +103,7 @@ impl ShortcutAction for TranscribeAction {
 
         // Load ASR model and VAD model in parallel
         let kickoff_started = Instant::now();
-        tm.initiate_model_load();
+        tm.initiate_model_load_for_capture(Some(trace.clone()));
         let rm_clone = Arc::clone(&rm);
         std::thread::spawn(move || {
             if let Err(e) = rm_clone.preload_vad() {
@@ -100,6 +121,8 @@ impl ShortcutAction for TranscribeAction {
                 .get_model_path(&selected_model)
             {
                 warn!("Not starting recording: no model can transcribe it ({})", e);
+                trace.cumulative(CaptureSpan::ActionCumulative, CaptureOutcome::Unavailable);
+                trace.finish(CaptureOutcome::Unavailable);
                 record(
                     Phase::RecordingStart,
                     Outcome::Unavailable,
@@ -118,6 +141,8 @@ impl ShortcutAction for TranscribeAction {
             Ok(generation) => generation,
             Err(code) => {
                 let _ = app.emit("session-error", code);
+                trace.cumulative(CaptureSpan::ActionCumulative, CaptureOutcome::Failed);
+                trace.finish(CaptureOutcome::Failed);
                 record(
                     Phase::RecordingStart,
                     Outcome::Failed,
@@ -128,6 +153,7 @@ impl ShortcutAction for TranscribeAction {
         };
         let workflow = app.state::<Arc<crate::workflow::DesktopWorkflow>>();
         let owner = workflow.token(generation);
+        crate::capture_observations::global().bind(generation, trace.clone());
         let binding_id = binding_id.to_string();
         let tray_started = Instant::now();
         generation_ui(app, owner.clone(), |app| {
@@ -190,7 +216,10 @@ impl ShortcutAction for TranscribeAction {
 
         let mut recording_error: Option<String> = None;
         let recording_start_time = Instant::now();
-        let Some(started) = owner.run(|| rm.try_start_recording(&binding_id, vad_policy)) else {
+        let Some(started) =
+            owner.run(|| rm.try_start_recording(&binding_id, vad_policy, trace.clone()))
+        else {
+            trace.finish(CaptureOutcome::Cancelled);
             record(
                 Phase::RecordingStart,
                 Outcome::Cancelled,
@@ -215,7 +244,7 @@ impl ShortcutAction for TranscribeAction {
                 let ready_owner = owner.clone();
                 record(Phase::MicrophoneReady, Outcome::Started, None);
                 std::thread::spawn(move || {
-                    if !readiness.wait() {
+                    let Some(observation) = readiness.wait() else {
                         debug!("Microphone readiness wait ended without receiving samples");
                         record(
                             Phase::MicrophoneReady,
@@ -223,7 +252,8 @@ impl ShortcutAction for TranscribeAction {
                             Some(start_time.elapsed().as_millis() as u64),
                         );
                         return;
-                    }
+                    };
+                    let cue_trace = observation.trace.clone();
 
                     // Development-only preview hook for evaluating the brief
                     // arming animation on hardware that normally starts too fast
@@ -242,6 +272,7 @@ impl ShortcutAction for TranscribeAction {
 
                     if !rm_clone.is_recording_readiness_current(generation) {
                         debug!("Microphone became ready for an inactive recording");
+                        observation.trace.finish(CaptureOutcome::Cancelled);
                         record(
                             Phase::MicrophoneReady,
                             Outcome::Cancelled,
@@ -258,7 +289,7 @@ impl ShortcutAction for TranscribeAction {
                             Some(start_time.elapsed().as_millis() as u64),
                         );
                         if let Some(ticket) = overlay_capture {
-                            utils::emit_recording_ready(&app_clone, ticket);
+                            utils::emit_recording_ready(&app_clone, ticket, observation);
                         }
                     });
 
@@ -268,13 +299,23 @@ impl ShortcutAction for TranscribeAction {
                     // is disabled; mute still follows the same readiness point.
                     ready_owner.readiness_feedback(
                         || rm_clone.is_recording_readiness_current(generation),
-                        || play_feedback_sound_blocking(&app_clone, SoundType::Start),
+                        || {
+                            let cue_started = cue_trace.now();
+                            play_feedback_sound_blocking(&app_clone, SoundType::Start);
+                            cue_trace.record(
+                                CaptureSpan::CueSubmission,
+                                CaptureOutcome::Ok,
+                                Some(cue_trace.now().saturating_duration_since(cue_started)),
+                            );
+                        },
                         || rm_clone.apply_mute(),
                     );
                 });
             }
             Err(e) => {
                 debug!("Failed to start recording: {}", e);
+                trace.cumulative(CaptureSpan::ActionCumulative, CaptureOutcome::Failed);
+                trace.finish(CaptureOutcome::Failed);
                 record(
                     Phase::RecordingStart,
                     Outcome::Failed,
@@ -344,6 +385,7 @@ impl ShortcutAction for TranscribeAction {
         }) else {
             return;
         };
+        crate::capture_observations::global().finish(generation, CaptureOutcome::Stopped);
         if streaming {
             tm.emit_stream_working(generation, StreamWorkKind::Transcribing);
         } else {

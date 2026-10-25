@@ -181,3 +181,46 @@ pub async fn export_diagnostic_report(
     }
     Ok(outcome)
 }
+
+/// Fixed overlay telemetry event kinds. Values contain no text or absolute clock.
+#[derive(serde::Deserialize, Serialize, Type)]
+#[serde(rename_all = "lowercase")]
+pub enum CaptureObservation {
+    /// First accepted ready receipt, without an absolute frontend clock.
+    Received,
+    /// First corresponding React commit; not a paint observation.
+    Committed,
+    /// Current noncritical settings resolution.
+    Settings,
+}
+
+/// Production overlay timing ACK. This accepts only the overlay webview and the
+/// current capture envelope; local durations are bounded, never absolute clocks.
+#[tauri::command]
+#[specta::specta]
+pub fn report_capture_observation(
+    window: tauri::WebviewWindow,
+    capture_id: String,
+    capture_revision: String,
+    observation: CaptureObservation,
+    duration_ms: u64,
+) -> bool {
+    if window.label() != "recording_overlay" {
+        return false;
+    }
+    let (Ok(capture), Ok(revision)) = (capture_id.parse::<u64>(), capture_revision.parse::<u64>())
+    else {
+        return false;
+    };
+    if capture == 0 || revision == 0 {
+        return false;
+    }
+    let observation = match observation {
+        CaptureObservation::Received => crate::capture_observations::FrontendObservation::Received,
+        CaptureObservation::Committed => {
+            crate::capture_observations::FrontendObservation::Committed
+        }
+        CaptureObservation::Settings => crate::capture_observations::FrontendObservation::Settings,
+    };
+    crate::overlay::record_capture_observation(capture, revision, observation, duration_ms)
+}

@@ -1,3 +1,4 @@
+use crate::capture_startup::{process_captured_chunk, ReadyRequest, ReadySignal};
 use std::{
     io::Error,
     sync::{
@@ -23,7 +24,7 @@ use crate::audio_toolkit::{
 enum Cmd {
     /// Begin capturing. Carries the send timestamp so the consumer can log how
     /// long the command sat in the channel, plus a one-shot first-sample acknowledgement.
-    Start(VadPolicy, Instant, mpsc::Sender<()>),
+    Start(VadPolicy, Instant, ReadySignal),
     Stop(mpsc::Sender<Vec<f32>>),
     Shutdown,
 }
@@ -386,8 +387,27 @@ impl AudioRecorder {
             .as_ref()
             .ok_or_else(|| Error::other("Recorder is not open"))?;
         let (ready_tx, ready_rx) = mpsc::channel();
-        tx.send(Cmd::Start(vad_policy, Instant::now(), ready_tx))?;
+        tx.send(Cmd::Start(
+            vad_policy,
+            Instant::now(),
+            ReadySignal::Legacy(ready_tx),
+        ))?;
         Ok(ready_rx)
+    }
+
+    /// Observed production handoff; readiness still follows real chunk processing.
+    pub fn start_observed(
+        &self,
+        policy: VadPolicy,
+        ready: ReadyRequest,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let sender = self
+            .cmd_tx
+            .as_ref()
+            .ok_or_else(|| Error::other("Recorder is not open"))?;
+        let sent_at = ready.sent_at();
+        sender.send(Cmd::Start(policy, sent_at, ReadySignal::Observed(ready)))?;
+        Ok(())
     }
 
     pub fn stop(&self) -> Result<Vec<f32>, Box<dyn std::error::Error>> {
@@ -714,7 +734,7 @@ struct CaptureProcessor {
     vad_policy: VadPolicy,
     processed_samples: Vec<f32>,
     awaiting_first_captured_chunk: Option<Instant>,
-    capture_ready_tx: Option<mpsc::Sender<()>>,
+    capture_ready_tx: Option<ReadySignal>,
     total_dropped_samples: u64,
     overrun_warning_logged: bool,
 }
@@ -772,7 +792,12 @@ impl CaptureProcessor {
     }
 
     /// Reset per-recording state and arm the first-sample acknowledgement.
+    #[cfg(test)]
     fn begin_recording(&mut self, policy: VadPolicy, ready_tx: mpsc::Sender<()>) {
+        self.begin_recording_signal(policy, ReadySignal::Legacy(ready_tx));
+    }
+
+    fn begin_recording_signal(&mut self, policy: VadPolicy, ready_tx: ReadySignal) {
         self.awaiting_first_captured_chunk = Some(Instant::now());
         self.capture_ready_tx = Some(ready_tx);
         self.total_dropped_samples = 0;
@@ -821,35 +846,34 @@ impl CaptureProcessor {
             return;
         }
 
-        if let Some(buckets) = self.visualizer.feed(raw) {
-            if let Some(callback) = &self.level_cb {
-                callback(buckets);
+        let mut signal = self.capture_ready_tx.take();
+        process_captured_chunk(&mut signal, raw, |raw| {
+            if let Some(buckets) = self.visualizer.feed(raw) {
+                if let Some(callback) = &self.level_cb {
+                    callback(buckets);
+                }
             }
-        }
 
-        let vad_policy = self.vad_policy;
-        self.frame_resampler.push(raw, |frame: &[f32]| {
-            handle_frame(
-                frame,
-                vad_policy,
-                &self.vad,
-                &self.audio_cb,
-                &mut self.processed_samples,
-            )
+            let vad_policy = self.vad_policy;
+            self.frame_resampler.push(raw, |frame: &[f32]| {
+                handle_frame(
+                    frame,
+                    vad_policy,
+                    &self.vad,
+                    &self.audio_cb,
+                    &mut self.processed_samples,
+                )
+            });
+
+            if let Some(started) = self.awaiting_first_captured_chunk.take() {
+                log::debug!(
+                    "first captured samples ({:.1}ms) processed {:?} after Cmd::Start",
+                    chunk_ms,
+                    started.elapsed()
+                );
+            }
         });
-
-        if let Some(started) = self.awaiting_first_captured_chunk.take() {
-            log::debug!(
-                "first captured samples ({:.1}ms) processed {:?} after Cmd::Start",
-                chunk_ms,
-                started.elapsed()
-            );
-        }
-        if let Some(ready_tx) = self.capture_ready_tx.take() {
-            // Silence still counts: readiness means the host is delivering samples,
-            // not that VAD has detected speech.
-            let _ = ready_tx.send(());
-        }
+        self.capture_ready_tx = signal;
     }
 
     /// Account for samples the callback could not fit into the ring during
@@ -954,7 +978,8 @@ fn run_consumer(
                         // Ignore overruns accumulated while the always-on stream
                         // was idle; only active-capture loss is relevant.
                         transport.overrun_samples.store(0, Ordering::Release);
-                        processor.begin_recording(policy, ready_tx);
+                        ready_tx.command_received();
+                        processor.begin_recording_signal(policy, ready_tx);
                         recording = true;
                     }
                     Cmd::Stop(reply_tx) => {

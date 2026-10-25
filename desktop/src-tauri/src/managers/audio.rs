@@ -6,13 +6,17 @@ use crate::audio_toolkit::{
     },
     AudioRecorder, SileroVad, VadPolicy, VoiceActivityDetector,
 };
+use crate::capture_startup::{
+    self, CaptureTrace, ReadyObservation, ReadyRequest, ReadyWaiter, RecorderPort,
+    StreamDisposition,
+};
 use crate::helpers::clamshell;
 use crate::managers::transcription::StreamRouter;
 use crate::settings::{get_settings, write_settings, AppSettings, VadBackend};
 use crate::utils;
 use log::{debug, error, info, trace, warn};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 use tauri::{Emitter, Manager};
 
@@ -356,13 +360,14 @@ fn create_audio_recorder(
 /// One recording session's first-sample notification. Waiting on this never
 /// blocks the shortcut coordinator: callers hand it to a dedicated worker.
 pub struct RecordingReadiness {
-    receiver: mpsc::Receiver<()>,
+    waiter: ReadyWaiter,
     generation: u64,
 }
 
 impl RecordingReadiness {
-    pub fn wait(self) -> bool {
-        self.receiver.recv().is_ok()
+    /// Processed-sample notification plus timing context; not a raw-driver timestamp.
+    pub fn wait(self) -> Option<ReadyObservation> {
+        self.waiter.wait()
     }
 
     pub fn generation(&self) -> u64 {
@@ -635,6 +640,10 @@ impl AudioRecordingManager {
     }
 
     pub fn start_microphone_stream(&self) -> Result<(), anyhow::Error> {
+        self.ensure_microphone_stream().map(|_| ())
+    }
+
+    fn ensure_microphone_stream(&self) -> Result<StreamDisposition, anyhow::Error> {
         use crate::diagnostics::{record, Outcome, Phase};
         let started = Instant::now();
         record(Phase::AudioStreamOpen, Outcome::Started, None);
@@ -651,8 +660,9 @@ impl AudioRecordingManager {
         result
     }
 
-    fn open_microphone_stream(&self) -> Result<(), anyhow::Error> {
+    fn open_microphone_stream(&self) -> Result<StreamDisposition, anyhow::Error> {
         let mut open_flag = self.is_open.lock().unwrap();
+        let reopening = *open_flag;
         if *open_flag {
             // `is_open` only records that we opened a stream at some point, not
             // that one is still running. If capture has since failed (mic
@@ -670,7 +680,7 @@ impl AudioRecordingManager {
                 // try_start_recording this now fires on every keypress in
                 // always-on mode.
                 trace!("Microphone stream already active");
-                return Ok(());
+                return Ok(StreamDisposition::Reused);
             }
 
             warn!("Microphone stream is no longer running (device disconnected?); reopening");
@@ -760,7 +770,11 @@ impl AudioRecordingManager {
             "Microphone stream initialized in {:?}",
             start_time.elapsed()
         );
-        Ok(())
+        Ok(if reopening {
+            StreamDisposition::Reopened
+        } else {
+            StreamDisposition::Opened
+        })
     }
 
     pub fn stop_microphone_stream(&self) {
@@ -830,10 +844,13 @@ impl AudioRecordingManager {
         );
     }
 
+    /// Uses the original state/mode/generation policy and recorder lock lifetime;
+    /// the trace is metadata only and collection OFF never prevents capture.
     pub fn try_start_recording(
         &self,
         binding_id: &str,
         vad_policy: VadPolicy,
+        trace: CaptureTrace,
     ) -> Result<RecordingReadiness, String> {
         let mut state = self.state.lock().unwrap();
 
@@ -841,38 +858,21 @@ impl AudioRecordingManager {
             // Cancel any pending lazy close (no-op in always-on mode, where
             // closes are never scheduled).
             self.close_generation.fetch_add(1, Ordering::SeqCst);
-            // Opens the stream in on-demand mode. In always-on mode the stream
-            // is normally already open and this is a cheap aliveness check —
-            // but if the capture worker died (device disconnect), it rebuilds
-            // the stream instead of leaving every subsequent start wedged on
-            // "Recorder not available".
-            if let Err(e) = self.start_microphone_stream() {
-                let msg = format!("{e}");
-                error!("Failed to open microphone stream: {msg}");
-                return Err(msg);
-            }
-
-            if let Some(rec) = self.recorder.lock().unwrap().as_ref() {
-                match rec.start(vad_policy) {
-                    Ok(receiver) => {
-                        let generation = self.capture_generation.fetch_add(1, Ordering::AcqRel) + 1;
-                        *self.is_recording.lock().unwrap() = true;
-                        self.set_state(
-                            &mut state,
-                            RecordingState::Recording {
-                                binding_id: binding_id.to_string(),
-                            },
-                        );
-                        debug!("Recording requested for binding {binding_id}");
-                        return Ok(RecordingReadiness {
-                            receiver,
-                            generation,
-                        });
-                    }
-                    Err(error) => return Err(format!("Failed to start recorder: {error}")),
-                }
-            }
-            Err("Recorder not available".to_string())
+            let mut port = ManagerRecorderPort {
+                manager: self,
+                recorder_guard: None,
+            };
+            let waiter = capture_startup::start_recording(&mut port, vad_policy, trace)?;
+            let generation = self.capture_generation.fetch_add(1, Ordering::AcqRel) + 1;
+            *self.is_recording.lock().unwrap() = true;
+            self.set_state(
+                &mut state,
+                RecordingState::Recording {
+                    binding_id: binding_id.to_string(),
+                },
+            );
+            debug!("Recording requested for binding {binding_id}");
+            Ok(RecordingReadiness { waiter, generation })
         } else {
             Err("Already recording".to_string())
         }
@@ -1144,5 +1144,35 @@ impl AudioRecordingManager {
             }
             RecordingState::Idle => {}
         }
+    }
+}
+
+/// Native port delegates operations without changing the manager state policy.
+struct ManagerRecorderPort<'a> {
+    manager: &'a AudioRecordingManager,
+    // Retain the original recorder guard through readiness generation/state
+    // publication, exactly as the previous inline start branch did.
+    recorder_guard: Option<MutexGuard<'a, Option<AudioRecorder>>>,
+}
+impl RecorderPort for ManagerRecorderPort<'_> {
+    type Policy = VadPolicy;
+    type Error = String;
+    fn ensure_stream(&mut self) -> Result<StreamDisposition, String> {
+        self.manager.ensure_microphone_stream().map_err(|error| {
+            let message = error.to_string();
+            error!("Failed to open microphone stream: {message}");
+            message
+        })
+    }
+    fn request_capture(&mut self, policy: VadPolicy, ready: ReadyRequest) -> Result<(), String> {
+        self.recorder_guard = Some(self.manager.recorder.lock().unwrap());
+        let recorder = self
+            .recorder_guard
+            .as_ref()
+            .and_then(|guard| guard.as_ref())
+            .ok_or_else(|| "Recorder not available".to_string())?;
+        recorder
+            .start_observed(policy, ready)
+            .map_err(|error| format!("Failed to start recorder: {error}"))
     }
 }

@@ -102,7 +102,11 @@ mod platform {
     static INPUT_LOST: AtomicBool = AtomicBool::new(false);
     struct HookState {
         router: GestureRouter,
-        sender: SyncSender<(Intent, Instant)>,
+        sender: SyncSender<(
+            Intent,
+            Instant,
+            Option<crate::capture_startup::AcceptedAttempt>,
+        )>,
     }
     #[repr(C)]
     struct KeyEvent {
@@ -241,7 +245,17 @@ mod platform {
         if let Some(intent) = decision.intent {
             if !suspended {
                 PHASE.store(2, Ordering::SeqCst);
-                if state.sender.try_send((intent, Instant::now())).is_err() {
+                let accepted_at = Instant::now();
+                let attempt = matches!(
+                    intent,
+                    Intent::Dictation | Intent::Translation | Intent::Ask
+                )
+                .then(|| crate::capture_startup::AcceptedAttempt::at(accepted_at));
+                if state
+                    .sender
+                    .try_send((intent, accepted_at, attempt))
+                    .is_err()
+                {
                     state.router.reset();
                 }
             }
@@ -295,7 +309,8 @@ mod platform {
         }
         let app = app.clone();
         std::thread::spawn(move || {
-            while let Ok((intent, accepted)) = receiver.recv() {
+            while let Ok((intent, accepted, attempt)) = receiver.recv() {
+                let attempt = attempt.map(|attempt| attempt.dequeued());
                 use crate::actions::ACTION_MAP;
                 use crate::diagnostics::{record, Outcome, Phase as DiagnosticPhase};
                 record(DiagnosticPhase::ShortcutAccepted, Outcome::Ok, None);
@@ -312,7 +327,11 @@ mod platform {
                             _ => "transcribe",
                         };
                         if let Some(action) = ACTION_MAP.get(id) {
-                            action.start(&app, id, "");
+                            if let Some(attempt) = attempt {
+                                action.start_with_attempt(&app, id, "", attempt);
+                            } else {
+                                action.start(&app, id, "");
+                            }
                         }
                         let recording = app
                             .state::<std::sync::Arc<crate::managers::audio::AudioRecordingManager>>(

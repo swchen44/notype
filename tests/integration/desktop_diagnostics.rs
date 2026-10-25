@@ -1,3 +1,5 @@
+#[path = "../../desktop/src-tauri/src/capture_startup.rs"]
+mod capture_startup;
 #[path = "../../desktop/src-tauri/src/diagnostics.rs"]
 mod diagnostics;
 use diagnostics::service::{DiagnosticService, DiagnosticStorage};

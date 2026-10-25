@@ -1,3 +1,4 @@
+use crate::capture_startup::{CaptureOutcome, CaptureSpan, ReadyObservation};
 use crate::input;
 use crate::overlay_lifecycle::{
     CaptureId, HideReason, OverlayLifecycle, OverlayTicket, Presentation,
@@ -674,26 +675,65 @@ fn show_overlay_state_on_main(
 /// Notify the visible recording overlay that the input stream has delivered its
 /// first sample chunk. Audio feedback uses the same backend readiness signal,
 /// but this targeted event is skipped when overlays are disabled.
-pub fn emit_recording_ready(app_handle: &AppHandle, ticket: OverlayTicket) {
+pub fn emit_recording_ready(
+    app_handle: &AppHandle,
+    ticket: OverlayTicket,
+    observation: ReadyObservation,
+) {
     if !OVERLAY_ENABLED.load(Ordering::Relaxed) {
+        observation
+            .trace
+            .record(CaptureSpan::MainQueue, CaptureOutcome::Unavailable, None);
         return;
     }
+    let dispatch = observation.queue();
     let handle = app_handle.clone();
     let _ = app_handle.run_on_main_thread(move || {
         LIFECYCLE
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .ready(ticket, || {
-                let _ = handle.emit_to(
-                    "recording_overlay",
-                    "recording-ready",
-                    RecordingReadyEvent {
-                        capture_id: ticket.capture.0.to_string(),
-                        capture_revision: ticket.revision.to_string(),
-                    },
-                );
+                dispatch.commit(|stamp| {
+                    crate::capture_observations::global().emitted(
+                        ticket.capture.0,
+                        ticket.revision,
+                        stamp,
+                    );
+                    handle
+                        .emit_to(
+                            "recording_overlay",
+                            "recording-ready",
+                            RecordingReadyEvent {
+                                capture_id: ticket.capture.0.to_string(),
+                                capture_revision: ticket.revision.to_string(),
+                            },
+                        )
+                        .is_ok()
+                })
             });
     });
+}
+
+/// Records typed local frontend observations only for the exact live capture.
+/// Owner IDs never enter reports; the observation service maps to attempt ordinal.
+pub fn record_capture_observation(
+    capture: u64,
+    revision: u64,
+    observation: crate::capture_observations::FrontendObservation,
+    duration_ms: u64,
+) -> bool {
+    LIFECYCLE
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .observe(CaptureId(capture), revision, || {
+            crate::capture_observations::global().frontend(
+                capture,
+                revision,
+                observation,
+                duration_ms,
+            )
+        })
+        .unwrap_or(false)
 }
 
 /// Begin/redisplay one capture. Duplicate presentation requests share a revision.

@@ -2,6 +2,7 @@
 //! state never covers I/O. Export commit and Clear share an independent gate.
 
 use super::{Diagnostics, Outcome, Phase, Report, ReportContext};
+use crate::capture_startup::{CaptureEvent, CaptureObserver, CollectionToken};
 use std::path::Path;
 use std::sync::{Arc, Mutex, OnceLock};
 
@@ -177,6 +178,27 @@ impl DiagnosticService {
             state.events.record(phase, outcome, duration);
         }
     }
+    /// Immutable collection generation for one capture. Preference revision
+    /// prevents an OFF/ON cycle from resurrecting an older in-flight trace.
+    pub fn capture_token(&self) -> Option<CollectionToken> {
+        let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        (state.status.initialized && state.status.effective_enabled).then_some(CollectionToken {
+            epoch: state.status.epoch,
+            revision: state.status.revision,
+        })
+    }
+    /// Epoch and effective preference are checked in the same collector lock
+    /// as insertion. No capture/target identity or user content crosses here.
+    pub fn record_capture(&self, event: CaptureEvent) {
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        if state.status.initialized
+            && state.status.effective_enabled
+            && event.token.epoch == state.status.epoch
+            && event.token.revision == state.status.revision
+        {
+            state.events.record_capture(event);
+        }
+    }
     /// Captures a bounded preparation token before context I/O, with no cache
     /// mutation. OFF still permits reviewing/exporting existing records.
     pub fn begin_preview(&self) -> Result<PreviewTicket, &'static str> {
@@ -267,4 +289,13 @@ static GLOBAL: OnceLock<DiagnosticService> = OnceLock::new();
 /// The shared app-run service, lazily created OFF without performing I/O.
 pub fn global() -> &'static DiagnosticService {
     GLOBAL.get_or_init(DiagnosticService::new)
+}
+
+impl CaptureObserver for DiagnosticService {
+    fn accepts(&self, token: CollectionToken) -> bool {
+        self.capture_token() == Some(token)
+    }
+    fn record(&self, event: CaptureEvent) {
+        self.record_capture(event);
+    }
 }

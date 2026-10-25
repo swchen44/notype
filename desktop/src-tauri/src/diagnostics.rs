@@ -1,7 +1,8 @@
 //! Privacy boundary for support reports. Only typed, bounded metadata enters
 //! this module. It never reads raw logs, settings documents, history or audio.
 
-use std::collections::VecDeque;
+use crate::capture_startup::{CaptureEvent, CaptureOutcome, CaptureSpan};
+use std::collections::{BTreeMap, VecDeque};
 use std::fmt::Write as _;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
@@ -34,6 +35,7 @@ macro_rules! labels {
 
 labels!("Allowlisted product stages. Callers record stage boundaries, never session IDs, keyboard text, model names or content.", Phase {
     Startup => "startup",
+    CaptureTiming => "capture-timing",
     ShortcutAccepted => "shortcut-accepted",
     ShortcutDispatch => "shortcut-dispatch",
     RecordingStart => "recording-start",
@@ -105,6 +107,8 @@ struct Event {
     phase: Phase,
     outcome: Outcome,
     duration_ms: Option<u64>,
+    capped: bool,
+    capture: Option<CaptureEvent>,
 }
 
 /// In-memory, instance-owned stage ring and monotonic elapsed-time origin.
@@ -145,6 +149,35 @@ impl Diagnostics {
             phase,
             outcome,
             duration_ms: duration_ms.map(|value| value.min(MAX_DURATION_MS)),
+            capped: duration_ms.is_some_and(|value| value > MAX_DURATION_MS),
+            capture: None,
+        });
+    }
+
+    /// Bounded capture timing records contain only an app-run ordinal and enums.
+    pub fn record_capture(&mut self, mut capture: CaptureEvent) {
+        if let Some(duration) = capture.duration_ms {
+            capture.capped |= duration > MAX_DURATION_MS;
+            capture.duration_ms = Some(duration.min(MAX_DURATION_MS));
+        }
+        capture.attempt = capture.attempt.filter(|ordinal| *ordinal != 0);
+        if self.events.len() == MAX_EVENTS {
+            self.events.pop_front();
+            self.discarded = self.discarded.saturating_add(1);
+        }
+        self.events.push_back(Event {
+            elapsed_ms: self.started.elapsed().as_millis().min(u64::MAX as u128) as u64,
+            phase: Phase::CaptureTiming,
+            outcome: match capture.outcome {
+                CaptureOutcome::Failed => Outcome::Failed,
+                CaptureOutcome::Cancelled => Outcome::Cancelled,
+                CaptureOutcome::Unavailable => Outcome::Unavailable,
+                CaptureOutcome::Started => Outcome::Started,
+                _ => Outcome::Ok,
+            },
+            duration_ms: capture.duration_ms,
+            capped: capture.capped,
+            capture: Some(capture),
         });
     }
 
@@ -180,6 +213,20 @@ impl Diagnostics {
             if let Some(duration) = event.duration_ms {
                 let _ = write!(text, " duration_ms={duration}");
             }
+            let _ = write!(text, " capped={}", event.capped);
+            if let Some(capture) = &event.capture {
+                let _ = write!(
+                    text,
+                    " attempt={} span={} origin={} capture_outcome={}",
+                    capture
+                        .attempt
+                        .map(|value| value.to_string())
+                        .unwrap_or_else(|| "unassociated".into()),
+                    capture.span.label(),
+                    capture.span.origin(),
+                    capture.outcome.label()
+                );
+            }
             let code = match event.outcome {
                 Outcome::Failed => format!("{}-failed", event.phase.label()),
                 Outcome::Unavailable => format!("{}-unavailable", event.phase.label()),
@@ -187,6 +234,36 @@ impl Diagnostics {
             };
             let _ = writeln!(text, " code={code}");
         }
+        let _ = writeln!(text, "\nring_truncated={}", self.discarded > 0);
+        let mut attempts = BTreeMap::<u32, (bool, bool, bool, Vec<CaptureSpan>)>::new();
+        for event in &self.events {
+            if let Some(capture) = &event.capture {
+                if let Some(ordinal) = capture.attempt {
+                    let entry = attempts.entry(ordinal).or_default();
+                    if capture.span == CaptureSpan::Attempt {
+                        entry.0 |= capture.outcome == CaptureOutcome::Started;
+                        entry.1 |= capture.outcome.terminal();
+                    }
+                    entry.2 |= capture.capped;
+                    if capture.span != CaptureSpan::Attempt {
+                        if capture.outcome == CaptureOutcome::Started
+                            && capture.duration_ms.is_none()
+                        {
+                            if !entry.3.contains(&capture.span) {
+                                entry.3.push(capture.span);
+                            }
+                        } else if capture.outcome != CaptureOutcome::Started {
+                            entry.3.retain(|span| *span != capture.span);
+                        }
+                    }
+                }
+            }
+        }
+        for (ordinal, (started, terminal, capped, pending)) in attempts {
+            let complete = started && terminal && pending.is_empty();
+            let _ = writeln!(text, "attempt_summary={} complete={} incomplete={} truncated={} capped={} pending_stages={}", ordinal, complete, !complete, !started || (self.discarded > 0 && !terminal), capped, pending.len());
+        }
+        text.push_str("Timing durations have explicit origins and may overlap; do not sum cumulative and local spans. ShortcutAccepted is worker-observed, not physical acceptance. Consumer sample observation is after the audio ring; raw hardware callback timing is unavailable. Frontend round-trip includes return IPC; React commit is not paint. Audible cue timing is unavailable.\n");
         Report { id, text }
     }
 }
