@@ -12,6 +12,8 @@ on:
       - tests/integration/desktop-contracts/**
       - tests/integration/desktop_provider.rs
       - tests/integration/desktop_diagnostics.rs
+      - tests/integration/diagnostic_control.rs
+      - tests/integration/model_storage.rs
       - tests/integration/native_delivery.rs
       - tests/integration/text-flow.test.mjs
       - tests/integration/portable-*.test.mjs
@@ -20,6 +22,9 @@ on:
       - tests/integration/portable_native.rs
       - desktop/src-tauri/src/workflow.rs
       - desktop/src-tauri/src/diagnostics.rs
+      - desktop/src-tauri/src/diagnostic_*.rs
+      - desktop/src-tauri/src/managers/model_storage.rs
+      - desktop/src-tauri/src/managers/model.rs
       - desktop/src/lib/diagnosticIssue.ts
       - desktop/src-tauri/src/faithful_provider.rs
       - desktop/src-tauri/src/recognition.rs
@@ -58,7 +63,7 @@ jobs:
       - name: Lint the core
         run: cargo +1.99.1 clippy --locked --manifest-path crates/notype-core/Cargo.toml --all-targets -- -D warnings
       - name: Exercise desktop orchestration and HTTP contracts without Tauri
-        run: cargo +1.99.1 test --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test desktop-workflow --test desktop-provider --test physical-gestures --test native-delivery --test desktop-diagnostics --test diagnostics-export --test window-lifecycle --test overlay-lifecycle
+        run: cargo +1.99.1 test --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test desktop-workflow --test desktop-provider --test physical-gestures --test native-delivery --test desktop-diagnostics --test diagnostics-export --test diagnostic-service --test diagnostic-privacy --test diagnostic-control --test model-storage --test window-lifecycle --test overlay-lifecycle
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22.15.0

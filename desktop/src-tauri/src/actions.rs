@@ -3,6 +3,7 @@ use crate::audio_toolkit::{is_microphone_access_denied, is_no_input_device_error
 use crate::diagnostics::{record, Outcome, Phase};
 use crate::managers::audio::AudioRecordingManager;
 use crate::managers::model::ModelManager;
+use crate::managers::model_storage::ModelPathAccess;
 use crate::managers::transcription::StreamWorkKind;
 use crate::managers::transcription::TranscriptionManager;
 use crate::overlay_lifecycle::HideReason;

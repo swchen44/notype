@@ -66,6 +66,17 @@ const ModelCard: React.FC<ModelCardProps> = ({
     (state) => state.settings?.recognition_mode ?? "traditional_english",
   );
   const [expanded, setExpanded] = useState(false);
+  const [receiptError, setReceiptError] = useState(false);
+  async function openQualityReceipt() {
+    setReceiptError(false);
+    try {
+      await openUrl(
+        "https://github.com/swchen44/notype/blob/main/docs/verification/qwen3-quality.md",
+      );
+    } catch {
+      setReceiptError(true);
+    }
+  }
   const [modelPath, setModelPath] = useState<string | null>(null);
   const [pathState, setPathState] = useState<
     "idle" | "loading" | "ready" | "error"
@@ -341,14 +352,15 @@ const ModelCard: React.FC<ModelCardProps> = ({
               <button
                 type="button"
                 className="underline underline-offset-2"
-                onClick={() =>
-                  void openUrl(
-                    "https://github.com/swchen44/notype/blob/main/docs/verification/qwen3-quality.md",
-                  )
-                }
+                onClick={() => void openQualityReceipt()}
               >
                 {t("notype.modelExplorer.qwenReceipt")}
               </button>
+              {receiptError && (
+                <p role="alert">
+                  {t("notype.modelExplorer.qwenReceiptFailed")}
+                </p>
+              )}
             </div>
           )}
         </div>

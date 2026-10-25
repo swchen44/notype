@@ -39,6 +39,22 @@ name = "diagnostics-export"
 path = "../desktop_diagnostics.rs"
 
 [[test]]
+name = "diagnostic-service"
+path = "../../unittest/diagnostic_service.rs"
+
+[[test]]
+name = "diagnostic-privacy"
+path = "../../unittest/diagnostic_privacy.rs"
+
+[[test]]
+name = "diagnostic-control"
+path = "../diagnostic_control.rs"
+
+[[test]]
+name = "model-storage"
+path = "../model_storage.rs"
+
+[[test]]
 name = "native-delivery"
 path = "../native_delivery.rs"
 

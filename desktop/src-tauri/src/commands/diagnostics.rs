@@ -1,30 +1,105 @@
-//! Production support entry points: preview locally, then explicitly save.
-//! No command accepts raw log/report text and no command uploads anything.
+//! Production structured-diagnostics IPC. Native adapters gather only fixed
+//! metadata and own the dialog; the shared service owns all state and commits.
 
-use crate::diagnostics::{self, LogFileStatus, Platform, Report, ReportContext};
+use crate::diagnostics::{
+    self,
+    service::{self, Status},
+    LogFileStatus, Platform, ReportContext,
+};
 use crate::managers::model::ModelManager;
 use crate::settings::{get_settings, LogLevel};
 use serde::Serialize;
 use specta::Type;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use tauri::{AppHandle, State};
 use tauri_plugin_dialog::DialogExt;
 
-static PREVIEW: Mutex<Option<Report>> = Mutex::new(None);
-
+/// Acknowledged collection/persistence status. Unsaved runtime OFF must never
+/// be displayed as saved OFF; epoch/revision reject late UI responses.
 #[derive(Serialize, Type)]
-pub struct DiagnosticPreview {
-    pub report_id: String,
-    pub text: String,
+pub struct DiagnosticStatus {
+    /// Initial preference load completed (including fail-closed read failure).
+    pub initialized: bool,
+    /// Effective structured collection state, independent of legacy raw logs.
+    pub effective_enabled: bool,
+    /// Last known saved/default preference, absent when unreadable.
+    pub saved_preference: Option<bool>,
+    /// Fixed persistence state: uninitialized/default/saved/pending/unsaved/load_failed.
+    pub persistence: String,
+    /// Current requested value while pending or unsaved.
+    pub desired_enabled: Option<bool>,
+    /// Serialized preference-operation revision.
+    pub revision: u64,
+    /// Clear generation, independent of preference changes.
+    pub epoch: u64,
+}
+impl From<Status> for DiagnosticStatus {
+    fn from(status: Status) -> Self {
+        Self {
+            initialized: status.initialized,
+            effective_enabled: status.effective_enabled,
+            saved_preference: status.saved_preference,
+            persistence: status.persistence.into(),
+            desired_enabled: status.desired_enabled,
+            revision: status.revision,
+            epoch: status.epoch,
+        }
+    }
 }
 
-/// Builds an allowlisted report without opening any user data or raw log file.
+/// Exact immutable allowlisted snapshot. A later preview or Clear revokes its
+/// export identity; client generations suppress late IPC responses after Clear.
+#[derive(Serialize, Type)]
+pub struct DiagnosticPreview {
+    /// Opaque snapshot identity for export and safe issue summaries.
+    pub report_id: String,
+    /// Exact sanitized bounded export content, without credentials/user content.
+    pub text: String,
+    /// Clear generation captured before native context gathering.
+    pub epoch: u64,
+}
+/// Explicit native-dialog outcome; contains no chosen destination or OS error.
+#[derive(Serialize, Type)]
+pub struct DiagnosticExport {
+    /// Fixed outcome: saved or cancelled.
+    pub status: String,
+    /// Snapshot identity, never replacement text supplied by the UI.
+    pub report_id: String,
+    /// Snapshot generation for late-response suppression.
+    pub epoch: u64,
+}
+
+/// Reads service status without loading a general settings/credential document.
 #[tauri::command]
 #[specta::specta]
-pub fn get_diagnostic_report(
+pub fn get_diagnostic_status() -> DiagnosticStatus {
+    service::global().status().into()
+}
+
+/// OFF stops before saving; failed persistence never resumes collection. ON
+/// enables only after the dedicated preference is successfully saved.
+#[tauri::command]
+#[specta::specta]
+pub async fn set_diagnostics_enabled(enabled: bool) -> DiagnosticStatus {
+    service::global().set_enabled(enabled).into()
+}
+
+/// Clears structured in-memory data only. Final export commit serialization
+/// ensures no older export can write after this command acknowledges success.
+#[tauri::command]
+#[specta::specta]
+pub async fn clear_diagnostics() -> u64 {
+    service::global().clear()
+}
+
+/// Captures epoch before context I/O, then publishes only if no Clear won.
+#[tauri::command]
+#[specta::specta]
+pub async fn get_diagnostic_report(
     app: AppHandle,
     model_manager: State<'_, Arc<ModelManager>>,
 ) -> Result<DiagnosticPreview, String> {
+    let ticket = service::global().begin_preview().map_err(str::to_string)?;
     let settings = get_settings(&app);
     let model = model_manager.get_model_info(&settings.selected_model);
     let local_log = crate::portable::app_log_dir(&app)
@@ -50,51 +125,59 @@ pub fn get_diagnostic_report(
         LogLevel::Debug => diagnostics::LogLevel::Debug,
         LogLevel::Trace => diagnostics::LogLevel::Trace,
     };
-    let report = diagnostics::report(ReportContext {
-        version: &app.package_info().version.to_string(),
-        platform,
-        log_level,
-        debug_mode: settings.debug_mode,
-        always_on_microphone: settings.always_on_microphone,
-        model_selected: !settings.selected_model.is_empty(),
-        model_available: model.as_ref().is_some_and(|model| model.is_downloaded),
-        model_is_custom: model.as_ref().is_some_and(|model| model.is_custom),
-        local_log,
-    });
-    let preview = DiagnosticPreview {
-        report_id: report.id().to_string(),
-        text: report.text().to_string(),
-    };
-    *PREVIEW
-        .lock()
-        .map_err(|_| "diagnostic-preview-failed".to_string())? = Some(report);
-    Ok(preview)
+    let preview = service::global()
+        .publish_preview(
+            ticket,
+            ReportContext {
+                version: &app.package_info().version.to_string(),
+                platform,
+                log_level,
+                debug_mode: settings.debug_mode,
+                always_on_microphone: settings.always_on_microphone,
+                model_selected: !settings.selected_model.is_empty(),
+                model_available: model.as_ref().is_some_and(|model| model.is_downloaded),
+                model_is_custom: model.as_ref().is_some_and(|model| model.is_custom),
+                local_log,
+            },
+        )
+        .map_err(str::to_string)?;
+    Ok(DiagnosticPreview {
+        report_id: preview.report.id().into(),
+        text: preview.report.text().into(),
+        epoch: preview.epoch,
+    })
 }
 
-/// The native save dialog is the only destination input. Returns false when
-/// the user cancels; only the exact previously previewed snapshot is saved.
+/// Dialog runs without service locks. The service revalidates after selection,
+/// before any destination staging/creation/write under its separate commit gate.
 #[tauri::command]
 #[specta::specta]
-pub async fn export_diagnostic_report(app: AppHandle, report_id: String) -> Result<bool, String> {
-    let report = PREVIEW
-        .lock()
-        .map_err(|_| "diagnostic-preview-failed".to_string())?
-        .as_ref()
-        .filter(|report| report.id() == report_id)
-        .cloned()
-        .ok_or_else(|| "diagnostic-preview-expired".to_string())?;
+pub async fn export_diagnostic_report(
+    app: AppHandle,
+    report_id: String,
+) -> Result<DiagnosticExport, String> {
+    let ticket = service::global()
+        .begin_export(&report_id)
+        .map_err(str::to_string)?;
     let selected = app
         .dialog()
         .file()
-        .set_file_name(format!("notype-diagnostics-{}.txt", report.id()))
+        .set_file_name(format!("notype-diagnostics-{}.txt", ticket.id()))
         .add_filter("Text", &["txt"])
         .blocking_save_file();
-    let Some(selected) = selected else {
-        return Ok(false);
+    let mut outcome = DiagnosticExport {
+        status: "cancelled".into(),
+        report_id: ticket.id().into(),
+        epoch: ticket.epoch(),
     };
-    let path = selected
-        .into_path()
-        .map_err(|_| "diagnostic-save-failed".to_string())?;
-    report.export_to(&path).map_err(str::to_string)?;
-    Ok(true)
+    if let Some(selected) = selected {
+        let path = selected
+            .into_path()
+            .map_err(|_| "diagnostic-save-failed".to_string())?;
+        service::global()
+            .commit_export(&ticket, &path)
+            .map_err(str::to_string)?;
+        outcome.status = "saved".into();
+    }
+    Ok(outcome)
 }

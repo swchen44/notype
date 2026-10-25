@@ -6,6 +6,7 @@ use crate::audio_toolkit::{detect_output_language, OutputLanguageEvidence};
 use crate::chinese_script::{convert_chinese_script, ChineseVariety};
 use crate::managers::audio::AudioRecordingManager;
 use crate::managers::model::{EngineType, ModelManager};
+use crate::managers::model_storage::ModelPathAccess;
 use crate::settings::{
     get_settings, AppSettings, ChineseScript, ModelUnloadTimeout, OrtAcceleratorSetting,
     TranscribeAcceleratorSetting,

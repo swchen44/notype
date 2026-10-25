@@ -11,7 +11,7 @@
     "test:integration": "node --experimental-sqlite --test tests/integration/*.test.mjs",
     "test:runtime": "node --experimental-sqlite --test tests/integration/runtime/*.test.mjs",
     "test:ui:unit": "node --test tests/unittest/*.ui.mjs",
-    "test:ui:integration": "node --test tests/integration/*.ui.mjs"
+    "test:ui:integration": "node --test --test-concurrency=1 tests/integration/*.ui.mjs"
   },
   "devDependencies": {
     "playwright": "1.58.0"
