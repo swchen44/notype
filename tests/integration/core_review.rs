@@ -159,6 +159,30 @@ async fn cancellation_during_back_step_preserves_committed_primary_across_restar
     reopened.delete(&original.id).unwrap();
     assert_eq!(task.await.unwrap().unwrap_err(), CoreError::NotFound);
     assert!(reopened.search("").unwrap().is_empty());
+    let original = translated(&reopened);
+    let signal = Arc::new(tokio::sync::Notify::new());
+    let worker = reopened.clone();
+    let id = original.id.clone();
+    let processor = Arc::new(Translator {
+        service: reopened.clone(),
+        id: id.clone(),
+        back_started: signal.clone(),
+        hold: true,
+    });
+    let task = tokio::spawn(async move {
+        worker
+            .process_with_review(&id, vec![], processor, true)
+            .await
+    });
+    signal.notified().await;
+    reopened.cancel(&original.id).unwrap();
+    let cancelled = task.await.unwrap().unwrap();
+    assert_eq!(cancelled.status, SessionStatus::Cancelled);
+    assert_eq!(cancelled.result.as_deref(), Some("primary"));
+    assert_eq!(cancelled.back_translation, None);
+    assert!(reopened
+        .confirm_review(&cancelled.id, cancelled.revision)
+        .is_err());
 }
 
 struct MissingSource;
@@ -213,4 +237,46 @@ fn source_context_rejects_full_urls_before_saving_any_history() {
         CoreError::InvalidInput
     );
     assert!(service.search("").unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn recognition_script_failure_cannot_enter_any_scenario_processing_even_after_original_choice(
+) {
+    let service = SessionService::in_memory().unwrap();
+    let entry = service
+        .create_recognition_failure(
+            "raw script failure",
+            SessionOptions {
+                scenario: Scenario::Translation,
+                original_target: Some("captured-target".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    assert_eq!(
+        service
+            .process_with_review(&entry.id, vec![], Arc::new(MissingSource), true)
+            .await
+            .unwrap_err(),
+        CoreError::InvalidTransition
+    );
+    service.choose_original(&entry.id).unwrap();
+    assert_eq!(
+        service
+            .process(&entry.id, vec![], Arc::new(MissingSource))
+            .await
+            .unwrap_err(),
+        CoreError::InvalidTransition
+    );
+    service
+        .deliver(&entry.id, Arc::new(Delivery(Arc::new(AtomicUsize::new(0)))))
+        .await
+        .unwrap();
+    assert_eq!(
+        service
+            .process_with_review(&entry.id, vec![], Arc::new(MissingSource), true)
+            .await
+            .unwrap_err(),
+        CoreError::InvalidTransition
+    );
 }

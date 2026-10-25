@@ -20,6 +20,15 @@ Deterministic tests 測試 HTTP、SQLite、文字流程與 callback 邊界。獨
 
 ## 執行原則
 
+正式 desktop 的平台中立 orchestration／OpenAI-compatible adapter 可用 test-only harness 驗證，不需要編譯 Tauri／C++：
+
+```powershell
+cargo test --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test desktop-workflow
+cargo test --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test desktop-provider
+```
+
+第一個 target 為 `tests/unittest/desktop_workflow.rs`，第二個為 `tests/integration/desktop_provider.rs`；皆透過公開 session／真實 loopback HTTP／SQLite 邊界，不代替原生 UI、STT 或公司品質驗收。三場景與回譯的新原生驗證見 [receipt](../docs/verification/scenarios-prompts.md)。
+
 - 每個產品行為隨實作加入可執行測試，先驗證失敗，再確認修正通過；驗證公開行為，不鎖死內部呼叫順序或複製實作。
 - unit tests 與 integration tests 應有可分開執行的命令。框架與命令在 Windows 實作選定 stack 後，於本檔及對應套件設定中補上。
 - deterministic tests 使用合成／非機密 fixture、本機測試 HTTP server 或測試替身。公司真實 LLM、實際模型及 Windows App 驗收另有明確環境條件。

@@ -875,10 +875,6 @@ async getHistoryEntries(query: string | null) : Promise<Result<SessionDto[], str
     else return { status: "error", error: e  as any };
 }
 },
-async saveScenarioPrompt(scenario: SceneId, prompt: string) : Promise<Result<TextConfiguration, string>> {try{return {status:"ok",data:await TAURI_INVOKE("save_scenario_prompt",{scenario, prompt})}}catch(e){if(e instanceof Error)throw e;else return {status:"error",error:e as any}}},
-async resetScenarioPrompt(scenario: SceneId) : Promise<Result<TextConfiguration, string>> {try{return {status:"ok",data:await TAURI_INVOKE("reset_scenario_prompt",{scenario})}}catch(e){if(e instanceof Error)throw e;else return {status:"error",error:e as any}}},
-async saveTranslationSettings(translation: TranslationSettings) : Promise<Result<TextConfiguration, string>> {try{return {status:"ok",data:await TAURI_INVOKE("save_translation_settings",{translation})}}catch(e){if(e instanceof Error)throw e;else return {status:"error",error:e as any}}},
-async confirmHistoryReview(id: string, revision: number) : Promise<Result<SessionDto, string>> {try{return {status:"ok",data:await TAURI_INVOKE("confirm_history_review",{id, revision})}}catch(e){if(e instanceof Error)throw e;else return {status:"error",error:e as any}}},
 async getTextConfiguration() : Promise<Result<TextConfiguration, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_text_configuration") };
@@ -890,6 +886,38 @@ async getTextConfiguration() : Promise<Result<TextConfiguration, string>> {
 async setTextConfiguration(configuration: TextConfiguration) : Promise<Result<null, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("set_text_configuration", { configuration }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async saveScenarioPrompt(scenario: SceneId, prompt: string) : Promise<Result<TextConfiguration, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("save_scenario_prompt", { scenario, prompt }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async resetScenarioPrompt(scenario: SceneId) : Promise<Result<TextConfiguration, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("reset_scenario_prompt", { scenario }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async saveTranslationSettings(translation: TranslationSettings) : Promise<Result<TextConfiguration, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("save_translation_settings", { translation }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async confirmHistoryReview(id: string, revision: number) : Promise<Result<SessionDto, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("confirm_history_review", { id, revision }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -1145,6 +1173,8 @@ export type PostProcessProvider = { id: string; label: string; base_url: string;
  */
 export type RecognitionModeSetting = "traditional_english" | "simplified_english"
 export type RecordingRetentionPeriod = "never" | "preserve_limit" | "days_3" | "weeks_2" | "months_3"
+export type ScenarioPrompts = { dictation: string; translation: string; ask: string }
+export type SceneId = "dictation" | "translation" | "ask"
 export type SecretMap = Partial<{ [key in string]: string }>
 export type SecureInputStatus = {
 /**
@@ -1233,10 +1263,6 @@ export type StreamTextEvent = { committed: string; tentative: string }
  */
 export type StreamWorkKind = "transcribing" | "polishing"
 export type TextAuthentication = "unspecified" | "none" | "bearer"
-export type SceneId = "dictation" | "translation" | "ask"
-export type TranslationTerm = { source: string; target: string; target_language: string }
-export type TranslationSettings = { target_language: string; domain: string; tone: string; glossary: TranslationTerm[]; back_translation: boolean }
-export type ScenarioPrompts = { dictation: string; translation: string; ask: string }
 export type TextConfiguration = { transport: TextTransport; endpoint: string; model: string; authentication: TextAuthentication; api_key: string; timeout_ms: number; prompts: ScenarioPrompts; translation: TranslationSettings }
 export type TextTransport = "disabled" | "open_ai_chat"
 /**
@@ -1245,6 +1271,8 @@ export type TextTransport = "disabled" | "open_ai_chat"
  */
 export type Theme = "system" | "light" | "dark"
 export type TranscribeAcceleratorSetting = "auto" | "cpu" | "gpu"
+export type TranslationSettings = { target_language: string; domain: string; tone: string; glossary: TranslationTerm[]; back_translation: boolean }
+export type TranslationTerm = { source: string; target: string; target_language: string }
 export type TypingTool = "auto" | "wtype" | "kwtype" | "dotool" | "ydotool" | "xdotool"
 export type VadBackend = "silero" | "earshot"
 export type WindowsMicrophonePermissionStatus = { supported: boolean; overall_access: PermissionAccess; device_access: PermissionAccess; app_access: PermissionAccess; desktop_app_access: PermissionAccess }

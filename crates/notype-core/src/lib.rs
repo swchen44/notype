@@ -374,6 +374,7 @@ impl SessionService {
             ("back_translation", "TEXT"),
             ("review_required", "INTEGER NOT NULL DEFAULT 0"),
             ("review_confirmed", "INTEGER NOT NULL DEFAULT 0"),
+            ("recognition_failed", "INTEGER NOT NULL DEFAULT 0"),
         ] {
             if !columns.iter().any(|column| column == name) {
                 transaction.execute_batch(&format!(
@@ -381,6 +382,10 @@ impl SessionService {
                 ))?;
             }
         }
+        transaction.execute(
+            "UPDATE sessions SET recognition_failed=1 WHERE error='recognition-script-failed'",
+            [],
+        )?;
         transaction.execute("UPDATE sessions SET status=CASE status WHEN 'processing' THEN 'failed' ELSE 'delivery-unknown' END,error='interrupted',attempt=attempt+1,updated_at=?1 WHERE status IN ('processing','delivering')", [now()])?;
         transaction.execute_batch("CREATE TABLE IF NOT EXISTS history_imports (source_key TEXT NOT NULL,source_id INTEGER NOT NULL,session_id TEXT NOT NULL,PRIMARY KEY(source_key,source_id)); PRAGMA user_version=3;")?;
         transaction.commit()?;
@@ -432,8 +437,8 @@ impl SessionService {
         let timestamp = now();
         self.connection()?.execute(
             "INSERT INTO sessions
-            (id, transcript, created_at, updated_at, status, recognition_mode, original_target,scenario,translation_target,source_context,error)
-            VALUES (?1,?2,?3,?3,?9,?4,?5,?6,?7,?8,?10)",
+            (id, transcript, created_at, updated_at, status, recognition_mode, original_target,scenario,translation_target,source_context,error,recognition_failed)
+            VALUES (?1,?2,?3,?3,?9,?4,?5,?6,?7,?8,?10,?11)",
             params![
                 id,
                 transcript,
@@ -445,7 +450,7 @@ impl SessionService {
                 serde_json::to_string(&options.scenario).unwrap().trim_matches('"'),
                 options.translation_target,
                 serde_json::to_string(&options.source_context).map_err(|_|CoreError::InvalidInput)?,
-                status,error
+                status,error,error==Some("recognition-script-failed")
             ],
         )?;
         self.get(&id)
@@ -684,6 +689,14 @@ impl SessionService {
         let (entry, attempt) = {
             let connection = self.connection()?;
             let entry = read_entry(&connection, id)?;
+            let recognition_failed: bool = connection.query_row(
+                "SELECT recognition_failed FROM sessions WHERE id=?1",
+                [id],
+                |row| row.get(0),
+            )?;
+            if recognition_failed {
+                return Err(CoreError::InvalidTransition);
+            }
             if matches!(
                 entry.status,
                 SessionStatus::Processing | SessionStatus::Delivering

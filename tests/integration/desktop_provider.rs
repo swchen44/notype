@@ -170,6 +170,50 @@ async fn translation_review_uses_two_requests_without_original_in_reverse_and_re
 }
 
 #[tokio::test]
+async fn invalid_source_metadata_retains_valid_primary_as_recoverable_review_failure() {
+    for source in [
+        Value::Null,
+        json!("https://untrusted.test/path"),
+        json!("und"),
+    ] {
+        let content =
+            json!({"text":"Preserve this valid primary.","source_language":source}).to_string();
+        let reply=json!({"choices":[{"message":{"role":"assistant","content":content},"finish_reason":"stop"}]}).to_string();
+        let (endpoint, request, server) = fixture(&reply, Duration::ZERO).await;
+        let workflow = DesktopWorkflow::new(SessionService::in_memory().unwrap(), Arc::new(|| {}));
+        let mut config = configured(endpoint);
+        config.translation.back_translation = true;
+        let generation = workflow
+            .begin(RecognitionMode::TraditionalEnglish, None)
+            .unwrap();
+        workflow
+            .capture_processing_snapshot(
+                generation,
+                notype_core::Scenario::Translation,
+                config.clone(),
+                vec![],
+            )
+            .unwrap();
+        let entry = workflow
+            .finish(generation, "只保留已產生的主翻譯", config, vec![])
+            .await
+            .unwrap();
+        assert_eq!(
+            entry.result.as_deref(),
+            Some("Preserve this valid primary.")
+        );
+        assert_eq!(entry.error.as_deref(), Some("back-translation-failed"));
+        assert_eq!(entry.source_language, None);
+        assert_eq!(entry.back_translation, None);
+        assert!(entry.review_required);
+        assert!(!entry.review_confirmed);
+        assert!(workflow.confirm_review(&entry.id, entry.revision).is_err());
+        request.await.unwrap();
+        server.await.unwrap();
+    }
+}
+
+#[tokio::test]
 async fn edited_prompt_and_terms_are_captured_at_start_without_hidden_default_examples() {
     let reply=json!({"choices":[{"message":{"role":"assistant","content":"保留 API 42。"},"finish_reason":"stop"}]}).to_string();
     let (endpoint, request, server) = fixture(&reply, Duration::ZERO).await;
