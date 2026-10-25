@@ -14,8 +14,9 @@ use std::sync::{
 #[path = "faithful_provider.rs"]
 mod faithful_provider;
 pub use faithful_provider::{
-    processor as text_processor, ScenarioPrompts, TextAuthentication, TextConfiguration,
-    TextProviderProfile, TextTransport, TranslationSettings, TranslationTerm,
+    probe_processor as probe_text_processor, processor as text_processor, ScenarioPrompts,
+    TextAuthentication, TextConfiguration, TextProviderProfile, TextTransport, TranslationSettings,
+    TranslationTerm,
 };
 #[path = "recognition.rs"]
 pub mod recognition;

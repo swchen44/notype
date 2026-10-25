@@ -154,8 +154,14 @@ pub fn schedule() -> &'static [SlotSpec] {
 
 /// Enforce the approved profile and complete serialized-wire bound.
 pub fn validate_wire(facts: &WireFacts<'_>) -> Result<(), Denied> {
-    if facts.endpoint != "https://api.deepseek.com/chat/completions"
-        || facts.model != "deepseek-flash"
+    if facts.endpoint != "https://api.deepseek.com/chat/completions" {
+        return Err(Denied::WireContract);
+    }
+    validate_controls(facts)
+}
+
+pub(super) fn validate_controls(facts: &WireFacts<'_>) -> Result<(), Denied> {
+    if facts.model != "deepseek-flash"
         || !facts.deepseek_profile
         || facts.effort != Some("none")
         || facts.thinking != Some(false)
@@ -168,4 +174,18 @@ pub fn validate_wire(facts: &WireFacts<'_>) -> Result<(), Denied> {
         return Err(Denied::WireContract);
     }
     Ok(())
+}
+
+#[cfg(test)]
+pub(super) fn validate_fixture_wire(facts: &WireFacts<'_>) -> Result<(), Denied> {
+    let port = facts
+        .endpoint
+        .strip_prefix("http://127.0.0.1:")
+        .and_then(|suffix| suffix.strip_suffix("/chat/completions"))
+        .and_then(|port| port.parse::<u16>().ok())
+        .filter(|port| *port > 0);
+    if port.is_none() {
+        return Err(Denied::WireContract);
+    }
+    validate_controls(facts)
 }

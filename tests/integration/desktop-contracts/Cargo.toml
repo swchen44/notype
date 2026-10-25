@@ -7,6 +7,14 @@ publish = false
 [workspace]
 
 [[test]]
+name = "deepseek-probe-bridge"
+path = "../deepseek_probe_bridge.rs"
+
+[[test]]
+name = "deepseek-probe-round"
+path = "../deepseek_probe_round.rs"
+
+[[test]]
 name = "history-metrics-dto"
 path = "../history_metrics_dto.rs"
 
@@ -18,6 +26,7 @@ specta = { version = "=2.0.0-rc.22", features = ["derive"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 tokio = { version = "1", features = ["macros", "net", "io-util", "sync", "time", "rt-multi-thread"] }
 tempfile = "3"
+rusqlite = { version = "0.37", features = ["bundled"] }
 regex = "1"
 ferrous-opencc = "0.2.3"
 opencc-jieba-rs = { version = "=0.8.1", default-features = false }
