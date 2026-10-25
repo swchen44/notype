@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { getVersion } from "@tauri-apps/api/app";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { exit } from "@tauri-apps/plugin-process";
 import { SettingsGroup } from "../../ui/SettingsGroup";
 import { SettingContainer } from "../../ui/SettingContainer";
 import { Button } from "../../ui/Button";
@@ -10,10 +11,20 @@ import { AppLanguageSelector } from "../AppLanguageSelector";
 import { ShowWhatsNewOnUpdate } from "../ShowWhatsNewOnUpdate";
 import { ThemeSelector } from "../ThemeSelector";
 import { LogDirectory } from "../debug";
+import { DiagnosticsSupport } from "./DiagnosticsSupport";
 
 export const AboutSettings: React.FC = () => {
   const { t } = useTranslation();
   const [version, setVersion] = useState("");
+  const [quitError, setQuitError] = useState("");
+
+  async function quitApp() {
+    try {
+      await exit(0);
+    } catch {
+      setQuitError(t("notype.diagnostics.quitFailed"));
+    }
+  }
 
   useEffect(() => {
     const fetchVersion = async () => {
@@ -79,7 +90,23 @@ export const AboutSettings: React.FC = () => {
 
         <AppDataDirectory descriptionMode="tooltip" grouped={true} />
         <LogDirectory grouped={true} />
+        <SettingContainer
+          title={t("notype.diagnostics.quitTitle")}
+          description={t("notype.diagnostics.quitDescription")}
+          grouped
+        >
+          <div className="space-y-2">
+            <Button variant="secondary" onClick={() => void quitApp()}>
+              {t("notype.diagnostics.quit")}
+            </Button>
+            <p role="status" className="text-sm">
+              {quitError}
+            </p>
+          </div>
+        </SettingContainer>
       </SettingsGroup>
+
+      <DiagnosticsSupport />
 
       <SettingsGroup title={t("settings.about.acknowledgments.title")}>
         <SettingContainer

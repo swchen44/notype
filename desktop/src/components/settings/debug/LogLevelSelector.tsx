@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import { SettingContainer } from "../../ui/SettingContainer";
 import { Dropdown, type DropdownOption } from "../../ui/Dropdown";
@@ -23,33 +24,45 @@ export const LogLevelSelector: React.FC<LogLevelSelectorProps> = ({
   grouped = false,
 }) => {
   const { t } = useTranslation();
-  const { settings, updateSetting, isUpdating } = useSettings();
+  const { settings, refreshSettings } = useSettings();
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
   const currentLevel = settings?.log_level ?? "debug";
 
   const handleSelect = async (value: string) => {
     if (value === currentLevel) return;
 
+    setSaving(true);
+    setError("");
     try {
-      await updateSetting("log_level", value as LogLevel);
-    } catch (error) {
-      console.error("Failed to update log level:", error);
+      await invoke<void>("set_log_level", { level: value as LogLevel });
+      await refreshSettings();
+    } catch {
+      setError(t("notype.diagnostics.logLevelFailed"));
+    } finally {
+      setSaving(false);
     }
   };
 
   return (
     <SettingContainer
       title={t("settings.debug.logLevel.title")}
-      description={t("settings.debug.logLevel.description")}
+      description={t("notype.diagnostics.logLevelDescription")}
       descriptionMode={descriptionMode}
       grouped={grouped}
       layout="horizontal"
     >
-      <Dropdown
-        options={LOG_LEVEL_OPTIONS}
-        selectedValue={currentLevel}
-        onSelect={handleSelect}
-        disabled={!settings || isUpdating("log_level")}
-      />
+      <div>
+        <Dropdown
+          options={LOG_LEVEL_OPTIONS}
+          selectedValue={currentLevel}
+          onSelect={handleSelect}
+          disabled={!settings || saving}
+        />
+        <p role="status" className="text-xs">
+          {error}
+        </p>
+      </div>
     </SettingContainer>
   );
 };

@@ -1,3 +1,5 @@
+#[path = "../../desktop/src-tauri/src/diagnostics.rs"]
+mod diagnostics;
 #[path = "../../desktop/src-tauri/src/workflow.rs"]
 mod workflow;
 use notype_core::{RecognitionMode, SessionOptions, SessionService, SessionStatus};

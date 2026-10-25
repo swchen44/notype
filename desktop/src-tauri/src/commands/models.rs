@@ -5,6 +5,21 @@ use log::error;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, State};
 
+/// Displays a completed model's actual resolved file/directory in the UI.
+/// This read-only lookup never exports a path in diagnostics or returns a
+/// guessed destination for a model that has not completed download.
+#[tauri::command]
+#[specta::specta]
+pub fn get_model_path(
+    model_manager: State<'_, Arc<ModelManager>>,
+    model_id: String,
+) -> Result<String, String> {
+    model_manager
+        .get_model_path_for_display(&model_id)
+        .map(|path| path.to_string_lossy().into_owned())
+        .map_err(|_| "model-path-unavailable".to_string())
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn get_available_models(
