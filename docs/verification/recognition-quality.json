@@ -52,11 +52,23 @@
       "referenceCharacters": 60,
       "cer": 0.5333333333333333,
       "missingRequiredLiterals": [
+        "2",
         "API",
         "not ready",
         "Keep the test data"
       ],
-      "strictLiteralDiagnosticPass": false
+      "strictLiteralDiagnosticPass": false,
+      "originalDiagnostic": {
+        "gold": "今天請保留42筆測試資料，不要刪除。The API is not ready. 等驗證完成後，再送出2筆請求。Keep the test data.",
+        "characterErrors": 32,
+        "referenceCharacters": 60,
+        "cer": 0.5333333333333333,
+        "missingRequiredLiterals": [
+          "API",
+          "not ready",
+          "Keep the test data"
+        ]
+      }
     },
     {
       "model": "small",
@@ -86,7 +98,14 @@
       "referenceCharacters": 88,
       "cer": 0.875,
       "missingRequiredLiterals": [],
-      "strictLiteralDiagnosticPass": true
+      "strictLiteralDiagnosticPass": true,
+      "originalDiagnostic": {
+        "gold": "Check the API and session underscore id. 這是測試用的設定，請保留英文名稱，不要改成中文。Use Visual Studio Code, then check GitHub.",
+        "characterErrors": 77,
+        "referenceCharacters": 88,
+        "cer": 0.875,
+        "missingRequiredLiterals": []
+      }
     },
     {
       "model": "small",
@@ -119,14 +138,24 @@
         "This is a test build",
         "2.0"
       ],
-      "strictLiteralDiagnosticPass": false
+      "strictLiteralDiagnosticPass": false,
+      "originalDiagnostic": {
+        "gold": "頭髮的髮和發展的發意思不同，今天不要發布正式版本。This is a test build, version 2.0. 請檢查後再送出，不要自動執行命令。",
+        "characterErrors": 29,
+        "referenceCharacters": 63,
+        "cer": 0.4603174603174603,
+        "missingRequiredLiterals": [
+          "This is a test build",
+          "2.0"
+        ]
+      }
     },
     {
       "model": "small",
       "mode": "simplified_english",
       "fixture": "numbers-negation-switch",
       "wavSha256": "39dec0a99dff6bec753bf4a699673dbed7dac8d1a32482ec08051a25dec90433",
-      "gold": "今天请保留42笔测试数据，不要删除。The API is not ready. 等验证完成后，再送出2笔请求。Keep the test data.",
+      "gold": "今天请保留42笔测试资料，不要删除。The API is not ready. 等验证完成后，再送出2笔请求。Keep the test data.",
       "observed": {
         "audio_secs": 13.992625,
         "best_ms": 3813,
@@ -145,15 +174,27 @@
         ]
       },
       "wallMs": 8336,
-      "characterErrors": 34,
+      "characterErrors": 32,
       "referenceCharacters": 60,
-      "cer": 0.5666666666666667,
+      "cer": 0.5333333333333333,
       "missingRequiredLiterals": [
+        "2",
         "API",
         "not ready",
         "Keep the test data"
       ],
-      "strictLiteralDiagnosticPass": false
+      "strictLiteralDiagnosticPass": false,
+      "originalDiagnostic": {
+        "gold": "今天请保留42笔测试数据，不要删除。The API is not ready. 等验证完成后，再送出2笔请求。Keep the test data.",
+        "characterErrors": 34,
+        "referenceCharacters": 60,
+        "cer": 0.5666666666666667,
+        "missingRequiredLiterals": [
+          "API",
+          "not ready",
+          "Keep the test data"
+        ]
+      }
     },
     {
       "model": "small",
@@ -183,7 +224,14 @@
       "referenceCharacters": 88,
       "cer": 0.875,
       "missingRequiredLiterals": [],
-      "strictLiteralDiagnosticPass": true
+      "strictLiteralDiagnosticPass": true,
+      "originalDiagnostic": {
+        "gold": "Check the API and session underscore id. 这是测试用的设定，请保留英文名称，不要改成中文。Use Visual Studio Code, then check GitHub.",
+        "characterErrors": 77,
+        "referenceCharacters": 88,
+        "cer": 0.875,
+        "missingRequiredLiterals": []
+      }
     },
     {
       "model": "small",
@@ -216,7 +264,17 @@
         "This is a test build",
         "2.0"
       ],
-      "strictLiteralDiagnosticPass": false
+      "strictLiteralDiagnosticPass": false,
+      "originalDiagnostic": {
+        "gold": "头发的发和发展的发意思不同，今天不要发布正式版本。This is a test build, version 2.0. 请检查后再送出，不要自动执行命令。",
+        "characterErrors": 28,
+        "referenceCharacters": 63,
+        "cer": 0.4444444444444444,
+        "missingRequiredLiterals": [
+          "This is a test build",
+          "2.0"
+        ]
+      }
     },
     {
       "model": "ggml-small-local-q5_1",
@@ -246,11 +304,23 @@
       "referenceCharacters": 60,
       "cer": 0.5333333333333333,
       "missingRequiredLiterals": [
+        "2",
         "API",
         "not ready",
         "Keep the test data"
       ],
-      "strictLiteralDiagnosticPass": false
+      "strictLiteralDiagnosticPass": false,
+      "originalDiagnostic": {
+        "gold": "今天請保留42筆測試資料，不要刪除。The API is not ready. 等驗證完成後，再送出2筆請求。Keep the test data.",
+        "characterErrors": 32,
+        "referenceCharacters": 60,
+        "cer": 0.5333333333333333,
+        "missingRequiredLiterals": [
+          "API",
+          "not ready",
+          "Keep the test data"
+        ]
+      }
     },
     {
       "model": "ggml-small-local-q5_1",
@@ -280,7 +350,14 @@
       "referenceCharacters": 88,
       "cer": 0.875,
       "missingRequiredLiterals": [],
-      "strictLiteralDiagnosticPass": true
+      "strictLiteralDiagnosticPass": true,
+      "originalDiagnostic": {
+        "gold": "Check the API and session underscore id. 這是測試用的設定，請保留英文名稱，不要改成中文。Use Visual Studio Code, then check GitHub.",
+        "characterErrors": 77,
+        "referenceCharacters": 88,
+        "cer": 0.875,
+        "missingRequiredLiterals": []
+      }
     },
     {
       "model": "ggml-small-local-q5_1",
@@ -313,14 +390,24 @@
         "This is a test build",
         "2.0"
       ],
-      "strictLiteralDiagnosticPass": false
+      "strictLiteralDiagnosticPass": false,
+      "originalDiagnostic": {
+        "gold": "頭髮的髮和發展的發意思不同，今天不要發布正式版本。This is a test build, version 2.0. 請檢查後再送出，不要自動執行命令。",
+        "characterErrors": 29,
+        "referenceCharacters": 63,
+        "cer": 0.4603174603174603,
+        "missingRequiredLiterals": [
+          "This is a test build",
+          "2.0"
+        ]
+      }
     },
     {
       "model": "ggml-small-local-q5_1",
       "mode": "simplified_english",
       "fixture": "numbers-negation-switch",
       "wavSha256": "39dec0a99dff6bec753bf4a699673dbed7dac8d1a32482ec08051a25dec90433",
-      "gold": "今天请保留42笔测试数据，不要删除。The API is not ready. 等验证完成后，再送出2笔请求。Keep the test data.",
+      "gold": "今天请保留42笔测试资料，不要删除。The API is not ready. 等验证完成后，再送出2笔请求。Keep the test data.",
       "observed": {
         "audio_secs": 13.992625,
         "best_ms": 5451,
@@ -339,15 +426,27 @@
         ]
       },
       "wallMs": 13738,
-      "characterErrors": 34,
+      "characterErrors": 32,
       "referenceCharacters": 60,
-      "cer": 0.5666666666666667,
+      "cer": 0.5333333333333333,
       "missingRequiredLiterals": [
+        "2",
         "API",
         "not ready",
         "Keep the test data"
       ],
-      "strictLiteralDiagnosticPass": false
+      "strictLiteralDiagnosticPass": false,
+      "originalDiagnostic": {
+        "gold": "今天请保留42笔测试数据，不要删除。The API is not ready. 等验证完成后，再送出2笔请求。Keep the test data.",
+        "characterErrors": 34,
+        "referenceCharacters": 60,
+        "cer": 0.5666666666666667,
+        "missingRequiredLiterals": [
+          "API",
+          "not ready",
+          "Keep the test data"
+        ]
+      }
     },
     {
       "model": "ggml-small-local-q5_1",
@@ -377,7 +476,14 @@
       "referenceCharacters": 88,
       "cer": 0.875,
       "missingRequiredLiterals": [],
-      "strictLiteralDiagnosticPass": true
+      "strictLiteralDiagnosticPass": true,
+      "originalDiagnostic": {
+        "gold": "Check the API and session underscore id. 这是测试用的设定，请保留英文名称，不要改成中文。Use Visual Studio Code, then check GitHub.",
+        "characterErrors": 77,
+        "referenceCharacters": 88,
+        "cer": 0.875,
+        "missingRequiredLiterals": []
+      }
     },
     {
       "model": "ggml-small-local-q5_1",
@@ -410,7 +516,17 @@
         "This is a test build",
         "2.0"
       ],
-      "strictLiteralDiagnosticPass": false
+      "strictLiteralDiagnosticPass": false,
+      "originalDiagnostic": {
+        "gold": "头发的发和发展的发意思不同，今天不要发布正式版本。This is a test build, version 2.0. 请检查后再送出，不要自动执行命令。",
+        "characterErrors": 28,
+        "referenceCharacters": 63,
+        "cer": 0.4444444444444444,
+        "missingRequiredLiterals": [
+          "This is a test build",
+          "2.0"
+        ]
+      }
     },
     {
       "model": "sense-voice-int8",
@@ -440,9 +556,19 @@
       "referenceCharacters": 60,
       "cer": 0.08333333333333333,
       "missingRequiredLiterals": [
+        "2",
         "API"
       ],
-      "strictLiteralDiagnosticPass": false
+      "strictLiteralDiagnosticPass": false,
+      "originalDiagnostic": {
+        "gold": "今天請保留42筆測試資料，不要刪除。The API is not ready. 等驗證完成後，再送出2筆請求。Keep the test data.",
+        "characterErrors": 5,
+        "referenceCharacters": 60,
+        "cer": 0.08333333333333333,
+        "missingRequiredLiterals": [
+          "API"
+        ]
+      }
     },
     {
       "model": "sense-voice-int8",
@@ -474,7 +600,16 @@
       "missingRequiredLiterals": [
         "Visual Studio Code"
       ],
-      "strictLiteralDiagnosticPass": false
+      "strictLiteralDiagnosticPass": false,
+      "originalDiagnostic": {
+        "gold": "Check the API and session underscore id. 這是測試用的設定，請保留英文名稱，不要改成中文。Use Visual Studio Code, then check GitHub.",
+        "characterErrors": 6,
+        "referenceCharacters": 88,
+        "cer": 0.06818181818181818,
+        "missingRequiredLiterals": [
+          "Visual Studio Code"
+        ]
+      }
     },
     {
       "model": "sense-voice-int8",
@@ -504,14 +639,21 @@
       "referenceCharacters": 63,
       "cer": 0.031746031746031744,
       "missingRequiredLiterals": [],
-      "strictLiteralDiagnosticPass": true
+      "strictLiteralDiagnosticPass": true,
+      "originalDiagnostic": {
+        "gold": "頭髮的髮和發展的發意思不同，今天不要發布正式版本。This is a test build, version 2.0. 請檢查後再送出，不要自動執行命令。",
+        "characterErrors": 2,
+        "referenceCharacters": 63,
+        "cer": 0.031746031746031744,
+        "missingRequiredLiterals": []
+      }
     },
     {
       "model": "sense-voice-int8",
       "mode": "simplified_english",
       "fixture": "numbers-negation-switch",
       "wavSha256": "39dec0a99dff6bec753bf4a699673dbed7dac8d1a32482ec08051a25dec90433",
-      "gold": "今天请保留42笔测试数据，不要删除。The API is not ready. 等验证完成后，再送出2笔请求。Keep the test data.",
+      "gold": "今天请保留42笔测试资料，不要删除。The API is not ready. 等验证完成后，再送出2笔请求。Keep the test data.",
       "observed": {
         "audio_secs": 13.992625,
         "best_ms": 1075,
@@ -530,13 +672,23 @@
         ]
       },
       "wallMs": 3792,
-      "characterErrors": 7,
+      "characterErrors": 5,
       "referenceCharacters": 60,
-      "cer": 0.11666666666666667,
+      "cer": 0.08333333333333333,
       "missingRequiredLiterals": [
+        "2",
         "API"
       ],
-      "strictLiteralDiagnosticPass": false
+      "strictLiteralDiagnosticPass": false,
+      "originalDiagnostic": {
+        "gold": "今天请保留42笔测试数据，不要删除。The API is not ready. 等验证完成后，再送出2笔请求。Keep the test data.",
+        "characterErrors": 7,
+        "referenceCharacters": 60,
+        "cer": 0.11666666666666667,
+        "missingRequiredLiterals": [
+          "API"
+        ]
+      }
     },
     {
       "model": "sense-voice-int8",
@@ -568,7 +720,16 @@
       "missingRequiredLiterals": [
         "Visual Studio Code"
       ],
-      "strictLiteralDiagnosticPass": false
+      "strictLiteralDiagnosticPass": false,
+      "originalDiagnostic": {
+        "gold": "Check the API and session underscore id. 这是测试用的设定，请保留英文名称，不要改成中文。Use Visual Studio Code, then check GitHub.",
+        "characterErrors": 6,
+        "referenceCharacters": 88,
+        "cer": 0.06818181818181818,
+        "missingRequiredLiterals": [
+          "Visual Studio Code"
+        ]
+      }
     },
     {
       "model": "sense-voice-int8",
@@ -598,7 +759,14 @@
       "referenceCharacters": 63,
       "cer": 0.015873015873015872,
       "missingRequiredLiterals": [],
-      "strictLiteralDiagnosticPass": true
+      "strictLiteralDiagnosticPass": true,
+      "originalDiagnostic": {
+        "gold": "头发的发和发展的发意思不同，今天不要发布正式版本。This is a test build, version 2.0. 请检查后再送出，不要自动执行命令。",
+        "characterErrors": 1,
+        "referenceCharacters": 63,
+        "cer": 0.015873015873015872,
+        "missingRequiredLiterals": []
+      }
     }
   ],
   "hardware": {
@@ -643,5 +811,8 @@
     "p95": "Not estimated from this small sample",
     "cold": "Fresh process/model load, OS file cache not flushed",
     "warm": "Second inference in same process"
+  },
+  "referenceErrata": {
+    "reason": "SAPI source says 測試資料; Simplified script-only reference must retain 资料 rather than regional-vocabulary substitute 数据. Manually corrected independent reference; no model/output changed. Numeric required-literal checks use digit boundaries so2 cannot match42. Original outside receipts remain historical."
   }
 }

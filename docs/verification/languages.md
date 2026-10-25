@@ -22,9 +22,11 @@
 | --- | --- | --- | --- |
 | Whisper Small FP16／MIT | 3,563–4,088 ms | 44.4–87.5% | 英文片段被省略；英文開頭時中文片段被譯為英文，未通過 |
 | 本機量化 Small Q5_1／MIT derivative | 5,284–7,934 ms | 44.4–87.5% | 相同混語損失，這台機器也較慢，未通過 |
-| SenseVoice int8／僅私人比較 | 948–1,481 ms | 1.6–11.7% | 保留雙語，但 API→AP、Visual 被省略、GitHub 分詞與 髮→法 仍錯；授權詮釋待釐清，未選作公開配送 |
+| SenseVoice int8／僅私人比較 | 948–1,481 ms | 1.6–8.3% | 保留雙語，但 API→AP、Visual 被省略、GitHub 分詞與 髮→法 仍錯；授權詮釋待釐清，未選作公開配送 |
 
 CER 定義是 NFKC／小寫後移除標點／空白的 Levenshtein，**未修補英文、未將中文數字當阿拉伯數字**。required literal 是另列的大小寫不敏感 exact substring 診斷；`兩`／`2`、`Git hub`／`GitHub` 應人工分辨，不把 literal diagnostic 當完整品質分數。沒有從這個小樣本宣稱 p95／人聲／公司通過；RAM 尚未量測。cold 指 fresh process/model load，沒有清除 OS file cache；warm 指同 process 第二次 decode。
+
+參考勘誤：最初簡體 numbers gold 把來源語音的「測試資料」寫成「测试数据」，現人工修正為只轉字形的「测试资料」；這使該簡體 case 的 CER 降低 3.3 個百分點。另修正 numeric literal 邊界，讓 required `2` 不再誤匹配 `42`。原始模型輸出完全保留，JSON 的 `originalDiagnostic` 保存舊 gold／分數／literal 診斷，`referenceErrata` 記錄理由；外部原始 receipts 不覆寫。這些修正沒有讓 Small 的英文省略／翻譯通過。
 
 另以已核對的 whisper.cpp v1.8.6 CLI、同一 FP16、`-l zh -t 4` 作診斷，numbers WAV 仍完整省略兩個英文句子，因此未以固定中文 language 掩蓋 auto 的失敗，也沒有改成靜默翻譯。這個診斷不是正式 app 的品質通過證據。
 
