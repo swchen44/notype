@@ -30,6 +30,7 @@ pub struct DesktopWorkflow {
     generation: AtomicU64,
     recording: Mutex<Option<Recording>>,
     notify: Arc<dyn Fn() + Send + Sync>,
+    delivery: Arc<dyn DeliveryAdapter>,
 }
 
 struct Recording {
@@ -67,7 +68,13 @@ impl DesktopWorkflow {
             generation: AtomicU64::new(0),
             recording: Mutex::new(None),
             notify,
+            delivery: Arc::new(UnavailableDelivery),
         }
+    }
+    /// Composition selects a guarded platform adapter; portable callers stay unavailable.
+    pub fn with_delivery(mut self, delivery: Arc<dyn DeliveryAdapter>) -> Self {
+        self.delivery = delivery;
+        self
     }
     pub fn sessions(&self) -> &SessionService {
         &self.sessions
@@ -309,7 +316,7 @@ impl DesktopWorkflow {
     pub async fn deliver(&self, id: &str) -> Result<SessionEntry, CoreError> {
         let entry = self
             .sessions
-            .deliver(id, Arc::new(UnavailableDelivery))
+            .deliver(id, Arc::clone(&self.delivery))
             .await?;
         (self.notify)();
         Ok(entry)

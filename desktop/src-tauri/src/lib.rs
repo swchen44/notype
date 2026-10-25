@@ -7,6 +7,9 @@ mod autostart;
 mod catalog;
 mod chinese_script;
 pub mod cli;
+mod native_input;
+mod physical_gestures;
+mod physical_shortcuts;
 // Retained upstream helpers are test-only. Production has no arbitrary-focus
 // paste or legacy prompt transport; #13 supplies a guarded delivery adapter.
 #[cfg(test)]
@@ -222,12 +225,17 @@ fn initialize_core_logic(app_handle: &AppHandle) -> Result<(), Box<dyn std::erro
     };
     app_handle.manage(commands::history::LegacyImportNotice(import_error));
     let event_app = app_handle.clone();
-    let workflow = Arc::new(workflow::DesktopWorkflow::new(
-        sessions,
-        Arc::new(move || {
-            let _ = event_app.emit("session-history-changed", ());
-        }),
-    ));
+    let native_input = native_input::NativeInput::default();
+    let workflow = Arc::new(
+        workflow::DesktopWorkflow::new(
+            sessions,
+            Arc::new(move || {
+                let _ = event_app.emit("session-history-changed", ());
+            }),
+        )
+        .with_delivery(Arc::new(native_input.clone())),
+    );
+    app_handle.manage(native_input);
 
     // Initialize the transcribe-cpp native backend (logging + backend module
     // registration) once, before any whisper model is loaded.

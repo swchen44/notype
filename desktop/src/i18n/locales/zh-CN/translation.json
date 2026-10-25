@@ -1,5 +1,17 @@
 {
   "notype": {
+    "hotkeys": {
+      "transcribe": "开始口述",
+      "translation": "开始翻译",
+      "ask": "开始随便问",
+      "stop": "停止本次录音",
+      "description": "按一下开始，再按停止键结束。整组按键松开并出现收音提示后，才开始说话。使用物理键名称，例如 alt_right、alt_right+shift_right、alt_right+space 或 f9；左右键分开判断。",
+      "cancel": "Esc 可取消录音或处理。不支持的输入框会保留待选结果，供手动复制。",
+      "save": "保存",
+      "reset": "恢复",
+      "saved": "已保存到本机",
+      "invalid": "无法保存：请检查物理键名称、开始键冲突或快捷键是否可用。"
+    },
     "history": {
       "title": "文字历史",
       "search": "搜索文字历史",

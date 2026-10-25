@@ -1065,6 +1065,15 @@ impl AudioRecordingManager {
         // freeze).
         self.recording_active.load(Ordering::SeqCst)
     }
+    /// Read on the shortcut worker, never in a hook/UI callback. Stop belongs to
+    /// the actual recording owner, including recordings started from the tray.
+    pub fn recording_binding(&self) -> Option<String> {
+        let state = self.state.lock().ok()?;
+        match &*state {
+            RecordingState::Recording { binding_id } => Some(binding_id.clone()),
+            _ => None,
+        }
+    }
 
     /// Cancel any ongoing recording without returning audio samples
     pub fn cancel_recording(&self) {

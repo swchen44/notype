@@ -18,6 +18,7 @@ use serde::Serialize;
 use specta::Type;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{AppHandle, Emitter, Manager};
+use tauri_plugin_store::StoreExt;
 
 use crate::settings::{
     self, get_settings, AutoSubmitKey, ChineseScript, ClipboardHandling, KeyboardImplementation,
@@ -29,29 +30,8 @@ use crate::tray;
 // Note: Commands are accessed via shortcut::handy_keys:: in lib.rs
 
 /// Initialize shortcuts using the configured implementation
-pub fn init_shortcuts(app: &AppHandle) {
-    let user_settings = settings::load_or_create_app_settings(app);
-
-    // Check which implementation to use
-    match user_settings.keyboard_implementation {
-        KeyboardImplementation::Tauri => {
-            tauri_impl::init_shortcuts(app);
-        }
-        KeyboardImplementation::HandyKeys => {
-            if let Err(e) = handy_keys::init_shortcuts(app) {
-                error!("Failed to initialize handy-keys shortcuts: {}", e);
-                // Fall back to Tauri implementation and persist this fallback
-                warn!("Falling back to Tauri global shortcut implementation and saving fallback to settings");
-
-                // Update settings to persist the fallback so we don't retry HandyKeys on next launch
-                let mut settings = settings::get_settings(app);
-                settings.keyboard_implementation = KeyboardImplementation::Tauri;
-                settings::write_settings(app, settings);
-
-                tauri_impl::init_shortcuts(app);
-            }
-        }
-    }
+pub fn init_shortcuts(app: &AppHandle) -> Result<(), String> {
+    crate::physical_shortcuts::initialize(app)
 }
 
 /// Whether the recording lifecycle currently wants the cancel shortcut.
@@ -65,6 +45,9 @@ static CANCEL_REGISTERED: std::sync::Mutex<bool> = std::sync::Mutex::new(false);
 
 /// Register the cancel shortcut (called when recording starts)
 pub fn register_cancel_shortcut(app: &AppHandle) {
+    if cfg!(target_os = "windows") {
+        return;
+    }
     // Track recording lifecycle independently of the current implementation so
     // switching implementations mid-recording cannot leave stale fallback state.
     crate::secure_input::register_cancel_fallback(app);
@@ -75,6 +58,9 @@ pub fn register_cancel_shortcut(app: &AppHandle) {
 
 /// Unregister the cancel shortcut (called when recording stops)
 pub fn unregister_cancel_shortcut(app: &AppHandle) {
+    if cfg!(target_os = "windows") {
+        return;
+    }
     crate::secure_input::unregister_cancel_fallback(app);
 
     CANCEL_REQUESTED.store(false, Ordering::SeqCst);
@@ -129,6 +115,10 @@ fn reconcile_cancel_shortcut(app: &AppHandle) {
 
 /// Register a shortcut using the appropriate implementation
 pub fn register_shortcut(app: &AppHandle, binding: ShortcutBinding) -> Result<(), String> {
+    if cfg!(target_os = "windows") {
+        let _ = (app, binding);
+        return Ok(());
+    }
     let settings = get_settings(app);
     match settings.keyboard_implementation {
         KeyboardImplementation::Tauri => tauri_impl::register_shortcut(app, binding),
@@ -138,6 +128,10 @@ pub fn register_shortcut(app: &AppHandle, binding: ShortcutBinding) -> Result<()
 
 /// Unregister a shortcut using the appropriate implementation
 pub fn unregister_shortcut(app: &AppHandle, binding: ShortcutBinding) -> Result<(), String> {
+    if cfg!(target_os = "windows") {
+        let _ = (app, binding);
+        return Ok(());
+    }
     let settings = get_settings(app);
     match settings.keyboard_implementation {
         KeyboardImplementation::Tauri => tauri_impl::unregister_shortcut(app, binding),
@@ -163,6 +157,55 @@ pub fn change_binding(
     id: String,
     binding: String,
 ) -> Result<BindingResponse, String> {
+    if cfg!(target_os = "windows") {
+        let mut settings = settings::get_settings(&app);
+        let previous = settings.clone();
+        let previous_bindings = crate::physical_shortcuts::configured(&app).ok();
+        let defaults = settings::get_default_settings();
+        let mut updated = defaults
+            .bindings
+            .get(&id)
+            .cloned()
+            .ok_or("shortcut-unknown")?;
+        if !["transcribe", "translation", "ask", "stop"].contains(&id.as_str()) {
+            return Err("shortcut-cancel-fixed-escape".into());
+        }
+        updated.current_binding = binding;
+        settings.bindings.insert(id, updated.clone());
+        let value = |id: &str| {
+            settings
+                .bindings
+                .get(id)
+                .or_else(|| defaults.bindings.get(id))
+                .map(|b| b.current_binding.as_str())
+                .unwrap_or("")
+        };
+        let bindings = crate::physical_gestures::Bindings::parse(
+            value("transcribe"),
+            value("translation"),
+            value("ask"),
+            value("stop"),
+        )?;
+        crate::physical_shortcuts::configure(&app, bindings)?;
+        settings::write_settings(&app, settings);
+        let store = app
+            .store(crate::portable::store_path(settings::SETTINGS_STORE_PATH))
+            .map_err(|_| "shortcut-settings-save-failed")?;
+        if store.save().is_err() {
+            settings::write_settings(&app, previous);
+            if let Some(bindings) = previous_bindings {
+                let _ = crate::physical_shortcuts::configure(&app, bindings);
+            } else {
+                crate::physical_shortcuts::suspend(true);
+            }
+            return Err("shortcut-settings-save-failed".into());
+        }
+        return Ok(BindingResponse {
+            success: true,
+            binding: Some(updated),
+            error: None,
+        });
+    }
     // Reject empty bindings — every shortcut should have a value
     if binding.trim().is_empty() {
         return Err("Binding cannot be empty".to_string());
@@ -272,6 +315,11 @@ fn restore_registration(app: &AppHandle, binding: &ShortcutBinding) {
 #[tauri::command]
 #[specta::specta]
 pub fn reset_binding(app: AppHandle, id: String) -> Result<BindingResponse, String> {
+    if cfg!(target_os = "windows") {
+        let defaults = settings::get_default_settings();
+        let binding = settings::get_stored_binding(&defaults, &id)?;
+        return change_binding(app, id, binding.current_binding);
+    }
     let binding = settings::get_stored_binding(&settings::get_settings(&app), &id)?;
     change_binding(app, id, binding.default_binding)
 }
@@ -281,6 +329,10 @@ pub fn reset_binding(app: AppHandle, id: String) -> Result<BindingResponse, Stri
 /// mid-capture. The "cancel" binding is untouched: it is managed dynamically
 /// by the recording lifecycle.
 pub fn suspend_all_shortcuts(app: &AppHandle) {
+    if cfg!(target_os = "windows") {
+        crate::physical_shortcuts::suspend(true);
+        return;
+    }
     for (id, binding) in settings::get_bindings(app) {
         if id == "cancel" {
             continue;
@@ -298,6 +350,10 @@ pub fn suspend_all_shortcuts(app: &AppHandle) {
 /// Registering an already-registered shortcut fails cleanly in both
 /// implementations, so this is idempotent and safe on every exit path.
 pub fn resume_all_shortcuts(app: &AppHandle) {
+    if cfg!(target_os = "windows") {
+        crate::physical_shortcuts::suspend(false);
+        return;
+    }
     let settings = get_settings(app);
     for (id, binding) in &settings.bindings {
         if id == "cancel" {
@@ -351,6 +407,9 @@ pub fn change_keyboard_implementation_setting(
     app: AppHandle,
     implementation: String,
 ) -> Result<ImplementationChangeResult, String> {
+    if cfg!(target_os = "windows") {
+        return Err("physical-shortcuts-require-native-backend".into());
+    }
     let current_settings = settings::get_settings(&app);
     let current_impl = current_settings.keyboard_implementation;
     let new_impl = parse_keyboard_implementation(&implementation);

@@ -37,6 +37,7 @@ impl Drop for FinishGuard {
         if let Some(c) = self.0.try_state::<TranscriptionCoordinator>() {
             c.notify_processing_finished();
         }
+        crate::physical_shortcuts::processing_finished(&self.0);
         // Release transient PCM and engine scratch pages back to the OS so
         // they don't sit in malloc arenas until they get swapped out (#1792).
         crate::memory::trim_freed_memory();
@@ -89,7 +90,12 @@ impl ShortcutAction for TranscribeAction {
             }
         }
 
-        if let Err(code) = crate::commands::history::begin_recording(app) {
+        let scenario = match binding_id {
+            "translation" => notype_core::Scenario::Translation,
+            "ask" => notype_core::Scenario::Ask,
+            _ => notype_core::Scenario::Dictation,
+        };
+        if let Err(code) = crate::commands::history::begin_captured_scenario(app, scenario) {
             let _ = app.emit("session-error", code);
             return;
         }
@@ -244,6 +250,7 @@ impl ShortcutAction for TranscribeAction {
             }
         }
 
+        crate::physical_shortcuts::processing_finished(app);
         debug!(
             "TranscribeAction::start completed in {:?}",
             start_time.elapsed()
@@ -251,6 +258,7 @@ impl ShortcutAction for TranscribeAction {
     }
 
     fn stop(&self, app: &AppHandle, binding_id: &str, _shortcut_str: &str) {
+        crate::physical_shortcuts::processing_started();
         let ah = app.clone();
         let rm = Arc::clone(&app.state::<Arc<AudioRecordingManager>>());
         let tm = Arc::clone(&app.state::<Arc<TranscriptionManager>>());
@@ -385,6 +393,14 @@ impl ShortcutAction for TestAction {
 // Static Action Map
 pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::new(|| {
     let mut map = HashMap::new();
+    map.insert(
+        "translation".to_string(),
+        Arc::new(TranscribeAction) as Arc<dyn ShortcutAction>,
+    );
+    map.insert(
+        "ask".to_string(),
+        Arc::new(TranscribeAction) as Arc<dyn ShortcutAction>,
+    );
     map.insert(
         "transcribe".to_string(),
         Arc::new(TranscribeAction) as Arc<dyn ShortcutAction>,

@@ -10,12 +10,15 @@ on:
       - tests/integration/core_*.rs
       - tests/integration/desktop-contracts/**
       - tests/integration/desktop_provider.rs
+      - tests/integration/native_delivery.rs
       - tests/integration/text-flow.test.mjs
       - tests/integration/portable-*.test.mjs
       - tests/integration/fixtures/portable-package.mjs
       - desktop/src-tauri/src/workflow.rs
       - desktop/src-tauri/src/faithful_provider.rs
       - desktop/src-tauri/src/recognition.rs
+      - desktop/src-tauri/src/physical_gestures.rs
+      - desktop/src-tauri/src/native_input.rs
       - src/**
       - package.json
       - package-lock.json
@@ -41,7 +44,7 @@ jobs:
       - name: Lint the core
         run: cargo +1.99.1 clippy --locked --manifest-path crates/notype-core/Cargo.toml --all-targets -- -D warnings
       - name: Exercise desktop orchestration and HTTP contracts without Tauri
-        run: cargo +1.99.1 test --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test desktop-workflow --test desktop-provider
+        run: cargo +1.99.1 test --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test desktop-workflow --test desktop-provider --test physical-gestures --test native-delivery
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22.15.0

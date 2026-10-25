@@ -239,13 +239,21 @@ pub fn get_workflow_readiness(
     WorkflowReadiness {
         text_configured: read_configuration(&app)
             .is_ok_and(|configuration| configuration.is_ready()),
-        delivery_available: false,
+        delivery_available: app.state::<crate::native_input::NativeInput>().available(),
         legacy_import_error: notice.0.clone(),
     }
 }
 
-pub(crate) fn begin_recording(app: &AppHandle) -> Result<u64, String> {
-    begin_scenario_recording(app, Scenario::Dictation, None, Default::default())
+pub(crate) fn begin_captured_scenario(app: &AppHandle, scenario: Scenario) -> Result<u64, String> {
+    let capture = app.state::<crate::native_input::NativeInput>().capture();
+    begin_scenario_recording(
+        app,
+        scenario,
+        capture.target,
+        notype_core::SourceContext {
+            application: capture.application,
+        },
+    )
 }
 pub(crate) fn begin_scenario_recording(
     app: &AppHandle,
@@ -439,7 +447,13 @@ pub fn debug_begin_session(
     workflow: State<'_, Arc<DesktopWorkflow>>,
     recognition_mode: Option<RecognitionMode>,
     scenario: Option<SceneId>,
+    capture_input: Option<bool>,
 ) -> Result<u64, String> {
+    let capture = if capture_input == Some(true) {
+        app.state::<crate::native_input::NativeInput>().capture()
+    } else {
+        Default::default()
+    };
     let generation = workflow
         .begin_with_profile(
             crate::workflow::recognition::RecognitionProfile::new(
@@ -447,7 +461,15 @@ pub fn debug_begin_session(
                     .unwrap_or_else(|| settings::get_settings(&app).recognition_mode.into()),
                 settings::get_settings(&app).custom_words,
             ),
-            None,
+            capture.target,
+        )
+        .map_err(|error| error.to_string())?;
+    workflow
+        .capture_source_context(
+            generation,
+            notype_core::SourceContext {
+                application: capture.application,
+            },
         )
         .map_err(|error| error.to_string())?;
     workflow
