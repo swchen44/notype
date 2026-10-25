@@ -10,7 +10,7 @@
 
 #25 其餘使用者決策已確認，不重新訪談：DeepSeek Flash4.1 的本輪總預算 **US$2**，取代先前 US$0.10；Gemini／OpenRouter 僅可免費路線。App 非空 key 優先、家目錄 `~/.env` 後備；已授權的 names-only 查核只確認三個預期變數存在，未輸出值。多份 connection、一份 active，包含 Custom／Local；Local 先指明確設定的 OpenAI 相容 endpoint，不自動啟動或下載模型。UI 的 Gemini／OpenRouter model ID 預設空白，由使用者填寫；View model IDs 只顯示／Copy，手動貼上，不自動選或覆寫。實驗模型 ID 與 UI 設定分開。Thinking 預設 OFF；不能關閉時提示限制並使用已知最小值，requested／effective 分開記錄。
 
-上述多連線／key fallback／model list／參數與 thinking 屬 [後續 config-v2 計畫](https://github.com/swchen44/notype/issues/25#issuecomment-6404377843)，除第一階段錯誤處理外尚未實作；debug 後續切片另列。接續前核對對應精確 GPT-6-Astra 核准及 resource gate。Gemini 的免費計費資格仍是外部 live gate，不能只因模型標價免費就發送；免費資格未證明不阻擋 owned-fixture 實作。舊 source41 helper 維持固定來源／舊模型／舊單輪預算的歷史證據，**不直接啟動新的多 Provider／US$2 測試**。沒有付費請求，未修改現用 App／profile；磁碟不足，未執行新的本機 Cargo／Tauri 建置。
+上述多連線／key fallback／model list／參數與 thinking 屬 [後續 config-v2 計畫](https://github.com/swchen44/notype/issues/25#issuecomment-6404377843)，已獲 [GPT-6-Astra APPROVED0](https://github.com/swchen44/notype/issues/25#issuecomment-6404401509)，從已合入的第一階段 gate 接續實作；目前 receipt 不包含第二階段完成證據。debug 後續切片另列，沿既有 P20 白名單／預設 ON／可關閉清除／預覽匯出／手動 GitHub issue 附檔，須有精確計畫核准及 resource gate，不收 secrets／逐字稿／raw body，與歷史業務計量獨立。Gemini 的免費計費資格仍是外部 live gate，不能只因模型標價免費就發送；免費資格未證明不阻擋 owned-fixture 實作。舊 source41 helper 維持固定來源／舊模型／舊單輪預算的歷史證據，**不直接啟動新的多 Provider／US$2 測試**。沒有付費請求，未修改現用 App／profile；磁碟不足，未執行新的本機 Cargo／Tauri 建置。
 
 前一來源 checkpoint：`af4ce80a315de025c0d8001e71081c3794c8fea2`，分支 `implement/notype-mvp`。#23 完整 source `41cb62da8482592bde02cc0b2b52460e361e75a9` 已合入；獨立最終 Spec／Standards 皆 0，[完整 Linux CI 40224287522](https://github.com/swchen44/notype/actions/runs/40224287522) 在精確 `41cb62d` 通過。這是來源與限定驗證完成，不代表使用者 helper／付費 API／新版 App 已交付。
 
