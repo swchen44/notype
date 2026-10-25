@@ -45,6 +45,12 @@ on:
       - package-lock.json
       - packages/**
   workflow_dispatch:
+    inputs:
+      scope:
+        description: Development check scope; final acceptance requires all
+        type: choice
+        options: [all, frontend]
+        default: all
 
 permissions:
   contents: read
@@ -82,7 +88,25 @@ jobs:
           else
             echo "Provider UI implementation is not composed in this backend checkpoint."
           fi
+      - name: Exercise request option history when composed
+        run: |
+          if test -f tests/integration/provider-request-options.ui.mjs; then
+            node --test tests/integration/provider-request-options.ui.mjs
+          fi
+      - name: Exercise settings presenter units when composed
+        run: |
+          if test -f tests/unittest/provider-form.ui.mjs; then
+            node --test tests/unittest/provider-form.ui.mjs
+          fi
+      - name: Lint and build composed provider UI
+        working-directory: desktop
+        run: |
+          if test -f ../tests/integration/provider-connections.ui.mjs; then
+            bun run lint
+            bun run build
+          fi
   portable-core:
+    if: github.event_name != 'workflow_dispatch' || inputs.scope != 'frontend'
     name: Core, desktop workflow and diagnostic contracts on Linux
     runs-on: ubuntu-latest
     timeout-minutes: 15
