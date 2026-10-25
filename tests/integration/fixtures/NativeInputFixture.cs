@@ -57,6 +57,7 @@ public class NativeInputFixture : Form {
       controls[id]=CreateWindowExW(0,id=="rich"?"RICHEDIT50W":"EDIT","alpha beta gamma",style,15,15+row++*50,550,40,Handle,new IntPtr(row+100),IntPtr.Zero,IntPtr.Zero);
       wrappers.Add(new GuardedControl(controls[id],this));
     }
+    var instruction=new Label();instruction.Text="Synthetic test only. Click the TOP text box and keep this window active for 20 seconds.";instruction.Left=15;instruction.Top=275;instruction.Width=550;instruction.Height=35;Controls.Add(instruction);
     Shown+=delegate {
       FocusOwned("first");
       Print(new {ready=true,pid=Process.GetCurrentProcess().Id,focusHandle=controls["first"].ToInt64()});

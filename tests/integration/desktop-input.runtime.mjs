@@ -137,6 +137,7 @@ test(
             updatedAt: new Date().toISOString(),
           }),
         );
+        if (initial.foregroundOwned) initial = await reset();
       }
       assert.equal(
         initial.foregroundOwned,

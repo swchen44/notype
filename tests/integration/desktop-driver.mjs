@@ -8,7 +8,7 @@ import { once } from "node:events";
 import { setTimeout as delay } from "node:timers/promises";
 import { chromium } from "../../desktop/node_modules/playwright/index.mjs";
 
-export async function desktopFixture() {
+export async function desktopFixture(options = {}) {
   assert.equal(process.platform, "win32");
   assert.ok(
     process.env.NOTYPE_DESKTOP_EXE,
@@ -17,14 +17,21 @@ export async function desktopFixture() {
   const executable = resolve(process.env.NOTYPE_DESKTOP_EXE);
   const directory = await mkdtemp(join(tmpdir(), "notype-workflow-receipt-"));
   const bindings = Object.fromEntries(
-    ["transcribe", "transcribe_with_post_process", "cancel"].map((id) => [
+    [
+      "transcribe",
+      "translation",
+      "ask",
+      "stop",
+      "transcribe_with_post_process",
+      "cancel",
+    ].map((id) => [
       id,
       {
         id,
         name: id,
         description: "nonsecret isolated receipt",
         default_binding: "",
-        current_binding: "",
+        current_binding: options.bindings?.[id] ?? "",
       },
     ]),
   );

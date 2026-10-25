@@ -1,6 +1,7 @@
 //! Captures only application metadata and opaque original-control identities.
 //! Native handles stay in memory; no title, field value, clipboard, or Enter API.
 use notype_core::{DeliveryAdapter, DeliveryFuture, DeliveryOutcome, DeliveryRequest};
+#[cfg(windows)]
 use std::sync::Arc;
 
 #[derive(Default)]

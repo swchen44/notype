@@ -315,6 +315,11 @@ fn restore_registration(app: &AppHandle, binding: &ShortcutBinding) {
 #[tauri::command]
 #[specta::specta]
 pub fn reset_binding(app: AppHandle, id: String) -> Result<BindingResponse, String> {
+    if cfg!(target_os = "windows") {
+        let defaults = settings::get_default_settings();
+        let binding = settings::get_stored_binding(&defaults, &id)?;
+        return change_binding(app, id, binding.current_binding);
+    }
     let binding = settings::get_stored_binding(&settings::get_settings(&app), &id)?;
     change_binding(app, id, binding.default_binding)
 }

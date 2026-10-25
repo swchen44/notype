@@ -6,10 +6,25 @@ test(
   "three independent tap starts and common Stop persist, validate conflicts and reset to product defaults",
   { timeout: 60000 },
   async () => {
-    const fixture = await desktopFixture();
+    const fixture = await desktopFixture({
+      bindings: {
+        transcribe: "f20",
+        translation: "f21",
+        ask: "f22",
+        stop: "f23",
+      },
+    });
     let app;
     try {
       app = await fixture.launch();
+      const legacyReset = await invoke(app.page, "reset_binding", {
+        id: "stop",
+      });
+      assert.equal(
+        legacyReset.binding.current_binding,
+        "alt_right",
+        "reset ignores legacy stored default metadata",
+      );
       for (const [id, binding] of [
         ["transcribe", "f8"],
         ["translation", "f9"],
@@ -49,8 +64,13 @@ test(
       ]) {
         const response = await invoke(app.page, "reset_binding", { id });
         assert.equal(response.success, true);
-        assert.equal(response.binding.current_binding, want);
+        assert.equal(
+          response.binding.current_binding,
+          want,
+          `${id}: ${JSON.stringify(response.binding)}`,
+        );
       }
+      await app.page.reload();
       await app.page.getByLabel("開始口述", { exact: true }).waitFor();
       assert.equal(
         await app.page.getByLabel("停止當次錄音", { exact: true }).inputValue(),

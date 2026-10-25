@@ -17,7 +17,9 @@ incremental = true # Compile your binary in smaller steps.
 # to make the lib name unique and wouldn't conflict with the bin name.
 # This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
 name = "notype_app_lib"
-crate-type = ["staticlib", "cdylib", "rlib"]
+# Desktop binaries consume this Rust library directly on Windows/macOS/Linux.
+# Foreign-host/mobile library outputs are outside this desktop payload.
+crate-type = ["rlib"]
 
 # [[bin]]
 # name = "cli"
