@@ -62,7 +62,7 @@ fn normalize_transcript(
         .map_err(|_| RecognitionFailure)?;
     static LITERALS: OnceLock<Result<Regex, RecognitionFailure>> = OnceLock::new();
     let literals = LITERALS.get_or_init(|| Regex::new(
-        r###"(?s:```.*?(?:```|\z))|`[^`\r\n]*(?:`|\z)|"(?:\\.|[^"\\])*"|(?:https?://|www\.)[^\s<>"`]+|[A-Za-z]:[\\/][^\s"`]+|[A-Za-z0-9_.+-]+@[\p{L}\p{N}.-]+\.[A-Za-z]{2,}|[A-Za-z_$][A-Za-z0-9_$]*(?:_[\p{L}\p{N}]+)+"###,
+        r###"(?s:```.*?(?:```|\z))|`[^`\r\n]*(?:`|\z)|"(?:\\.|[^"\\])*"|(?:https?://|www\.)[^\s<>"`，。！？；]+|[A-Za-z]:[\\/][^\s"`，。！？；]+|[A-Za-z0-9_.+-]+@[\p{L}\p{N}.-]+\.[A-Za-z]{2,}|[A-Za-z_$][A-Za-z0-9_$]*(?:_[\p{L}\p{N}]+)+"###,
     ).map_err(|_| RecognitionFailure)).as_ref().map_err(|_| RecognitionFailure)?;
     let mut spans: Vec<_> = literals
         .find_iter(raw)

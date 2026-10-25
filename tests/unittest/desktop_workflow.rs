@@ -5,6 +5,45 @@ use std::sync::Arc;
 use workflow::{DesktopWorkflow, TextConfiguration};
 
 #[tokio::test]
+async fn traditional_profile_converts_prose_after_url_sentence_separator() {
+    let workflow = DesktopWorkflow::new(SessionService::in_memory().unwrap(), Arc::new(|| {}));
+    let recording = workflow
+        .begin(RecognitionMode::TraditionalEnglish, None)
+        .unwrap();
+    let entry = workflow
+        .finish(
+            recording,
+            "请打开https://example.com/头发，然后检查发展。",
+            TextConfiguration::default(),
+            vec![],
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        entry.transcript,
+        "請打開https://example.com/头发，然後檢查發展。"
+    );
+}
+
+#[tokio::test]
+async fn simplified_profile_converts_prose_after_path_sentence_separator() {
+    let workflow = DesktopWorkflow::new(SessionService::in_memory().unwrap(), Arc::new(|| {}));
+    let recording = workflow
+        .begin(RecognitionMode::SimplifiedEnglish, None)
+        .unwrap();
+    let entry = workflow
+        .finish(
+            recording,
+            r"請打開C:\資料\頭髮，然後保留發展。",
+            TextConfiguration::default(),
+            vec![],
+        )
+        .await
+        .unwrap();
+    assert_eq!(entry.transcript, r"请打开C:\資料\頭髮，然后保留发展。");
+}
+
+#[tokio::test]
 async fn recorded_original_uses_captured_traditional_profile_before_text_processing() {
     let workflow = DesktopWorkflow::new(SessionService::in_memory().unwrap(), Arc::new(|| {}));
     let recording = workflow
