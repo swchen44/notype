@@ -3,11 +3,35 @@ import { listen } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { commands, type SessionDto, type WorkflowReadiness } from "@/bindings";
+import { HistoryMetrics } from "./HistoryMetrics";
 import { Input } from "../../ui/Input";
 import { Button } from "../../ui/Button";
 
 export const HistorySettings = () => {
   const { t, i18n } = useTranslation();
+  const [exporting, setExporting] = useState(false);
+  const [exportMessage, setExportMessage] = useState("");
+  const exportLock = useRef(false);
+  const exportAll = async () => {
+    if (exportLock.current) return;
+    exportLock.current = true;
+    setExporting(true);
+    setExportMessage("");
+    try {
+      const result = await commands.exportHistoryCsv();
+      if (result.status !== "ok") throw new Error("history-export-failed");
+      setExportMessage(
+        result.data.status === "cancelled"
+          ? t("notype.history.exportCancelled")
+          : t("notype.history.exportSaved", { rows: result.data.rows }),
+      );
+    } catch {
+      setExportMessage(t("notype.history.exportFailed"));
+    } finally {
+      exportLock.current = false;
+      setExporting(false);
+    }
+  };
   const [query, setQuery] = useState("");
   const [entries, setEntries] = useState<SessionDto[]>([]);
   const [readiness, setReadiness] = useState<WorkflowReadiness | null>(null);
@@ -94,6 +118,16 @@ export const HistorySettings = () => {
     >
       <h2 className="font-semibold">{t("notype.history.title")}</h2>
       <p className="text-sm text-text/60">{t("notype.history.retained")}</p>
+      <Button
+        variant="secondary"
+        disabled={exporting}
+        onClick={() => void exportAll()}
+      >
+        {t(exporting ? "notype.history.exporting" : "notype.history.exportAll")}
+      </Button>
+      <p role="status" className="text-sm">
+        {exportMessage}
+      </p>
       <Input
         type="search"
         className="w-full"
@@ -160,6 +194,13 @@ export const HistorySettings = () => {
                 <h3 className="text-sm font-semibold">
                   {t("notype.history.original")}
                 </h3>
+                <p className="text-sm">
+                  {t("notype.metrics.originalCount", {
+                    value:
+                      entry.observations.original_count ??
+                      t("notype.metrics.unknown"),
+                  })}
+                </p>
                 <p className="whitespace-pre-wrap break-words select-text cursor-text text-sm mt-1">
                   {entry.transcript}
                 </p>
@@ -182,6 +223,13 @@ export const HistorySettings = () => {
                       : "notype.history.result",
                   )}
                 </h3>
+                <p className="text-sm">
+                  {t("notype.metrics.resultCount", {
+                    value:
+                      entry.observations.result_count ??
+                      t("notype.metrics.unknown"),
+                  })}
+                </p>
                 <p className="whitespace-pre-wrap break-words select-text cursor-text text-sm mt-1">
                   {entry.result ?? t("notype.history.noResult")}
                 </p>
@@ -197,6 +245,7 @@ export const HistorySettings = () => {
                   {t("notype.history.copyResult")}
                 </Button>
               </div>
+              <HistoryMetrics entry={entry} />
               {entry.review_required && (
                 <div className="space-y-2">
                   <h3 className="text-sm font-semibold">
