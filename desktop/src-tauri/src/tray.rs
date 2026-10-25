@@ -683,6 +683,14 @@ mod tests {
             recognition_mode: None,
             original_target: None,
             selection: TextSelection::Polished,
+            scenario: notype_core::Scenario::Dictation,
+            translation_target: None,
+            source_context: Default::default(),
+            source_language: None,
+            back_translation: None,
+            review_required: false,
+            review_confirmed: false,
+            revision: 1,
         }
     }
 

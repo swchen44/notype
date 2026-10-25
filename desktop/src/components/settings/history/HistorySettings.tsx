@@ -16,7 +16,7 @@ export const HistorySettings = () => {
   const [working, setWorking] = useState(new Set<string>());
   const [copied, setCopied] = useState<{
     id: string;
-    version: "original" | "result";
+    version: "original" | "result" | "back_translation";
   } | null>(null);
   const request = useRef(0);
   const refresh = useCallback(async () => {
@@ -48,6 +48,11 @@ export const HistorySettings = () => {
       void unlisten.then((stop) => stop());
     };
   }, [refresh]);
+  useEffect(() => {
+    if (!entries.some((entry) => entry.status === "processing")) return;
+    const timer = window.setInterval(() => void refresh(), 500);
+    return () => window.clearInterval(timer);
+  }, [entries, refresh]);
 
   const run = async (
     id: string,
@@ -69,7 +74,10 @@ export const HistorySettings = () => {
       await refresh();
     }
   };
-  const copy = async (entry: SessionDto, version: "original" | "result") => {
+  const copy = async (
+    entry: SessionDto,
+    version: "original" | "result" | "back_translation",
+  ) => {
     const result = await commands.copyHistoryText(entry.id, version);
     if (result.status === "ok") setCopied({ id: entry.id, version });
     else toast.error(t("notype.history.copyFailed"));
@@ -110,9 +118,12 @@ export const HistorySettings = () => {
             entry.status === "processing" || entry.status === "delivering";
           const frozen =
             entry.status === "delivered" || entry.status === "delivery-unknown";
-          const canChoose = ["recognized", "failed", "pending"].includes(
-            entry.status,
-          );
+          const canChoose = [
+            "recognized",
+            "failed",
+            "pending",
+            "cancelled",
+          ].includes(entry.status);
           return (
             <article
               key={entry.id}
@@ -120,6 +131,12 @@ export const HistorySettings = () => {
               className="border border-mid-gray/30 rounded-lg p-4 space-y-3"
             >
               <div className="flex flex-wrap gap-2 justify-between text-sm text-text/70">
+                <span>
+                  {t(`notype.scenarios.${entry.scenario}`)}
+                  {entry.translation_target
+                    ? ` → ${entry.translation_target}`
+                    : ""}
+                </span>
                 <time dateTime={entry.created_at}>
                   {new Date(entry.created_at).toLocaleString(i18n.language)}
                 </time>
@@ -155,7 +172,11 @@ export const HistorySettings = () => {
               </div>
               <div>
                 <h3 className="text-sm font-semibold">
-                  {t("notype.history.result")}
+                  {t(
+                    entry.scenario === "translation"
+                      ? "notype.scenarios.primaryTranslation"
+                      : "notype.history.result",
+                  )}
                 </h3>
                 <p className="whitespace-pre-wrap break-words select-text cursor-text text-sm mt-1">
                   {entry.result ?? t("notype.history.noResult")}
@@ -172,12 +193,66 @@ export const HistorySettings = () => {
                   {t("notype.history.copyResult")}
                 </Button>
               </div>
+              {entry.review_required && (
+                <div className="space-y-2">
+                  <h3 className="text-sm font-semibold">
+                    {t("notype.scenarios.backResult")}
+                    {entry.source_language ? ` → ${entry.source_language}` : ""}
+                  </h3>
+                  <p className="whitespace-pre-wrap break-words select-text cursor-text text-sm">
+                    {entry.back_translation ??
+                      t(
+                        entry.status === "processing"
+                          ? "notype.scenarios.backPending"
+                          : "notype.scenarios.backMissing",
+                      )}
+                  </p>
+                  {entry.back_translation && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => void copy(entry, "back_translation")}
+                    >
+                      {t("notype.scenarios.copyBack")}
+                    </Button>
+                  )}
+                  <p className="text-sm" role="note">
+                    {t(
+                      entry.review_confirmed
+                        ? "notype.scenarios.reviewConfirmed"
+                        : "notype.scenarios.reviewRequired",
+                    )}
+                  </p>
+                  {entry.status === "pending" &&
+                    !entry.review_confirmed &&
+                    (entry.back_translation ||
+                      entry.selection === "original") && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        disabled={working.has(entry.id)}
+                        onClick={() =>
+                          void run(entry.id, () =>
+                            commands.confirmHistoryReview(
+                              entry.id,
+                              entry.revision,
+                            ),
+                          )
+                        }
+                      >
+                        {t("notype.scenarios.confirmReview")}
+                      </Button>
+                    )}
+                </div>
+              )}
               {copied?.id === entry.id && (
                 <p role="status" className="text-sm">
                   {t(
                     copied.version === "original"
                       ? "notype.history.copiedOriginal"
-                      : "notype.history.copiedResult",
+                      : copied.version === "back_translation"
+                        ? "notype.scenarios.copiedBack"
+                        : "notype.history.copiedResult",
                   )}
                 </p>
               )}
@@ -231,7 +306,9 @@ export const HistorySettings = () => {
                     variant="secondary"
                     size="sm"
                     disabled={
-                      !readiness?.delivery_available || working.has(entry.id)
+                      !readiness?.delivery_available ||
+                      working.has(entry.id) ||
+                      (entry.review_required && !entry.review_confirmed)
                     }
                     onClick={() => {
                       void run(entry.id, () =>

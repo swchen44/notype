@@ -69,6 +69,7 @@ fn session(service: &SessionService) -> notype_core::SessionEntry {
             SessionOptions {
                 recognition_mode: RecognitionMode::TraditionalEnglish,
                 original_target: Some("private-target".into()),
+                ..SessionOptions::default()
             },
         )
         .unwrap()

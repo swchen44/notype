@@ -891,6 +891,38 @@ async setTextConfiguration(configuration: TextConfiguration) : Promise<Result<nu
     else return { status: "error", error: e  as any };
 }
 },
+async saveScenarioPrompt(scenario: SceneId, prompt: string) : Promise<Result<TextConfiguration, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("save_scenario_prompt", { scenario, prompt }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async resetScenarioPrompt(scenario: SceneId) : Promise<Result<TextConfiguration, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("reset_scenario_prompt", { scenario }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async saveTranslationSettings(translation: TranslationSettings) : Promise<Result<TextConfiguration, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("save_translation_settings", { translation }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async confirmHistoryReview(id: string, revision: number) : Promise<Result<SessionDto, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("confirm_history_review", { id, revision }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async getWorkflowReadiness() : Promise<WorkflowReadiness> {
     return await TAURI_INVOKE("get_workflow_readiness");
 },
@@ -1080,7 +1112,7 @@ export type EngineType =
  */
 "TranscribeCpp" | "Parakeet" | "Moonshine" | "MoonshineStreaming" | "SenseVoice" | "GigaAM" | "Canary" | "Cohere"
 export type GpuDeviceOption = { id: string; name: string; total_vram_mb: number }
-export type HistoryTextVersion = "original" | "result"
+export type HistoryTextVersion = "original" | "result" | "back_translation"
 /**
  * Result of changing keyboard implementation
  */
@@ -1141,6 +1173,8 @@ export type PostProcessProvider = { id: string; label: string; base_url: string;
  */
 export type RecognitionModeSetting = "traditional_english" | "simplified_english"
 export type RecordingRetentionPeriod = "never" | "preserve_limit" | "days_3" | "weeks_2" | "months_3"
+export type ScenarioPrompts = { dictation: string; translation: string; ask: string }
+export type SceneId = "dictation" | "translation" | "ask"
 export type SecretMap = Partial<{ [key in string]: string }>
 export type SecureInputStatus = {
 /**
@@ -1174,7 +1208,7 @@ uncovered_bindings: string[];
  * warning banner appears and explains why recording refused.
  */
 recorder_blocked: boolean }
-export type SessionDto = { id: string; transcript: string; result: string | null; created_at: string; updated_at: string; status: SessionPhase; error: string | null; recognition_mode: string | null; selection: string }
+export type SessionDto = { id: string; transcript: string; result: string | null; created_at: string; updated_at: string; status: SessionPhase; error: string | null; recognition_mode: string | null; selection: string; scenario: SceneId; translation_target: string | null; source_language: string | null; back_translation: string | null; review_required: boolean; review_confirmed: boolean; revision: number }
 export type SessionPhase = "recognized" | "processing" | "pending" | "failed" | "cancelled" | "delivering" | "delivered" | "delivery-unknown"
 /**
  * How the transcribe shortcut's key events drive a recording.
@@ -1229,7 +1263,7 @@ export type StreamTextEvent = { committed: string; tentative: string }
  */
 export type StreamWorkKind = "transcribing" | "polishing"
 export type TextAuthentication = "unspecified" | "none" | "bearer"
-export type TextConfiguration = { transport: TextTransport; endpoint: string; model: string; authentication: TextAuthentication; api_key: string; timeout_ms: number }
+export type TextConfiguration = { transport: TextTransport; endpoint: string; model: string; authentication: TextAuthentication; api_key: string; timeout_ms: number; prompts: ScenarioPrompts; translation: TranslationSettings }
 export type TextTransport = "disabled" | "open_ai_chat"
 /**
  * UI appearance mode. `System` follows the OS `prefers-color-scheme`; `Light`
@@ -1237,6 +1271,8 @@ export type TextTransport = "disabled" | "open_ai_chat"
  */
 export type Theme = "system" | "light" | "dark"
 export type TranscribeAcceleratorSetting = "auto" | "cpu" | "gpu"
+export type TranslationSettings = { target_language: string; domain: string; tone: string; glossary: TranslationTerm[]; back_translation: boolean }
+export type TranslationTerm = { source: string; target: string; target_language: string }
 export type TypingTool = "auto" | "wtype" | "kwtype" | "dotool" | "ydotool" | "xdotool"
 export type VadBackend = "silero" | "earshot"
 export type WindowsMicrophonePermissionStatus = { supported: boolean; overall_access: PermissionAccess; device_access: PermissionAccess; app_access: PermissionAccess; desktop_app_access: PermissionAccess }
