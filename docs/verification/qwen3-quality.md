@@ -33,7 +33,7 @@ native process observed peak working set 是 **1,355.875–1,379.58203125 MiB**�
 
 ## Binary 與新 normalizer 的區別
 
-retained exe SHA256 `86ec70cdac8f54547f886a715acec9b27ab0d2bfb360da3ec580cfaec7e69dba`，來源功能 commit `8ef71e7`／文件 merge `0bd8ed54`，是舊 ferrous normalizer。後續 [lexical conversion 修正](conversion-context.md) 另有純 Rust RED→GREEN／保存原稿證明；其最新 native proof 與 first initialization／reuse 計時仍待 #13 下一次必要建置，沒有把這批舊 binary 的結果當作新 backend 的測量。
+retained exe SHA256 `86ec70cdac8f54547f886a715acec9b27ab0d2bfb360da3ec580cfaec7e69dba`，來源功能 commit `8ef71e7`／文件 merge `0bd8ed54`，是舊 ferrous normalizer。後續 [lexical conversion 修正](conversion-context.md) 另有純 Rust RED→GREEN／保存原稿證明，並以最新633f binary單一WAV確認ASR `[3327,3389]ms`／local normalization `[1176,0]ms`及3個actual public sessions；見 `conversion-native-proof.json`。沒有把這批舊 binary 的完整矩陣改成新 backend 的測量，也沒有重跑整個矩陣。
 
 debug binary 的舊 bindings exporter 會寫回編譯時 source path；benchmark wrapper 只接受已知舊 export SHA，並在 child結束後原樣還原較新的 tracked bindings，未覆寫陌生變更。首個成功 probe 的實際 engine exit0／JSON先保存，之後 Python cp950 console顯示失敗；已記錄工具勘誤，完整 matrix 改用UTF8，沒有為顯示問題重跑推論。
 
