@@ -1,0 +1,21 @@
+{
+  "name": "notype",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "notype portable launcher foundation (not an assembled release)",
+  "bin": {
+    "notype": "bin/notype.mjs"
+  },
+  "engines": {
+    "node": ">=22.15.0"
+  },
+  "files": [
+    "bin/notype.mjs",
+    "lib/launcher.mjs",
+    "lib/manifest.mjs",
+    "lib/windows-host.mjs",
+    "release.json",
+    "README.md"
+  ]
+}

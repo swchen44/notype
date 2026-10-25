@@ -18,7 +18,7 @@
 
 整合分支：`implement/notype-mvp`，起點 `be6f0a5`。每個實作 ticket 使用獨立 branch／worktree 與已確認的 public seams 做 TDD，合入整合分支後再啟動被解鎖的工作；最後對起點到整合分支的完整 diff 做 Standards／Spec review。本輪不建立 PR，不把公司／目標環境尚未執行的驗收當作完成。
 
-目前 #9～#11、#12 功能部分與 #17 已合入整合分支，最新合併點 `af94735`；#13 快捷鍵／原目標交付正在實作，#12 模型品質及本機轉換缺口仍未完成。Issues 保持 open 直到 review／驗收完成。最新合併檢查通過 core 27、portable harness 16、Node 16、前端 lint/build 及繁簡各 559 keys；原生測試結果與限制分列於 [三場景 receipt](docs/verification/scenarios-prompts.md) 及 [語言 receipt](docs/verification/languages.md)，不把功能測試視為語音品質／效能通過。
+目前 #9～#11、#12 功能／詞級字形修正與 #17 已合入整合分支，最新合併點 `2a1044e`；#13 快捷鍵／原目標交付正在實作，背景自動取得前景遭 Windows 拒絕，人工點擊前不宣稱原生插入通過。#12 新 native binary 補驗及 Qwen 完整 receipt 待合入。Issues 保持 open 直到 review／驗收完成。最新合併檢查通過 core 27、portable harness 21、Node 16、前端 lint/build 及繁簡各 559 keys；原生測試結果與限制分列於 [三場景 receipt](docs/verification/scenarios-prompts.md) 及 [語言 receipt](docs/verification/languages.md)，不把功能測試視為語音品質／效能通過。
 
 | Ticket | 阻擋來源 | 可展示／驗收成果 |
 | --- | --- | --- |
