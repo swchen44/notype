@@ -2,13 +2,13 @@
 
 更新日期：2026-10-26。這份文件是接手順序與狀態快照；live [GitHub Issues](https://github.com/swchen44/notype/issues) 是工作追蹤入口。先讀 [HANDOFF.md](HANDOFF.md)。
 
-最新 #23 frontier：bridge checkpoint bfecf99／da7d1cc 完成 6 integration cases／固定8次離線呼叫／取消retry／6列CSV，兩段來源雙軸0；shared console late interrupt 7/7。native console／helper source 尚在完成，binary未就緒、沒有key／付費呼叫。新 Windows feature cache cascade 的成本無法證明能放入剩餘額，native build已停止等待資源；曾誤profile造成135MB新cache，工具拒絕精確刪除且零檔案被刪，不重試。現採已Astra核准192MiB累積cap／160stop不刪檔方案，不resetledger。使用者新的空間問題是C至少500MB、D至少2GB，尚待回覆；其餘native App／公司／五App／品質項目仍保留。
+最新來源整合為 `af4ce80a315de025c0d8001e71081c3794c8fea2`。#23 完整 source `41cb62d` 已合入，最終獨立 Spec／Standards 皆 0；[Linux CI 40224287522](https://github.com/swchen44/notype/actions/runs/40224287522) 於精確 `41cb62d` 通過。bridge 6、shared console 7、core 43＋doc 1 等 portable checks 通過；原生 Windows owned-console direct-rustc driver 2 tests／9 cases 通過，見 [receipt](docs/verification/deepseek-native-console.md)。完整 Windows helper 已完成精確來源啟用建置、固定參數拒絕、無 key console gate smoke 與 dated 私有 package，見 [helper receipt](docs/verification/deepseek-reviewed-helper.md)；這不代表真實 API／費用／品質或 Tauri App 驗收。**沒有取得 key，沒有付費呼叫。**
 
-最新 frontier：#22 backend／#24 UI 及 readiness／owner-release 修正已合入 `ac69eb1`，frontend-only #24 已結案；core43＋doc1、provider20／workflow15／DTO1、UI36＋1、Clippy及獨立來源雙軸0；Linux完整CI40216512564通過產品來源fb4，後續receipt-only8214來源相同。#23 portable helper 已獲補充計畫核准並進入獨立實作，未取得key／未付費。#22／#14原生建置與安裝驗收未做，D約1.51GB不足native起始2GiB，使用者釋放空間回覆仍待；現用App／資料未動。所有其他未完項目留在#8。下列舊狀態由本段取代。
+#22 backend／#24 UI 及 readiness／owner-release 修正已合入，frontend-only #24 已結案；Windows core 43＋doc 1、provider 20／workflow 15／DTO 1、UI 36＋1、Clippy 及對應獨立來源雙軸 0。Linux CI 40216512564 驗證產品來源 `fb4ab689`，文件-only receipt `8214d317` 的產品／測試來源相同。#22 的 native bindings／capture fixture／實際匯出與新版 App acceptance 尚未完成，不因來源／fixture 通過而結案。
 
-最新進度以 HANDOFF 開頭的 2026-10-26 快照為準：root `1dfedea`；P19 來源複核兩軸 0；#23 離線 guards／修正已整合並複核 0；#22 backend 收尾、#24 UI 完成待整合。P23 live 與 P14 build/delivery-v2 已 Astra 核准，仍須各自資源、完整來源、binary 與 runtime gate。D 槽空間不足以開始新版 native App 建置；尚未輸入 key／呼叫付費 API，也未更新或移除使用者現用 App。所有未完 item 仍保留於 #8，不只歷史／CSV。
+目前 frontier 是等使用者回覆本機 key 已就緒，再由使用者自行啟動 `D:/git/notype-build/compiler-temp/p23-reviewed-helper-41cb62da/Start-deepseek-probe.cmd`，於專屬非回顯視窗輸入 key，最後輸入 `RUN P23-live-v1` 執行本輪 US$0.10 有限驗收；agent 不替使用者啟動付費輪次。實際模型／tokens／文字品質／同 ID CSV 核對仍未做；AvailableSpace 實際 quota 查詢亦未由本輪 smoke 證明。這不是公司 API 驗收，也不是新版 App 交付。新版 native App `0.1.1` 尚未建置／安裝；D 低於 2 GiB 起始門檻。使用者空間問題（C 至少 500 MB、D 至少 2 GB）待回覆；不降低 floor、不刪個人檔案。誤 profile 快取與自動清理拒絕的證據照實保留，零檔案被刪，不重試被拒絕的刪除；累積 baseline／ledger 不重設。
 
-所有未結案項目已補入 [主規格#8](https://github.com/swchen44/notype/issues/8) 剩餘工作表。Source 已推送89d239c，使用者包未更新；P19兩項review修正待最終複核，#22歷史／彙總CSV／effort已Astra核准並實作中。#23 US$0.10 DeepSeek live計畫及P14新版建置／乾淨安裝計畫草擬中，未取得key／未呼叫付費API。使用者取消本輪舊版相容要求，尚未移除任何現用資料；公司API與五App驗收仍保留。確切核准與限制見HANDOFF；所有新實作仍須 [GPT-6-Astra 計畫gate](docs/agents/plan-review.md)。
+所有未完項目仍保留於 [主規格 #8](https://github.com/swchen44/notype/issues/8)，包含 Tauri build／bindings／Clippy／recording fixture、新版乾淨安裝與重設路徑、右 Alt readiness／tray／diagnostics／秒數 overlay 真機驗收、繁簡中英人聲品質／完整 session p95、公司 API／Proxy、五個 App、完整 npm 配送／公開 notices／發布。公司／五 App 依使用者範圍延後；macOS／Linux 僅架構預留。所有新實作仍須 [GPT-6-Astra 計畫 gate](docs/agents/plan-review.md)。現在不移除使用者現用 App 或資料；舊版相容已由使用者取消，之後使用 fresh schema4 與版本化資料目錄。
 
 ## 已完成
 
