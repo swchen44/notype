@@ -15,6 +15,7 @@ on:
       - tests/integration/desktop_provider.rs
       - tests/integration/desktop_diagnostics.rs
       - tests/integration/capture_readiness.rs
+      - tests/integration/deepseek_probe_round.rs
       - tests/integration/diagnostic_control.rs
       - tests/integration/model_storage.rs
       - tests/integration/native_delivery.rs
@@ -37,6 +38,7 @@ on:
       - desktop/src-tauri/src/overlay_lifecycle.rs
       - desktop/src-tauri/src/capture_startup.rs
       - desktop/src-tauri/src/capture_observations.rs
+      - desktop/src-tauri/src/deepseek_probe/**
       - src/**
       - package.json
       - package-lock.json
@@ -69,6 +71,14 @@ jobs:
         run: cargo +1.99.1 clippy --locked --manifest-path crates/notype-core/Cargo.toml --all-targets -- -D warnings
       - name: Exercise desktop orchestration and HTTP contracts without Tauri
         run: cargo +1.99.1 test --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test desktop-workflow --test desktop-provider --test history-metrics-dto --test physical-gestures --test native-delivery --test desktop-diagnostics --test diagnostics-export --test diagnostic-service --test diagnostic-privacy --test diagnostic-control --test model-storage --test window-lifecycle --test overlay-lifecycle --test capture-startup --test capture-readiness
+      - name: Exercise independent offline probe policy without HTTP or credentials
+        run: |
+          rustc +1.99.1 --edition=2021 -A dead_code --test tests/unittest/deepseek_probe_policy.rs -o /tmp/notype-probe-policy
+          /tmp/notype-probe-policy
+          rustc +1.99.1 --edition=2021 -A dead_code --test tests/unittest/deepseek_probe_round.rs -o /tmp/notype-probe-round
+          /tmp/notype-probe-round
+          rustc +1.99.1 --edition=2021 -A dead_code --test tests/unittest/deepseek_probe_console.rs -o /tmp/notype-probe-console
+          /tmp/notype-probe-console
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22.15.0

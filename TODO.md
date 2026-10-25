@@ -1,8 +1,10 @@
 # notype 開發待辦
 
-更新日期：2026-10-25。這份文件是接手順序與狀態快照；live [GitHub Issues](https://github.com/swchen44/notype/issues) 是工作追蹤入口。先讀 [HANDOFF.md](HANDOFF.md)。
+更新日期：2026-10-26。這份文件是接手順序與狀態快照；live [GitHub Issues](https://github.com/swchen44/notype/issues) 是工作追蹤入口。先讀 [HANDOFF.md](HANDOFF.md)。
 
-目前接續 #18～#23，source 已推送 `160ea64`，使用者實際包未更新。P20/P21 已合入，獨立複核 Spec 0／Standards 2，正依 [已核准補充計畫](https://github.com/swchen44/notype/issues/20#issuecomment-6398823972) 補測試與 doc comments；P19-latency-v3 已核准且相依完成，觀測實作中。P14 tiny npm 2 tests 通過，大型包裝／native 尚未執行。新增 [#22 歷史量測／CSV／effort](https://github.com/swchen44/notype/issues/22) 與 [#23 DeepSeek](https://github.com/swchen44/notype/issues/23) 僅在規格階段：字數與耗時定義、US$0.10 測試上限已確認，其餘決策待回覆，尚未有實作核准或送出付費請求。所有新實作先走 [GPT-6-Astra 計畫 gate](docs/agents/plan-review.md)，確切版本／連結與限制見 HANDOFF。
+最新進度以 HANDOFF 開頭的 2026-10-26 快照為準：root `1dfedea`；P19 來源複核兩軸 0；#23 離線 guards／修正已整合並複核 0；#22 backend 收尾、#24 UI 完成待整合。P23 live 與 P14 build/delivery-v2 已 Astra 核准，仍須各自資源、完整來源、binary 與 runtime gate。D 槽空間不足以開始新版 native App 建置；尚未輸入 key／呼叫付費 API，也未更新或移除使用者現用 App。所有未完 item 仍保留於 #8，不只歷史／CSV。
+
+所有未結案項目已補入 [主規格#8](https://github.com/swchen44/notype/issues/8) 剩餘工作表。Source 已推送89d239c，使用者包未更新；P19兩項review修正待最終複核，#22歷史／彙總CSV／effort已Astra核准並實作中。#23 US$0.10 DeepSeek live計畫及P14新版建置／乾淨安裝計畫草擬中，未取得key／未呼叫付費API。使用者取消本輪舊版相容要求，尚未移除任何現用資料；公司API與五App驗收仍保留。確切核准與限制見HANDOFF；所有新實作仍須 [GPT-6-Astra 計畫gate](docs/agents/plan-review.md)。
 
 ## 已完成
 

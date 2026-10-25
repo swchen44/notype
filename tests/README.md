@@ -180,3 +180,28 @@ cargo test --locked --manifest-path tests/integration/desktop-contracts/Cargo.to
 
 These are deterministic owned fixtures, not native App/microphone or paid API acceptance.
 Native compilation, rendered UI and live DeepSeek have separate receipts/gates.
+
+## Independent DeepSeek probe preparation (#23)
+
+Approved [offline addendum](https://github.com/swchen44/notype/issues/23#issuecomment-6399793622)
+and [Astra approval / zero unresolved](https://github.com/swchen44/notype/issues/23#issuecomment-6399801208).
+The actual reusable helper modules have no App/network/user-key entry point.
+
+- `tests/unittest/deepseek_probe_policy.rs`: pinned complete-wire bound/profile
+  and exact eight-slot schedule.
+- `tests/unittest/deepseek_probe_round.rs`: public durable admission service,
+  storage failure, no refund/reuse, serial history grouping and terminal halt.
+- `tests/unittest/deepseek_probe_console.rs`: actual input/RAII algorithm through
+  a fake console system port; no real terminal mode or credential operations.
+- `tests/integration/deepseek_probe_round.rs`: actual SQLite FULL reservation
+  store, owned files/OS lock and child-process termination/reopen; logical
+  corruption rejection, actual transition/crash-prefix positive controls and
+  compare-commit preserving invalid/current evidence. No HTTP.
+
+The first three run with `rustc --edition=2021 -A dead_code --test <root-test.rs>
+-o <task-owned-test.exe>` and the resulting executable; they are in portable CI.
+SQLite tests currently link existing Release rlibs read-only, documented in the
+[receipt](../docs/verification/deepseek-probe-offline.md). Do not create a target
+or run Cargo concurrently with its lease holder. Shared harness registration,
+native console adapter and full production/live acceptance remain pending the
+complete #22 gate. See [public contract](../docs/deepseek-probe-offline.md).
