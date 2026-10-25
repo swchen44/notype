@@ -1,11 +1,11 @@
 use crate::{
     portable, settings,
-    workflow::{DesktopWorkflow, TextConfiguration},
+    workflow::{DesktopWorkflow, TextConfiguration, TranslationSettings},
 };
-use notype_core::{RecognitionMode, SessionEntry, SessionStatus};
+use notype_core::{RecognitionMode, Scenario, SessionEntry, SessionStatus};
 use serde::{Deserialize, Serialize};
 use specta::Type;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_store::StoreExt;
@@ -33,6 +33,39 @@ pub struct SessionDto {
     pub error: Option<String>,
     pub recognition_mode: Option<String>,
     pub selection: String,
+    pub scenario: SceneId,
+    pub translation_target: Option<String>,
+    pub source_language: Option<String>,
+    pub back_translation: Option<String>,
+    pub review_required: bool,
+    pub review_confirmed: bool,
+    pub revision: i64,
+}
+#[derive(Clone, Copy, Default, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum SceneId {
+    #[default]
+    Dictation,
+    Translation,
+    Ask,
+}
+impl From<SceneId> for Scenario {
+    fn from(value: SceneId) -> Self {
+        match value {
+            SceneId::Dictation => Self::Dictation,
+            SceneId::Translation => Self::Translation,
+            SceneId::Ask => Self::Ask,
+        }
+    }
+}
+impl From<Scenario> for SceneId {
+    fn from(value: Scenario) -> Self {
+        match value {
+            Scenario::Dictation => Self::Dictation,
+            Scenario::Translation => Self::Translation,
+            Scenario::Ask => Self::Ask,
+        }
+    }
 }
 impl From<SessionEntry> for SessionDto {
     fn from(entry: SessionEntry) -> Self {
@@ -53,6 +86,13 @@ impl From<SessionEntry> for SessionDto {
                 SessionStatus::DeliveryUnknown => SessionPhase::DeliveryUnknown,
             },
             error: entry.error,
+            scenario: entry.scenario.into(),
+            translation_target: entry.translation_target,
+            source_language: entry.source_language,
+            back_translation: entry.back_translation,
+            review_required: entry.review_required,
+            review_confirmed: entry.review_confirmed,
+            revision: entry.revision,
             recognition_mode: entry.recognition_mode.map(|mode| {
                 match mode {
                     RecognitionMode::TraditionalEnglish => "traditional_english",
@@ -102,9 +142,20 @@ pub fn get_text_configuration(app: AppHandle) -> Result<TextConfiguration, Strin
 #[specta::specta]
 pub fn set_text_configuration(
     app: AppHandle,
-    configuration: TextConfiguration,
+    mut configuration: TextConfiguration,
 ) -> Result<(), String> {
-    let path = portable::app_data_dir(&app)
+    let _lock = CONFIGURATION_WRITE
+        .lock()
+        .map_err(|_| "configuration-storage-failed")?;
+    // The API form saves only its fields. A stale form cannot overwrite profiles.
+    let current = read_configuration(&app)?;
+    configuration.prompts = current.prompts;
+    configuration.translation = current.translation;
+    persist_configuration(&app, configuration)
+}
+static CONFIGURATION_WRITE: Mutex<()> = Mutex::new(());
+fn persist_configuration(app: &AppHandle, configuration: TextConfiguration) -> Result<(), String> {
+    let path = portable::app_data_dir(app)
         .map_err(|_| "configuration-storage-failed")?
         .join("text_processing_store.json");
     let store = app
@@ -117,6 +168,66 @@ pub fn set_text_configuration(
     store
         .save()
         .map_err(|_| "configuration-storage-failed".to_string())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn save_scenario_prompt(
+    app: AppHandle,
+    scenario: SceneId,
+    prompt: String,
+) -> Result<TextConfiguration, String> {
+    let _lock = CONFIGURATION_WRITE
+        .lock()
+        .map_err(|_| "configuration-storage-failed")?;
+    let mut configuration = read_configuration(&app)?;
+    configuration.set_prompt(scenario.into(), prompt)?;
+    persist_configuration(&app, configuration.clone())?;
+    Ok(configuration)
+}
+#[tauri::command]
+#[specta::specta]
+pub fn reset_scenario_prompt(
+    app: AppHandle,
+    scenario: SceneId,
+) -> Result<TextConfiguration, String> {
+    let _lock = CONFIGURATION_WRITE
+        .lock()
+        .map_err(|_| "configuration-storage-failed")?;
+    let mut configuration = read_configuration(&app)?;
+    configuration.reset_prompt(scenario.into());
+    persist_configuration(&app, configuration.clone())?;
+    Ok(configuration)
+}
+#[tauri::command]
+#[specta::specta]
+pub fn save_translation_settings(
+    app: AppHandle,
+    translation: TranslationSettings,
+) -> Result<TextConfiguration, String> {
+    if translation.target_language.trim().is_empty()
+        || translation.target_language.len() > 100
+        || translation.domain.len() > 2000
+        || translation.tone.len() > 2000
+        || translation.glossary.len() > 1000
+        || translation.glossary.iter().any(|term| {
+            term.source.trim().is_empty()
+                || term.target.trim().is_empty()
+                || term.target_language.trim().is_empty()
+                || term.source.len() > 1000
+                || term.target.len() > 1000
+                || term.target_language.len() > 100
+        })
+    {
+        return Err("translation-settings-invalid".into());
+    }
+    let _lock = CONFIGURATION_WRITE
+        .lock()
+        .map_err(|_| "configuration-storage-failed")?;
+    let mut configuration = read_configuration(&app)?;
+    configuration.translation = translation;
+    persist_configuration(&app, configuration.clone())?;
+    Ok(configuration)
 }
 
 #[tauri::command]
@@ -134,15 +245,36 @@ pub fn get_workflow_readiness(
 }
 
 pub(crate) fn begin_recording(app: &AppHandle) -> Result<u64, String> {
+    begin_scenario_recording(app, Scenario::Dictation, None, Default::default())
+}
+pub(crate) fn begin_scenario_recording(
+    app: &AppHandle,
+    scenario: Scenario,
+    target: Option<String>,
+    context: notype_core::SourceContext,
+) -> Result<u64, String> {
     let mode = match settings::get_settings(app).chinese_script {
         settings::ChineseScript::Simplified => RecognitionMode::SimplifiedEnglish,
         settings::ChineseScript::Traditional | settings::ChineseScript::AsTranscribed => {
             RecognitionMode::TraditionalEnglish
         }
     };
-    app.state::<Arc<DesktopWorkflow>>()
-        .begin(mode, None)
-        .map_err(|error| error.to_string())
+    let workflow = app.state::<Arc<DesktopWorkflow>>();
+    let generation = workflow
+        .begin(mode, target)
+        .map_err(|error| error.to_string())?;
+    workflow
+        .capture_source_context(generation, context)
+        .map_err(|error| error.to_string())?;
+    workflow
+        .capture_processing_snapshot(
+            generation,
+            scenario,
+            read_configuration(app).unwrap_or_default(),
+            settings::get_settings(app).custom_words,
+        )
+        .map_err(|error| error.to_string())?;
+    Ok(generation)
 }
 
 pub(crate) async fn finish_recognized(
@@ -233,12 +365,25 @@ pub async fn deliver_history_entry(
         .map(Into::into)
         .map_err(|error| error.to_string())
 }
+#[tauri::command]
+#[specta::specta]
+pub fn confirm_history_review(
+    workflow: State<'_, Arc<DesktopWorkflow>>,
+    id: String,
+    revision: i64,
+) -> Result<SessionDto, String> {
+    workflow
+        .confirm_review(&id, revision)
+        .map(Into::into)
+        .map_err(|error| error.to_string())
+}
 
 #[derive(Deserialize, Type)]
 #[serde(rename_all = "snake_case")]
 pub enum HistoryTextVersion {
     Original,
     Result,
+    BackTranslation,
 }
 #[tauri::command]
 #[specta::specta]
@@ -255,6 +400,9 @@ pub fn copy_history_text(
     let text = match version {
         HistoryTextVersion::Original => entry.transcript,
         HistoryTextVersion::Result => entry.result.ok_or("result-unavailable")?,
+        HistoryTextVersion::BackTranslation => {
+            entry.back_translation.ok_or("result-unavailable")?
+        }
     };
     app.clipboard()
         .write_text(text)
@@ -276,12 +424,23 @@ pub fn update_recording_retention_period(_period: String) -> Result<(), String> 
 #[cfg(debug_assertions)]
 #[tauri::command]
 pub fn debug_begin_session(
+    app: AppHandle,
     workflow: State<'_, Arc<DesktopWorkflow>>,
     recognition_mode: RecognitionMode,
+    scenario: Option<SceneId>,
 ) -> Result<u64, String> {
-    workflow
+    let generation = workflow
         .begin(recognition_mode, None)
-        .map_err(|error| error.to_string())
+        .map_err(|error| error.to_string())?;
+    workflow
+        .capture_processing_snapshot(
+            generation,
+            scenario.unwrap_or_default().into(),
+            read_configuration(&app).unwrap_or_default(),
+            settings::get_settings(&app).custom_words,
+        )
+        .map_err(|error| error.to_string())?;
+    Ok(generation)
 }
 #[cfg(debug_assertions)]
 #[tauri::command]

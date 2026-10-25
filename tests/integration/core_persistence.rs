@@ -1,6 +1,58 @@
 use notype_core::{CoreError, RecognitionMode, SessionOptions, SessionService, SessionStatus};
 
 #[test]
+fn translation_scene_and_target_survive_sqlite_restart_as_immutable_entry_metadata() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("scene-history.db");
+    let service = SessionService::open(&path).unwrap();
+    let entry = service
+        .create(
+            "不要删除 API_42",
+            SessionOptions {
+                recognition_mode: RecognitionMode::SimplifiedEnglish,
+                original_target: None,
+                scenario: notype_core::Scenario::Translation,
+                translation_target: Some("en-US".into()),
+                ..SessionOptions::default()
+            },
+        )
+        .unwrap();
+    drop(service);
+    let saved = SessionService::open(&path).unwrap().get(&entry.id).unwrap();
+    assert_eq!(saved.scenario, notype_core::Scenario::Translation);
+    assert_eq!(saved.translation_target.as_deref(), Some("en-US"));
+    assert_eq!(saved.transcript, "不要删除 API_42");
+    assert_eq!(saved.created_at, entry.created_at);
+    assert_eq!(saved.status, SessionStatus::Recognized);
+}
+
+#[test]
+fn core_v2_history_migrates_to_dictation_without_changing_raw_result_or_recognition_mode() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("core-v2.db");
+    let fixture = rusqlite::Connection::open(&path).unwrap();
+    fixture.execute_batch("CREATE TABLE sessions (
+        id TEXT PRIMARY KEY,transcript TEXT NOT NULL,result TEXT,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,
+        status TEXT NOT NULL,error TEXT,recognition_mode TEXT,original_target TEXT,
+        selection TEXT NOT NULL DEFAULT 'polished',attempt INTEGER NOT NULL DEFAULT 0
+    ); INSERT INTO sessions VALUES ('legacy-id','不要删除 API 42','不要删除 API 42。','2026-10-24T00:00:00.000Z','2026-10-24T00:01:00.000Z','pending',NULL,'simplified_english','old-target','polished',1); PRAGMA user_version=2;").unwrap();
+    drop(fixture);
+    let service = SessionService::open(&path).unwrap();
+    let entry = service.get("legacy-id").unwrap();
+    assert_eq!(entry.scenario, notype_core::Scenario::Dictation);
+    assert_eq!(entry.translation_target, None);
+    assert_eq!(entry.transcript, "不要删除 API 42");
+    assert_eq!(entry.result.as_deref(), Some("不要删除 API 42。"));
+    assert_eq!(entry.created_at, "2026-10-24T00:00:00.000Z");
+    assert_eq!(entry.updated_at, "2026-10-24T00:01:00.000Z");
+    assert_eq!(
+        entry.recognition_mode,
+        Some(RecognitionMode::SimplifiedEnglish)
+    );
+    assert_eq!(entry.original_target.as_deref(), Some("old-target"));
+}
+
+#[test]
 fn original_and_captured_profile_survive_sqlite_restart_without_a_recording() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory
@@ -14,6 +66,7 @@ fn original_and_captured_profile_survive_sqlite_restart_without_a_recording() {
             SessionOptions {
                 recognition_mode: RecognitionMode::SimplifiedEnglish,
                 original_target: Some("control-from-session-start".into()),
+                ..SessionOptions::default()
             },
         )
         .unwrap();
@@ -181,6 +234,7 @@ async fn second_instance_cannot_recover_or_interrupt_an_owners_active_session() 
             SessionOptions {
                 recognition_mode: RecognitionMode::TraditionalEnglish,
                 original_target: None,
+                ..SessionOptions::default()
             },
         )
         .unwrap();

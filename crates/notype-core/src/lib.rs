@@ -14,19 +14,58 @@ use uuid::Uuid;
 mod http;
 pub use http::HttpTextProcessor;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RecognitionMode {
+    #[default]
     TraditionalEnglish,
     SimplifiedEnglish,
 }
 
 pub type TargetToken = String;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Scenario {
+    #[default]
+    Dictation,
+    Translation,
+    Ask,
+}
+
+/// Only platform-verified, minimized metadata. Never page titles, input values or URLs.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SourceContext {
+    pub application: Option<String>,
+    pub website_domain: Option<String>,
+}
+impl SourceContext {
+    pub fn is_valid(&self) -> bool {
+        self.application.as_ref().is_none_or(|name| {
+            !name.trim().is_empty() && name.len() <= 256 && !name.chars().any(char::is_control)
+        }) && self.website_domain.as_ref().is_none_or(|domain| {
+            domain.len() <= 253
+                && !domain.is_empty()
+                && domain.split('.').all(|label| {
+                    !label.is_empty()
+                        && label.len() <= 63
+                        && !label.starts_with('-')
+                        && !label.ends_with('-')
+                        && label.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+                })
+        })
+    }
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
 pub struct SessionOptions {
     pub recognition_mode: RecognitionMode,
     pub original_target: Option<TargetToken>,
+    pub scenario: Scenario,
+    pub translation_target: Option<String>,
+    pub source_context: SourceContext,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -54,11 +93,20 @@ pub struct TextRequest {
     pub transcript: String,
     pub glossary: Vec<String>,
     pub recognition_mode: Option<RecognitionMode>,
+    #[serde(default)]
+    pub scenario: Scenario,
+    #[serde(default)]
+    pub translation_target: Option<String>,
+    #[serde(default)]
+    pub source_context: SourceContext,
+    #[serde(default)]
+    pub back_translation: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TextFailure {
     ConfigurationRequired,
+    InvalidPrompt,
     Failed,
     Timeout,
     InvalidResponse,
@@ -66,9 +114,34 @@ pub enum TextFailure {
 }
 
 pub type TextFuture = Pin<Box<dyn Future<Output = Result<String, TextFailure>> + Send>>;
+#[derive(Clone, Debug)]
+pub struct TextOutput {
+    pub text: String,
+    pub source_language: Option<String>,
+}
+pub type GenerationFuture = Pin<Box<dyn Future<Output = Result<TextOutput, TextFailure>> + Send>>;
+/// Deliberately cannot contain the original transcript: reverse the generated text independently.
+#[derive(Clone, Debug)]
+pub struct BackTranslationRequest {
+    pub text: String,
+    pub source_language: String,
+    pub target_language: String,
+}
 
 pub trait TextProcessor: Send + Sync {
     fn polish(&self, request: TextRequest, cancellation: CancellationToken) -> TextFuture;
+    fn generate(&self, request: TextRequest, cancellation: CancellationToken) -> GenerationFuture {
+        let future = self.polish(request, cancellation);
+        Box::pin(async move {
+            future.await.map(|text| TextOutput {
+                text,
+                source_language: None,
+            })
+        })
+    }
+    fn back_translate(&self, _: BackTranslationRequest, _: CancellationToken) -> TextFuture {
+        Box::pin(async { Err(TextFailure::InvalidResponse) })
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -106,6 +179,16 @@ pub struct SessionEntry {
     pub recognition_mode: Option<RecognitionMode>,
     pub original_target: Option<TargetToken>,
     pub selection: TextSelection,
+    #[serde(default)]
+    pub scenario: Scenario,
+    #[serde(default)]
+    pub translation_target: Option<String>,
+    pub source_context: SourceContext,
+    pub source_language: Option<String>,
+    pub back_translation: Option<String>,
+    pub review_required: bool,
+    pub review_confirmed: bool,
+    pub revision: i64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -237,7 +320,7 @@ impl SessionService {
         if has_handy && !has_sessions {
             return Err(CoreError::LegacyImportRequired);
         }
-        if version > 2 {
+        if version > 3 {
             return Err(CoreError::UnsupportedSchema);
         }
         if has_sessions {
@@ -284,6 +367,13 @@ impl SessionService {
             ("original_target", "TEXT"),
             ("selection", "TEXT NOT NULL DEFAULT 'polished'"),
             ("attempt", "INTEGER NOT NULL DEFAULT 0"),
+            ("scenario", "TEXT NOT NULL DEFAULT 'dictation'"),
+            ("translation_target", "TEXT"),
+            ("source_context", "TEXT NOT NULL DEFAULT '{}'"),
+            ("source_language", "TEXT"),
+            ("back_translation", "TEXT"),
+            ("review_required", "INTEGER NOT NULL DEFAULT 0"),
+            ("review_confirmed", "INTEGER NOT NULL DEFAULT 0"),
         ] {
             if !columns.iter().any(|column| column == name) {
                 transaction.execute_batch(&format!(
@@ -292,7 +382,7 @@ impl SessionService {
             }
         }
         transaction.execute("UPDATE sessions SET status=CASE status WHEN 'processing' THEN 'failed' ELSE 'delivery-unknown' END,error='interrupted',attempt=attempt+1,updated_at=?1 WHERE status IN ('processing','delivering')", [now()])?;
-        transaction.execute_batch("CREATE TABLE IF NOT EXISTS history_imports (source_key TEXT NOT NULL,source_id INTEGER NOT NULL,session_id TEXT NOT NULL,PRIMARY KEY(source_key,source_id)); PRAGMA user_version=2;")?;
+        transaction.execute_batch("CREATE TABLE IF NOT EXISTS history_imports (source_key TEXT NOT NULL,source_id INTEGER NOT NULL,session_id TEXT NOT NULL,PRIMARY KEY(source_key,source_id)); PRAGMA user_version=3;")?;
         transaction.commit()?;
         Ok(Self {
             connection: Arc::new(Mutex::new(connection)),
@@ -310,15 +400,15 @@ impl SessionService {
         transcript: &str,
         options: SessionOptions,
     ) -> Result<SessionEntry, CoreError> {
-        if transcript.trim().is_empty() {
+        if transcript.trim().is_empty() || !options.source_context.is_valid() {
             return Err(CoreError::InvalidInput);
         }
         let id = Uuid::new_v4().to_string();
         let timestamp = now();
         self.connection()?.execute(
             "INSERT INTO sessions
-            (id, transcript, created_at, updated_at, status, recognition_mode, original_target)
-            VALUES (?1,?2,?3,?3,'recognized',?4,?5)",
+            (id, transcript, created_at, updated_at, status, recognition_mode, original_target,scenario,translation_target,source_context)
+            VALUES (?1,?2,?3,?3,'recognized',?4,?5,?6,?7,?8)",
             params![
                 id,
                 transcript,
@@ -326,7 +416,10 @@ impl SessionService {
                 serde_json::to_string(&options.recognition_mode)
                     .unwrap()
                     .trim_matches('"'),
-                options.original_target
+                options.original_target,
+                serde_json::to_string(&options.scenario).unwrap().trim_matches('"'),
+                options.translation_target,
+                serde_json::to_string(&options.source_context).map_err(|_|CoreError::InvalidInput)?
             ],
         )?;
         self.get(&id)
@@ -429,11 +522,14 @@ impl SessionService {
             let entry = read_entry(&connection, id)?;
             if !matches!(
                 entry.status,
-                SessionStatus::Recognized | SessionStatus::Failed | SessionStatus::Pending
+                SessionStatus::Recognized
+                    | SessionStatus::Failed
+                    | SessionStatus::Pending
+                    | SessionStatus::Cancelled
             ) {
                 return Err(CoreError::InvalidTransition);
             }
-            connection.execute("UPDATE sessions SET status='pending',selection='original',updated_at=?2 WHERE id=?1", params![id,now()])?;
+            connection.execute("UPDATE sessions SET status='pending',selection='original',review_confirmed=0,attempt=attempt+1,updated_at=?2 WHERE id=?1", params![id,now()])?;
         }
         self.get(id)
     }
@@ -475,6 +571,9 @@ impl SessionService {
             let connection = self.connection()?;
             let entry = read_entry(&connection, id)?;
             if entry.status != SessionStatus::Pending {
+                return Ok(entry);
+            }
+            if entry.review_required && !entry.review_confirmed {
                 return Ok(entry);
             }
             let Some(original_target) = entry.original_target else {
@@ -525,6 +624,36 @@ impl SessionService {
         glossary: Vec<String>,
         processor: Arc<dyn TextProcessor>,
     ) -> Result<SessionEntry, CoreError> {
+        self.process_with_review(id, glossary, processor, false)
+            .await
+    }
+
+    /// Approves only the exact displayed revision. It does not deliver or change focus.
+    pub fn confirm_review(&self, id: &str, revision: i64) -> Result<SessionEntry, CoreError> {
+        let connection = self.connection()?;
+        let entry = read_entry(&connection, id)?;
+        if entry.status != SessionStatus::Pending
+            || !entry.review_required
+            || entry.revision != revision
+            || (entry.selection == TextSelection::Polished
+                && (entry.result.is_none() || entry.back_translation.is_none()))
+        {
+            return Err(CoreError::InvalidTransition);
+        }
+        connection.execute(
+            "UPDATE sessions SET review_confirmed=1,updated_at=?2 WHERE id=?1",
+            params![id, now()],
+        )?;
+        read_entry(&connection, id)
+    }
+
+    pub async fn process_with_review(
+        &self,
+        id: &str,
+        glossary: Vec<String>,
+        processor: Arc<dyn TextProcessor>,
+        review: bool,
+    ) -> Result<SessionEntry, CoreError> {
         let cancellation = CancellationToken::new();
         let (entry, attempt) = {
             let connection = self.connection()?;
@@ -546,7 +675,7 @@ impl SessionService {
                 [id],
                 |row| row.get(0),
             )?;
-            connection.execute("UPDATE sessions SET status='processing',result=NULL,error=NULL,selection='polished',attempt=?3,updated_at=?2 WHERE id=?1", params![id, now(), attempt])?;
+            connection.execute("UPDATE sessions SET status='processing',result=NULL,back_translation=NULL,source_language=NULL,review_required=?4,review_confirmed=0,error=NULL,selection='polished',attempt=?3,updated_at=?2 WHERE id=?1", params![id, now(), attempt,review&&entry.scenario==Scenario::Translation])?;
             self.active
                 .lock()
                 .map_err(|_| CoreError::Storage)?
@@ -560,21 +689,64 @@ impl SessionService {
             delivery: false,
             armed: true,
         };
+        let review = review && entry.scenario == Scenario::Translation;
         let response = tokio::select! {
             biased;
             _ = cancellation.cancelled() => Err(TextFailure::Cancelled),
-            response = processor.polish(TextRequest { transcript: entry.transcript, glossary, recognition_mode: entry.recognition_mode }, cancellation.clone()) => response,
+            response = processor.generate(TextRequest { transcript: entry.transcript, glossary, recognition_mode: entry.recognition_mode,scenario:entry.scenario,translation_target:entry.translation_target.clone(),source_context:entry.source_context,back_translation:review }, cancellation.clone()) => response,
         };
+        let mut source_language = None;
+        let mut back_translation = None;
         let (status, result, error) = match response {
             Err(TextFailure::ConfigurationRequired) => {
                 ("failed", None, Some("configuration-required"))
             }
-            Ok(text) if !text.trim().is_empty() => ("pending", Some(text), None),
+            Ok(output) if !output.text.trim().is_empty() => {
+                source_language = output.source_language;
+                if review {
+                    // This committed write precedes construction/polling of the second request.
+                    let changed=self.connection()?.execute("UPDATE sessions SET result=?2,source_language=?3,updated_at=?4 WHERE id=?1 AND attempt=?5 AND status='processing'",params![id,output.text,source_language,now(),attempt])?;
+                    if changed == 0 {
+                        guard.armed = false;
+                        return self.get(id);
+                    }
+                    let back = if let (Some(source), Some(target)) = (
+                        source_language.clone().filter(|s| !s.trim().is_empty()),
+                        entry.translation_target,
+                    ) {
+                        tokio::select! {biased; _=cancellation.cancelled()=>Err(TextFailure::Cancelled),response=processor.back_translate(BackTranslationRequest{text:output.text.clone(),source_language:target,target_language:source},cancellation.clone())=>response}
+                    } else {
+                        Err(TextFailure::InvalidResponse)
+                    };
+                    match back {
+                        Ok(text) if !text.trim().is_empty() => {
+                            back_translation = Some(text);
+                            ("pending", Some(output.text), None)
+                        }
+                        Err(TextFailure::Cancelled) => {
+                            ("cancelled", Some(output.text), Some("cancelled"))
+                        }
+                        Err(TextFailure::Timeout) => (
+                            "pending",
+                            Some(output.text),
+                            Some("back-translation-timeout"),
+                        ),
+                        _ => (
+                            "pending",
+                            Some(output.text),
+                            Some("back-translation-failed"),
+                        ),
+                    }
+                } else {
+                    ("pending", Some(output.text), None)
+                }
+            }
             Ok(_) => ("failed", None, Some("llm-invalid-response")),
             Err(TextFailure::Timeout) => ("failed", None, Some("llm-timeout")),
             Err(TextFailure::Cancelled) => ("cancelled", None, Some("cancelled")),
             Err(TextFailure::InvalidResponse) => ("failed", None, Some("llm-invalid-response")),
             Err(TextFailure::Failed) => ("failed", None, Some("llm-failed")),
+            Err(TextFailure::InvalidPrompt) => ("failed", None, Some("prompt-invalid")),
         };
         let connection = self.connection()?;
         let mut active = self.active.lock().map_err(|_| CoreError::Storage)?;
@@ -584,7 +756,7 @@ impl SessionService {
         {
             active.remove(id);
         }
-        connection.execute("UPDATE sessions SET status=?2,result=?3,error=?4,updated_at=?5 WHERE id=?1 AND attempt=?6 AND status='processing'", params![id,status,result,error,now(),attempt])?;
+        connection.execute("UPDATE sessions SET status=?2,result=?3,error=?4,updated_at=?5,source_language=?7,back_translation=?8 WHERE id=?1 AND attempt=?6 AND status='processing'", params![id,status,result,error,now(),attempt,source_language,back_translation])?;
         guard.armed = false;
         read_entry(&connection, id)
     }
@@ -594,12 +766,13 @@ fn read_entry(connection: &Connection, id: &str) -> Result<SessionEntry, CoreErr
     connection
         .query_row(
             "SELECT id,transcript,result,created_at,updated_at,status,error,
-        recognition_mode,original_target,selection FROM sessions WHERE id=?1",
+        recognition_mode,original_target,selection,scenario,translation_target,source_context,source_language,back_translation,review_required,review_confirmed,attempt FROM sessions WHERE id=?1",
             [id],
             |row| {
                 let status: String = row.get(5)?;
                 let mode: Option<String> = row.get(7)?;
                 let selection: String = row.get(9)?;
+                let scenario:String=row.get(10)?;
                 let decode = |value: &str| format!("\"{value}\"");
                 Ok(SessionEntry {
                     id: row.get(0)?,
@@ -617,6 +790,14 @@ fn read_entry(connection: &Connection, id: &str) -> Result<SessionEntry, CoreErr
                     original_target: row.get(8)?,
                     selection: serde_json::from_str(&decode(&selection))
                         .map_err(|_| rusqlite::Error::InvalidQuery)?,
+                    scenario:serde_json::from_str(&decode(&scenario)).map_err(|_|rusqlite::Error::InvalidQuery)?,
+                    translation_target:row.get(11)?,
+                    source_context:serde_json::from_str(&row.get::<_,String>(12)?).map_err(|_|rusqlite::Error::InvalidQuery)?,
+                    source_language:row.get(13)?,
+                    back_translation:row.get(14)?,
+                    review_required:row.get(15)?,
+                    review_confirmed:row.get(16)?,
+                    revision:row.get(17)?,
                 })
             },
         )

@@ -9,6 +9,7 @@ let sessions = SessionService::open("/chosen/persistent/directory/history.db")?;
 let original = sessions.create("不要刪除 API 42", SessionOptions {
     recognition_mode: RecognitionMode::TraditionalEnglish,
     original_target: Some("adapter-owned-target-token".into()),
+    ..SessionOptions::default()
 })?;
 assert_eq!(sessions.get(&original.id)?.transcript, "不要刪除 API 42");
 # Ok(()) }

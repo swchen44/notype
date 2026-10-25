@@ -15,6 +15,7 @@ fn options() -> SessionOptions {
     SessionOptions {
         recognition_mode: RecognitionMode::TraditionalEnglish,
         original_target: Some("test-control-1".into()),
+        ..SessionOptions::default()
     }
 }
 
@@ -32,7 +33,11 @@ impl TextProcessor for InspectOriginal {
             TextRequest {
                 transcript: "不要刪除 42 個 API request".into(),
                 glossary: vec!["API".into()],
-                recognition_mode: Some(RecognitionMode::TraditionalEnglish)
+                recognition_mode: Some(RecognitionMode::TraditionalEnglish),
+                scenario: notype_core::Scenario::Dictation,
+                translation_target: None,
+                source_context: Default::default(),
+                back_translation: false,
             }
         );
         Box::pin(async { Ok("不要刪除 42 個 API request。".into()) })

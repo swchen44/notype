@@ -1,0 +1,32 @@
+[package]
+name = "notype-desktop-contracts"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+notype-core = { path = "../../../crates/notype-core" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+specta = { version = "=2.0.0-rc.22", features = ["derive"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+tokio = { version = "1", features = ["macros", "net", "io-util", "sync", "time", "rt-multi-thread"] }
+tempfile = "3"
+
+[[test]]
+name = "desktop-workflow"
+path = "../../unittest/desktop_workflow.rs"
+
+[[test]]
+name = "desktop-provider"
+path = "../desktop_provider.rs"
+
+[profile.dev]
+debug = 0
+incremental = false
+
+[profile.test]
+debug = 0
+incremental = false
