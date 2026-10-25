@@ -197,6 +197,7 @@ math/range typography was corrected to ASCII `*` / `..` without behavior changes
 
 No frontend/native build, unrelated UI suite, microphone, user App/profile,
 clipboard, real key or paid request was run. Separate Linux desktop-provider
-AlreadyOwned CI evidence remains under independent investigation and is not
-claimed fixed by this endpoint correction. Native acceptance and the whole
+AlreadyOwned CI evidence is handled separately in the
+[owner-release receipt](history-owner-release.md); it is not fixed by this endpoint
+correction. Native acceptance and the whole
 #22/#24 source dependency gate remain separate from these Windows core results.
