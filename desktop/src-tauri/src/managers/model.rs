@@ -1,6 +1,7 @@
 use super::model_capabilities::{
     CapabilityProbe, CapabilityProber, Compatibility, GgufHeaderProber,
 };
+use super::model_storage::{DownloadState, ModelStorage, StorageError, StorageSource};
 use crate::settings::{get_settings, write_settings};
 use anyhow::Result;
 use flate2::read::GzDecoder;
@@ -2553,97 +2554,43 @@ impl ModelManager {
         let _ = self.app_handle.emit("models-updated", ());
     }
 
+    /// Resolve a model for activation, retaining HF mirror partial cleanup and
+    /// reconciling a missing catalog entry while preserving its saved selection.
     pub fn get_model_path(&self, model_id: &str) -> Result<PathBuf> {
-        self.resolve_model_path(model_id, true)
+        let result = self.storage_for_model(model_id)?.activation_path();
+        if matches!(result, Err(StorageError::Missing)) {
+            self.mark_model_unavailable(model_id);
+        }
+        result.map_err(|error| anyhow::anyhow!("{}: {}", error, model_id))
     }
 
     /// Resolve an existing completed model for display without cleaning files or
     /// changing catalog availability. Missing/incomplete models remain errors.
     pub fn get_model_path_for_display(&self, model_id: &str) -> Result<PathBuf> {
-        self.resolve_model_path(model_id, false)
+        self.storage_for_model(model_id)?.display_path()
+            .map_err(|error| anyhow::anyhow!("{}: {}", error, model_id))
     }
 
-    fn resolve_model_path(&self, model_id: &str, update_state: bool) -> Result<PathBuf> {
+    fn storage_for_model(&self, model_id: &str) -> Result<ModelStorage> {
         let model_info = self
             .get_model_info(model_id)
             .ok_or_else(|| anyhow::anyhow!("Model not found: {}", model_id))?;
 
-        if !model_info.is_downloaded {
-            return Err(anyhow::anyhow!("Model not available: {}", model_id));
-        }
-
-        // Ensure we don't return partial files/directories
-        if model_info.is_downloading {
-            return Err(anyhow::anyhow!(
-                "Model is currently downloading: {}",
-                model_id
-            ));
-        }
-
-        if let ModelSource::HuggingFace { repo_id, revision } = &model_info.source {
-            if let Some(path) = hf_cached_path(repo_id, revision, &model_info.filename) {
-                return Ok(path);
-            }
-            // Mirror-fallback download or manual drop-in in the models dir.
-            // The complete file only ever appears after verification, so a
-            // stale `.partial` alongside it is leftover noise, not a veto —
-            // clear it rather than declaring the model missing.
-            let local_path = self.models_dir.join(&model_info.filename);
-            if local_path.exists() {
-                let partial_path = self
-                    .models_dir
-                    .join(format!("{}.partial", &model_info.filename));
-                if update_state && partial_path.exists() {
-                    let _ = fs::remove_file(&partial_path);
-                }
-                return Ok(local_path);
-            }
-            if update_state {
-                self.mark_model_unavailable(model_id);
-            }
-            return Err(anyhow::anyhow!(
-                "Complete model file not found in HF cache or models dir: {}",
-                model_id
-            ));
-        }
-
-        let model_path = self.models_dir.join(&model_info.filename);
-        let partial_path = self
-            .models_dir
-            .join(format!("{}.partial", &model_info.filename));
-
-        if model_info.is_directory {
-            if !model_path.exists() || !model_path.is_dir() {
-                if update_state {
-                    self.mark_model_unavailable(model_id);
-                }
-                return Err(anyhow::anyhow!(
-                    "Complete model directory not found: {}",
-                    model_id
-                ));
-            }
-            if partial_path.exists() {
-                return Err(anyhow::anyhow!(
-                    "Model directory is incomplete: {}",
-                    model_id
-                ));
-            }
-            Ok(model_path)
+        let state = if !model_info.is_downloaded {
+            DownloadState::Unavailable
+        } else if model_info.is_downloading {
+            DownloadState::Downloading
         } else {
-            if !model_path.exists() {
-                if update_state {
-                    self.mark_model_unavailable(model_id);
-                }
-                return Err(anyhow::anyhow!(
-                    "Complete model file not found: {}",
-                    model_id
-                ));
-            }
-            if partial_path.exists() {
-                return Err(anyhow::anyhow!("Model file is incomplete: {}", model_id));
-            }
-            Ok(model_path)
-        }
+            DownloadState::Complete
+        };
+        let source = match &model_info.source {
+            ModelSource::HuggingFace {repo_id, revision} => StorageSource::HuggingFace {
+                cached_path: matches!(state, DownloadState::Complete)
+                    .then(|| hf_cached_path(repo_id, revision, &model_info.filename)).flatten(),
+            },
+            _ => StorageSource::Local,
+        };
+        Ok(ModelStorage::new(self.models_dir.clone(), model_info.filename, model_info.is_directory, state, source))
     }
 
     pub fn cancel_download(&self, model_id: &str) -> Result<()> {

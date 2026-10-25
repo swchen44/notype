@@ -30,6 +30,7 @@
       "awaitingProgress": "Waiting for download size…",
       "qwenEvidence": "Qwen3-ASR 0.6B Q6_K local evidence (2026-10-25): 3 synthetic bilingual recordings × 2 profiles, 12 decodes. Observed 3,229–3,795 ms included ASR and the old normalizer. This is not human speech, a current full-session benchmark, or p95. See the receipt for provenance and limits.",
       "qwenReceipt": "Read the Qwen verification receipt",
+      "qwenReceiptFailed": "Unable to open the quality report. Please try again.",
       "noLanguages": "No language metadata supplied",
       "states": {
         "downloadable": "Not downloaded",

@@ -30,6 +30,7 @@
       "awaitingProgress": "正在取得下載大小…",
       "qwenEvidence": "Qwen3-ASR 0.6B Q6_K 本機證據（2026-10-25）：3 段合成中英錄音 × 2 模式，共 12 次辨識。觀察到 3,229–3,795 毫秒，包含 ASR 與舊版正規化，不代表人聲、目前完整 session 效能或 p95。來源與限制請見驗證紀錄。",
       "qwenReceipt": "閱讀 Qwen 驗證紀錄",
+      "qwenReceiptFailed": "無法開啟品質驗證紀錄，請再試一次。",
       "noLanguages": "未提供語言資料",
       "states": {
         "downloadable": "尚未下載",

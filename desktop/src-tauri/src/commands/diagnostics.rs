@@ -12,9 +12,14 @@ use tauri_plugin_dialog::DialogExt;
 
 static PREVIEW: Mutex<Option<Report>> = Mutex::new(None);
 
+/// Public IPC preview of one owned, allowlisted report. The adapter caches this
+/// exact snapshot until another preview replaces it or the app exits. Export
+/// accepts only its matching ID, never replacement text supplied by the UI.
 #[derive(Serialize, Type)]
 pub struct DiagnosticPreview {
+    /// Opaque snapshot ID for export matching and the safe GitHub summary.
     pub report_id: String,
+    /// Exact bounded export text; excludes user content, secrets and paths.
     pub text: String,
 }
 

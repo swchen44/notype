@@ -1,45 +1,9 @@
 import assert from "node:assert/strict";
-import { mkdir } from "node:fs/promises";
 import test from "node:test";
-import { createRequire } from "node:module";
-import { fileURLToPath } from "node:url";
-const require = createRequire(
-  new URL("../../desktop/package.json", import.meta.url),
-);
-const { chromium } = require("playwright");
-const { createServer } = await import(
-  new URL("../../desktop/node_modules/vite/dist/node/index.js", import.meta.url)
-);
-const desktop = fileURLToPath(new URL("../../desktop", import.meta.url));
+import { desktop, uiFixture } from "./fixtures/ui.mjs";
 
 async function fixture(t, component = "card") {
-  await mkdir(new URL("../../.local", import.meta.url), { recursive: true });
-  const server = await createServer({
-    root: desktop,
-    server: { host: "127.0.0.1", port: 0, strictPort: false },
-  });
-  await server.listen();
-  t.after(() => server.close());
-  const browser = await chromium.launch({
-    executablePath:
-      process.env.NOTYPE_TEST_BROWSER ??
-      (process.platform === "win32"
-        ? "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe"
-        : undefined),
-    headless: true,
-  });
-  t.after(() => browser.close());
-  const page = await browser.newPage({ viewport: { width: 900, height: 900 } });
-  const address = server.httpServer.address();
-  const origin = `http://127.0.0.1:${address.port}`;
-  const html = await server.transformIndexHtml(
-    "/",
-    '<html><head></head><body><div id="root"></div></body></html>',
-  );
-  await page.route(origin + "/", (route) =>
-    route.fulfill({ contentType: "text/html", body: html }),
-  );
-  await page.goto(origin);
+  const page = await uiFixture(t);
   await page.evaluate(async (component) => {
     window.downloadCalls = [];
     window.__TAURI_INTERNALS__ = {
@@ -213,6 +177,24 @@ test("catalog scores remain relative and sort descending with unscored models la
     "Faster fixture",
     "Unscored fixture",
   ]);
+});
+
+test("quality receipt opener failures are translated and a retry clears the error", async (t) => {
+  const page = await fixture(t);
+  const unhandled = [];
+  page.on("pageerror", (error) => unhandled.push(error.message));
+  await page.evaluate(() => {
+    window.renderCard({model: {...window.fixtureModel, filename: "Qwen3-ASR-0.6B-Q6_K.gguf"}});
+    window.__TAURI_INTERNALS__.invoke = async () => { throw new Error("synthetic private opener failure"); };
+  });
+  await page.getByText("Advanced model information", {exact: true}).click();
+  await page.getByRole("button", {name: "Read the Qwen verification receipt"}).click({timeout: 3000});
+  await page.getByRole("alert").filter({hasText: "Unable to open the quality report. Please try again."}).waitFor({timeout: 3000});
+  assert.doesNotMatch(await page.locator("body").innerText(), /synthetic private/);
+  assert.deepEqual(unhandled, []);
+  await page.evaluate(() => { window.__TAURI_INTERNALS__.invoke = async () => null; });
+  await page.getByRole("button", {name: "Read the Qwen verification receipt"}).click({timeout: 3000});
+  await page.getByRole("alert").waitFor({state: "detached", timeout: 3000});
 });
 
 test("download UI shows actual transferred bytes and preserves verification, extraction, and missing-path states", async (t) => {
