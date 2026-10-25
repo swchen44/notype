@@ -840,10 +840,12 @@ async fn session_http_separates_fixed_faithful_rules_examples_and_structured_cur
 
 #[tokio::test]
 async fn cancelling_desktop_session_during_http_keeps_cancelled_original_and_ignores_late_reply() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("sessions.db");
     let reply=json!({"choices":[{"message":{"role":"assistant","content":"late result"},"finish_reason":"stop"}]}).to_string();
     let (endpoint, request, server) = fixture(&reply, Duration::from_millis(150)).await;
     let workflow = Arc::new(DesktopWorkflow::new(
-        SessionService::in_memory().unwrap(),
+        SessionService::open(&path).unwrap(),
         Arc::new(|| {}),
     ));
     let recording = workflow
@@ -869,6 +871,11 @@ async fn cancelling_desktop_session_during_http_keeps_cancelled_original_and_ign
         saved.observations.latest_outcome.as_deref(),
         Some("cancelled")
     );
+    drop(workflow);
+    let reopened = SessionService::open(&path).unwrap().get(&entry.id).unwrap();
+    assert_eq!(reopened.status, SessionStatus::Cancelled);
+    assert_eq!(reopened.transcript, "cancel me");
+    assert_eq!(reopened.result, None);
 }
 
 #[tokio::test]
@@ -1282,7 +1289,7 @@ async fn provider_error_categories_survive_real_http_and_sqlite_without_upstream
         (
             200,
             r#"{"error":null,"choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"success control"}}]}"#,
-            "delivery-unavailable",
+            "success",
         ),
     ];
     for (status, body, expected) in cases {
@@ -1299,21 +1306,26 @@ async fn provider_error_categories_survive_real_http_and_sqlite_without_upstream
             .unwrap();
         request.await.unwrap();
         server.await.unwrap();
+        let expected_error = (expected != "success").then_some(expected);
         assert_eq!(
             entry.error.as_deref(),
-            Some(expected),
+            expected_error,
             "HTTP {status}: {body}"
         );
         assert_eq!(entry.transcript, "saved original");
         assert_eq!(entry.api_summary.call_count, Some(1));
-        assert!(!entry.error.as_deref().unwrap().contains("sentinel"));
+        assert!(!entry
+            .error
+            .as_deref()
+            .unwrap_or_default()
+            .contains("sentinel"));
         let id = entry.id;
         drop(workflow);
         let saved = SessionService::open(&path).unwrap().get(&id).unwrap();
-        assert_eq!(saved.error.as_deref(), Some(expected));
+        assert_eq!(saved.error.as_deref(), expected_error);
         assert_eq!(
             saved.result.as_deref(),
-            if expected == "delivery-unavailable" {
+            if expected == "success" {
                 Some("success control")
             } else {
                 None
@@ -1441,7 +1453,7 @@ async fn reverse_provider_failure_retains_forward_result_and_review_after_sqlite
         )
         .unwrap();
     let entry = workflow
-        .finish(generation, "??", configuration, vec![])
+        .finish(generation, "reverse original", configuration, vec![])
         .await
         .unwrap();
     request.await.unwrap();
@@ -1460,4 +1472,119 @@ async fn reverse_provider_failure_retains_forward_result_and_review_after_sqlite
     let saved = SessionService::open(&path).unwrap().get(&id).unwrap();
     assert_eq!(saved.result.as_deref(), Some("valid translation"));
     assert_eq!(saved.error.as_deref(), Some("back-provider-balance"));
+}
+
+#[tokio::test]
+async fn whole_deadline_preserves_a_single_sent_call_and_original_after_sqlite_restart() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("sessions.db");
+    let workflow = DesktopWorkflow::new(SessionService::open(&path).unwrap(), Arc::new(|| {}));
+    let (endpoint, request, server) = fixture("{}", Duration::from_secs(1)).await;
+    let mut configuration = configured(endpoint);
+    configuration.timeout_ms = 500;
+    let generation = workflow
+        .begin(RecognitionMode::TraditionalEnglish, None)
+        .unwrap();
+    let entry = workflow
+        .finish(generation, "deadline original", configuration, vec![])
+        .await
+        .unwrap();
+    request.await.unwrap();
+    server.await.unwrap();
+    assert_eq!(entry.error.as_deref(), Some("llm-timeout"));
+    assert_eq!(entry.api_summary.call_count, Some(1));
+    assert_eq!(entry.api_summary.input.total, None);
+    let id = entry.id;
+    drop(workflow);
+    let reopened = SessionService::open(&path).unwrap().get(&id).unwrap();
+    assert_eq!(reopened.transcript, "deadline original");
+    assert_eq!(reopened.result, None);
+    assert_eq!(reopened.error.as_deref(), Some("llm-timeout"));
+}
+
+#[tokio::test]
+async fn unsupported_success_bodies_never_become_text_but_keep_valid_usage() {
+    for choice in [
+        json!({"finish_reason":"stop","message":{"role":"assistant","content":"partial","tool_calls":[]}}),
+        json!({"finish_reason":"stop","message":{"role":"assistant","content":"partial","function_call":{"name":"unknown"}}}),
+        json!({"finish_reason":"stop","message":{"role":"assistant","content":"partial","refusal":"no"}}),
+        json!({"finish_reason":"stop","message":{"role":"assistant","content":{"text":"partial"}}}),
+    ] {
+        let body = json!({"usage":{"prompt_tokens":5,"completion_tokens":2},"choices":[choice]})
+            .to_string();
+        let (endpoint, request, server) = fixture(&body, Duration::ZERO).await;
+        let workflow = DesktopWorkflow::new(SessionService::in_memory().unwrap(), Arc::new(|| {}));
+        let generation = workflow
+            .begin(RecognitionMode::TraditionalEnglish, None)
+            .unwrap();
+        let entry = workflow
+            .finish(generation, "saved original", configured(endpoint), vec![])
+            .await
+            .unwrap();
+        request.await.unwrap();
+        server.await.unwrap();
+        assert_eq!(entry.result, None);
+        assert_eq!(entry.error.as_deref(), Some("llm-invalid-response"));
+        assert_eq!(entry.api_summary.input.total, Some(5));
+        assert_eq!(entry.api_summary.output.total, Some(2));
+    }
+}
+
+#[tokio::test]
+async fn in_band_provider_timeout_finishes_the_public_observer_as_timeout() {
+    use notype_core::observations::{ApiCallDescriptor, ApiCallObserver, ApiOutcome, ApiReceipt};
+    use notype_core::{CancellationToken, TextFailure, TextRequest};
+    #[derive(Default)]
+    struct Observer(std::sync::Mutex<Option<(ApiOutcome, Option<u64>)>>);
+    impl ApiCallObserver for Observer {
+        fn begin(&self, _: ApiCallDescriptor) -> Result<String, TextFailure> {
+            Ok("owned-call".into())
+        }
+        fn mark_sent(&self, _: &str) -> Result<(), TextFailure> {
+            Ok(())
+        }
+        fn response(&self, _: &str, receipt: ApiReceipt) {
+            *self.0.lock().unwrap() = Some((ApiOutcome::Pending, receipt.usage.input));
+        }
+        fn finish(&self, _: &str, outcome: ApiOutcome, _: u64) {
+            let mut state = self.0.lock().unwrap();
+            let usage = state.as_ref().and_then(|(_, usage)| *usage);
+            *state = Some((outcome, usage));
+        }
+        fn unavailable(&self) {
+            panic!("actual chat adapter must be observed")
+        }
+    }
+    let (endpoint, request, server) = fixture(
+        r#"{"usage":{"prompt_tokens":13},"error":{"code":504}}"#,
+        Duration::ZERO,
+    )
+    .await;
+    let observer = Arc::new(Observer::default());
+    let processor = workflow::text_processor(configured(endpoint));
+    let result = processor
+        .generate_observed(
+            TextRequest {
+                transcript: "original".into(),
+                glossary: vec![],
+                recognition_mode: None,
+                scenario: Default::default(),
+                translation_target: None,
+                source_context: Default::default(),
+                back_translation: false,
+            },
+            CancellationToken::new(),
+            observer.clone(),
+        )
+        .await;
+    request.await.unwrap();
+    server.await.unwrap();
+    assert_eq!(
+        result.unwrap_err(),
+        TextFailure::Provider(notype_core::gateway_error::GatewayError::ProviderTimeout)
+    );
+    assert_eq!(
+        *observer.0.lock().unwrap(),
+        Some((ApiOutcome::Timeout, Some(13)))
+    );
 }
