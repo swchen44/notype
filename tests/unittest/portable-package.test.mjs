@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
-import { unlink, writeFile, readFile, mkdir } from "node:fs/promises";
+import { unlink, writeFile, readFile, mkdir, symlink } from "node:fs/promises";
 import { prepareLaunch } from "../../packages/notype/lib/launcher.mjs";
 import {
   portableFixture,
@@ -16,7 +16,10 @@ test("verified packages resolve fixed runtime and stable external data independe
     facadeRoot: f.facade,
     platform: "win32",
     arch: "x64",
-    env: { APPDATA: path.join(f.root, "roaming") },
+    env: {
+      APPDATA: path.join(f.root, "roaming"),
+      GGML_BACKEND_PATH: "developer-cache-module.dll",
+    },
     host: { integrity: "medium" },
   });
   assert.equal(plan.executable, path.join(f.app, "app/notype.exe"));
@@ -30,10 +33,15 @@ test("verified packages resolve fixed runtime and stable external data independe
   );
   assert.equal(
     plan.environment.WEBVIEW2_USER_DATA_FOLDER,
-    path.join(plan.dataDirectory, "webview2"),
+    path.join(plan.dataDirectory, "webview"),
   );
-  assert.equal(plan.environment.NOTYPE_DATA_DIR, plan.dataDirectory);
+  assert.equal(
+    plan.environment.NOTYPE_DATA_DIR,
+    undefined,
+    "default root must preserve native/global HF cache behavior",
+  );
   assert.equal(plan.model.identity, "fixture-v1");
+  assert.equal(plan.environment.GGML_BACKEND_PATH, undefined);
 });
 
 test("package inventory rejects undeclared private data and traversal in pinned manifests", async (t) => {
@@ -225,5 +233,68 @@ test("private settings cannot be added even to an otherwise hash-pinned resource
       host: { integrity: "medium" },
     }),
     { code: "private-file" },
+  );
+});
+
+test("an AVX2/BMI2 release refuses missing CPU capability before model activation", async (t) => {
+  const f = await portableFixture(t);
+  await replaceManifest(f, "application", (m) => {
+    m.cpu = "avx2-bmi2";
+  });
+  const options = {
+    facadeRoot: f.facade,
+    platform: "win32",
+    arch: "x64",
+    env: { APPDATA: f.root },
+    host: { integrity: "medium", cpu: { avx2: true, bmi2: false } },
+  };
+  await assert.rejects(prepareLaunch(options), { code: "unsupported-cpu" });
+  const plan = await prepareLaunch({
+    ...options,
+    host: { integrity: "medium", cpu: { avx2: true, bmi2: true } },
+  });
+  assert.equal(plan.cpu, "avx2-bmi2");
+});
+
+test("installed junctions are refused and actual Windows roaming metadata governs the default root", async (t) => {
+  const f = await portableFixture(t);
+  const options = {
+    facadeRoot: f.facade,
+    platform: "win32",
+    arch: "x64",
+    env: { APPDATA: path.join(f.root, "redirected-env") },
+    host: {
+      integrity: "medium",
+      roaming_app_data: path.join(f.root, "actual-roaming"),
+    },
+  };
+  const plan = await prepareLaunch(options);
+  assert.equal(
+    plan.dataDirectory,
+    path.join(f.root, "actual-roaming/io.github.swchen44.notype"),
+  );
+  assert.equal(plan.environment.NOTYPE_DATA_DIR, undefined);
+  const foreign = path.join(f.root, "external-fixture");
+  await mkdir(foreign);
+  await symlink(foreign, path.join(f.app, "redirect"), "junction");
+  await assert.rejects(prepareLaunch(options), { code: "unsafe-file" });
+});
+
+test("a manifest cannot omit the baseline probe's app-local VC runtime dependency", async (t) => {
+  const f = await portableFixture(t);
+  await replaceManifest(f, "application", (m) => {
+    m.hostProbeLibraries = [];
+    m.files = m.files.filter((file) => file.path !== "app/vcruntime140.dll");
+  });
+  await unlink(path.join(f.app, "app/vcruntime140.dll"));
+  await assert.rejects(
+    prepareLaunch({
+      facadeRoot: f.facade,
+      platform: "win32",
+      arch: "x64",
+      env: { APPDATA: f.root },
+      host: { integrity: "medium" },
+    }),
+    { code: "invalid-manifest" },
   );
 });

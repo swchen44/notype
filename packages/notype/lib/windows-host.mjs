@@ -2,43 +2,48 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { PackageError } from "./manifest.mjs";
 
-export async function inspectWindowsHost() {
+export async function inspectWindowsHost({ hostProbe }) {
   if (process.platform !== "win32" || process.arch !== "x64")
     throw new PackageError(
       "unsupported-platform",
       "This release supports Windows x64 only.",
     );
-  const systemRoot = process.env.SystemRoot;
-  if (!systemRoot || !path.isAbsolute(systemRoot))
-    throw new PackageError(
-      "host-check-failed",
-      "Unable to inspect the Windows user token.",
-    );
-  // whoami inherits this process token. CSV contains invariant integrity SIDs,
-  // irrespective of the translated group names. Never forward its output.
-  const result = spawnSync(
-    path.join(systemRoot, "System32/whoami.exe"),
-    ["/groups", "/fo", "csv", "/nh"],
-    {
-      shell: false,
-      windowsHide: true,
-      encoding: "utf8",
-      timeout: 5000,
-      maxBuffer: 128 * 1024,
-    },
-  );
+  // The exact regular-byte helper was verified in the application manifest.
+  // Its baseline Rust/Windows system APIs have no ORT or ggml imports.
+  const result = spawnSync(hostProbe, [], {
+    shell: false,
+    windowsHide: true,
+    encoding: "utf8",
+    timeout: 5000,
+    maxBuffer: 16 * 1024,
+  });
   if (result.error || result.status !== 0)
     throw new PackageError(
       "host-check-failed",
-      "Unable to inspect the Windows user token.",
+      "Unable to verify the Windows user token and CPU compatibility.",
     );
-  const levels = [...result.stdout.matchAll(/S-1-16-(\d+)/g)].map((match) =>
-    Number(match[1]),
-  );
-  if (levels.length !== 1)
+  let report;
+  try {
+    report = JSON.parse(result.stdout);
+  } catch {
     throw new PackageError(
       "host-check-failed",
-      "Unable to inspect the Windows user token.",
+      "The local platform probe returned invalid metadata.",
     );
-  return { integrity: levels[0] === 8192 ? "medium" : "unsupported" };
+  }
+  if (
+    report.schema !== 1 ||
+    report.platform !== "win32" ||
+    report.arch !== "x64" ||
+    !["medium", "unsupported"].includes(report.integrity) ||
+    typeof report.cpu?.avx2 !== "boolean" ||
+    typeof report.cpu?.bmi2 !== "boolean" ||
+    typeof report.roaming_app_data !== "string" ||
+    !path.isAbsolute(report.roaming_app_data)
+  )
+    throw new PackageError(
+      "host-check-failed",
+      "The local platform probe returned invalid metadata.",
+    );
+  return report;
 }

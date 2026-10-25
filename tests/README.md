@@ -13,6 +13,8 @@ tests/
 - unit：`npm.cmd run test:unit`
 - integration：`npm.cmd run test:integration`
 - npm portable foundation：`node --test tests/unittest/portable-package.test.mjs tests/integration/portable-cli.test.mjs tests/integration/portable-tarball.test.mjs`。使用合成檔案與真正本機 npm tarball；不啟動 App、不含模型／runtime 大檔，詳見 [封裝契約](../packages/ASSEMBLY.md)。
+- local model activation：`node --test tests/integration/portable-model.test.mjs`，實際檔案、取消、並行與程序中斷後重啟；不讀寫使用者設定或選取模型。
+- native portable preflight：`cargo test --locked --manifest-path crates/notype-platform/Cargo.toml`。獨立 Rust adapter/probe，不需 Tauri、ORT／C++；實際 App Release 啟動另做驗收。
 - 真實 CPU／Edge smoke：`npm.cmd run test:runtime`，需先準備固定模型、CLI、WAV 與 Edge；見 [runtime receipt](../docs/verification/windows11-preflight.md)。缺少必要檔案會失敗，不會 skip。
 
 Deterministic tests 測試 HTTP、SQLite、文字流程與 callback 邊界。獨立 runtime smoke 使用真實 CPU STT 與全新 headless Edge 文字框；它不證明原生 Windows 貼上、公司 API、五個 App 或完整 portable 啟動。

@@ -146,6 +146,7 @@ export async function verifyPackage(root, pin, role) {
   const roles = new Set([
     "entrypoint",
     "webview-entry",
+    "host-probe",
     "runtime",
     "native",
     "resource",
@@ -219,10 +220,36 @@ export async function verifyPackage(root, pin, role) {
     if (
       manifest.platform !== "win32" ||
       manifest.arch !== "x64" ||
-      manifest.cpu !== "x86-64"
+      !["x86-64", "avx2-bmi2"].includes(manifest.cpu)
     )
       invalid();
     declared(manifest.entrypoint, "entrypoint");
+    declared(manifest.hostProbe, "host-probe");
+    if (
+      !Array.isArray(manifest.hostProbeLibraries) ||
+      !manifest.hostProbeLibraries.length
+    )
+      invalid();
+    const probeDirectory = manifest.hostProbe.slice(
+      0,
+      manifest.hostProbe.lastIndexOf("/"),
+    );
+    if (
+      !manifest.hostProbeLibraries.some(
+        (file) =>
+          file.toLowerCase() ===
+          `${probeDirectory}/vcruntime140.dll`.toLowerCase(),
+      )
+    )
+      invalid();
+    for (const library of manifest.hostProbeLibraries) {
+      declared(library, "native");
+      if (
+        !library.startsWith(`${probeDirectory}/`) ||
+        library.slice(probeDirectory.length + 1).includes("/")
+      )
+        invalid();
+    }
     if (
       !manifest.webview ||
       !/^\d+\.\d+\.\d+\.\d+$/.test(manifest.webview.version)
@@ -244,6 +271,22 @@ export async function verifyPackage(root, pin, role) {
     )
       invalid();
     for (const file of manifest.modelFiles) declared(file, "model");
+    const activation = manifest.activation;
+    if (
+      !activation ||
+      activation.kind !== "file" ||
+      manifest.modelFiles.length !== 1 ||
+      activation.source !== manifest.modelFiles[0] ||
+      typeof activation.modelId !== "string" ||
+      !activation.modelId.trim()
+    )
+      invalid();
+    relativeFile(activation.filename);
+    if (
+      activation.filename.includes("/") ||
+      !/\.(gguf|bin)$/.test(activation.filename)
+    )
+      invalid();
   }
   for (const file of manifest.files) {
     await regular(root, file.path);

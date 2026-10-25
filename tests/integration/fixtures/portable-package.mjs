@@ -82,6 +82,8 @@ export async function portableFixture(t) {
     "application",
     [
       ["app/notype.exe", "entrypoint", "fixture app"],
+      ["app/notype-platform-check.exe", "host-probe", "fixture probe"],
+      ["app/vcruntime140.dll", "native", "fixture VC runtime"],
       [
         "webview/156.0.4314.42/msedgewebview2.exe",
         "webview-entry",
@@ -95,6 +97,8 @@ export async function portableFixture(t) {
       arch: "x64",
       cpu: "x86-64",
       entrypoint: "app/notype.exe",
+      hostProbe: "app/notype-platform-check.exe",
+      hostProbeLibraries: ["app/vcruntime140.dll"],
       webview: {
         directory: "webview/156.0.4314.42",
         version: "156.0.4314.42",
@@ -110,7 +114,16 @@ export async function portableFixture(t) {
       ["weights/fixture.bin", "model", "fixture weights"],
       ["NOTICE.txt", "notice", "Synthetic test fixtures only."],
     ],
-    { identity: "fixture-v1", modelFiles: ["weights/fixture.bin"] },
+    {
+      identity: "fixture-v1",
+      modelFiles: ["weights/fixture.bin"],
+      activation: {
+        kind: "file",
+        source: "weights/fixture.bin",
+        filename: "fixture.bin",
+        modelId: "fixture",
+      },
+    },
   );
   const release = {
     schema: 1,

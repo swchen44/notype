@@ -53,7 +53,6 @@ pub use transcription_coordinator::TranscriptionCoordinator;
 
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Emitter, Listener, Manager};
-use tauri_plugin_autostart::MacosLauncher;
 use tauri_plugin_log::{Builder as LogBuilder, RotationStrategy, Target, TargetKind};
 
 use crate::settings::get_settings;
@@ -954,10 +953,8 @@ pub fn run(cli_args: CliArgs) {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
-        .plugin(tauri_plugin_autostart::init(
-            MacosLauncher::LaunchAgent,
-            Some(vec![]),
-        ))
+        // Local npm payloads do not register a versioned executable at login.
+        // A future stable facade adapter must preserve explicit data overrides.
         .manage(cli_args.clone())
         .setup(move |app| {
             #[cfg(target_os = "windows")]
@@ -1094,6 +1091,18 @@ pub fn run(cli_args: CliArgs) {
             app.manage(TranscriptionCoordinator::new(app_handle.clone()));
 
             initialize_core_logic(&app_handle)?;
+
+            // Initialize the local script dictionary away from the first Stop.
+            // The headless CLI branch returns earlier and retains cold timings.
+            let recognition_mode = settings.recognition_mode.into();
+            std::thread::spawn(move || {
+                if workflow::recognition::RecognitionProfile::new(recognition_mode, Vec::new())
+                    .normalize("")
+                    .is_err()
+                {
+                    log::warn!("recognition-script-prewarm-failed");
+                }
+            });
 
             // Secure Input monitor (macOS): detects stuck secure input that
             // silently blocks keyed shortcuts, warns the user, and activates

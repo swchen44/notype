@@ -76,6 +76,7 @@ test("real npm tarballs contain only the private package role allowlists and no 
             "bin/notype.mjs",
             "lib/launcher.mjs",
             "lib/manifest.mjs",
+            "lib/model.mjs",
             "lib/windows-host.mjs",
           ]
         : ["package.json", "README.md", "payload.json"];

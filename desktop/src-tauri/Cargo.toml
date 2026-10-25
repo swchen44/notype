@@ -104,6 +104,7 @@ tauri-plugin-global-shortcut = "2.3.1"
 tauri-plugin-single-instance = "2.3.2"
 
 [target.'cfg(windows)'.dependencies]
+notype-platform = { path = "../../crates/notype-platform" }
 # Used to reach ICoreWebView2Settings3 through the webview's controller
 # (disabling browser accelerator keys in the main window). Must match the
 # version wry links against so the COM types are identical.
@@ -197,8 +198,12 @@ tempfile = "3"
 tokio = { version = "1.43.0", features = ["macros", "net", "io-util", "sync", "time", "rt-multi-thread"] }
 
 [profile.release]
-lto = true
-codegen-units = 1
+# One bounded desktop release build; the optional foreign-host library outputs
+# are already removed. Native transcribe inputs are independently optimized.
+lto = "off"
+codegen-units = 16
+debug = 0
+incremental = false
 strip = true
 panic = "unwind"
 

@@ -428,6 +428,7 @@
       },
       "autostart": {
         "label": "開機啟動",
+        "unavailable": "本機套件暫不支援開機啟動登錄；既有偏好設定會保留。",
         "description": "登入電腦時自動啟動 notype"
       },
       "showTrayIcon": {
