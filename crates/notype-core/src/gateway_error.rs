@@ -157,11 +157,18 @@ impl std::error::Error for GatewayError {}
 // Structural paths are intentionally narrow: error.status, numeric error.code,
 // then exact string error.code/error.type/error.metadata.error_type. The caller
 // selects a top-level or choice error object; natural-language messages are ignored.
+// Numeric validation permits only an exact context-limit refinement; other
+// numeric categories remain authoritative over every structural string.
 fn structural_error(error: &Value) -> Option<GatewayError> {
+    let mut numeric_error = None;
     for value in [&error["status"], &error["code"]] {
         if let Some(status) = value.as_u64().filter(|status| (400..=599).contains(status)) {
-            return GatewayError::from_status(status as u16);
+            numeric_error = GatewayError::from_status(status as u16);
+            break;
         }
+    }
+    if numeric_error.is_some_and(|category| category != GatewayError::UpstreamValidationError) {
+        return numeric_error;
     }
     for value in [
         &error["code"],
@@ -187,7 +194,9 @@ fn structural_error(error: &Value) -> Option<GatewayError> {
             }
             _ => continue,
         };
-        return Some(category);
+        if numeric_error.is_none() || category == GatewayError::ContextWindowExceeded {
+            return Some(category);
+        }
     }
-    None
+    numeric_error
 }

@@ -657,7 +657,7 @@ fn decode_output(content: &str, envelope: bool) -> Result<TextOutput, TextFailur
             source_language: None,
         });
     }
-    let value: Value = serde_json::from_str(&content).map_err(|_| TextFailure::InvalidResponse)?;
+    let value: Value = serde_json::from_str(content).map_err(|_| TextFailure::InvalidResponse)?;
     let text = value["text"]
         .as_str()
         .filter(|s| !s.trim().is_empty())
