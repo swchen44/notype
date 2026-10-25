@@ -97,7 +97,15 @@ export async function desktopFixture() {
         if (page) break;
         await delay(100);
       }
-      assert.ok(page, "native main WebView");
+      assert.ok(
+        page,
+        `native main WebView; owned pages=${JSON.stringify(
+          browser
+            .contexts()
+            .flatMap((context) => context.pages())
+            .map((page) => page.url()),
+        )}; startup=${logs.slice(-2500)}`,
+      );
       page.setDefaultTimeout(5000);
       await page.waitForFunction(() => window.__TAURI_INTERNALS__?.invoke);
       if (process.env.NOTYPE_NATIVE_MODULE_RECEIPT) {

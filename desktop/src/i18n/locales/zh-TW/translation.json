@@ -1,5 +1,17 @@
 {
   "notype": {
+    "hotkeys": {
+      "transcribe": "開始口述",
+      "translation": "開始翻譯",
+      "ask": "開始隨便問",
+      "stop": "停止當次錄音",
+      "description": "按一下開始，再按停止鍵結束。整組按鍵放開並出現收音提示後，才開始說話。使用實體鍵名稱，例如 alt_right、alt_right+shift_right、alt_right+space 或 f9；左右鍵分開判定。",
+      "cancel": "Esc 可取消錄音或處理。不支援的輸入欄位會保留待選結果，供手動複製。",
+      "save": "儲存",
+      "reset": "還原",
+      "saved": "已儲存至本機",
+      "invalid": "無法儲存：請檢查實體鍵名稱、開始鍵衝突或快捷鍵是否可用。"
+    },
     "recognition": {
       "title": "語音辨識",
       "mode": "辨識模式",

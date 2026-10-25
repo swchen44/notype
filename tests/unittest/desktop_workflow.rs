@@ -5,6 +5,44 @@ use std::sync::Arc;
 use workflow::{DesktopWorkflow, TextConfiguration};
 
 #[tokio::test]
+async fn captured_target_delivery_uses_one_adapter_and_never_retries_uncertain_write() {
+    use notype_core::{
+        DeliveryAdapter, DeliveryFuture, DeliveryOutcome, DeliveryRequest, SessionOptions,
+    };
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    struct NativeBoundary(Arc<AtomicUsize>);
+    impl DeliveryAdapter for NativeBoundary {
+        fn deliver(&self, request: DeliveryRequest) -> DeliveryFuture {
+            assert_eq!(request.original_target, "opaque-target");
+            assert_eq!(request.text, "fixture original");
+            self.0.fetch_add(1, Ordering::SeqCst);
+            Box::pin(async { DeliveryOutcome::Uncertain })
+        }
+    }
+    let writes = Arc::new(AtomicUsize::new(0));
+    let workflow = DesktopWorkflow::new(SessionService::in_memory().unwrap(), Arc::new(|| {}))
+        .with_delivery(Arc::new(NativeBoundary(writes.clone())));
+    let entry = workflow
+        .sessions()
+        .create(
+            "fixture original",
+            SessionOptions {
+                original_target: Some("opaque-target".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    workflow.choose_original(&entry.id).unwrap();
+    let entry = workflow.deliver(&entry.id).await.unwrap();
+    assert_eq!(entry.status, SessionStatus::DeliveryUnknown);
+    assert_eq!(
+        workflow.deliver(&entry.id).await.unwrap().status,
+        SessionStatus::DeliveryUnknown
+    );
+    assert_eq!(writes.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
 async fn recorded_original_uses_captured_traditional_profile_before_text_processing() {
     let workflow = DesktopWorkflow::new(SessionService::in_memory().unwrap(), Arc::new(|| {}));
     let recording = workflow

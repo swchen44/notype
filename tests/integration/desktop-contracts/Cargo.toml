@@ -25,6 +25,14 @@ path = "../../unittest/desktop_workflow.rs"
 name = "desktop-provider"
 path = "../desktop_provider.rs"
 
+[[test]]
+name = "physical-gestures"
+path = "../../unittest/physical_gestures.rs"
+
+[[test]]
+name = "native-delivery"
+path = "../native_delivery.rs"
+
 [profile.dev]
 debug = 0
 incremental = false

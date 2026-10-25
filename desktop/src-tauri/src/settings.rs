@@ -895,7 +895,7 @@ pub const SETTINGS_STORE_PATH: &str = "settings_store.json";
 
 pub fn get_default_settings() -> AppSettings {
     #[cfg(target_os = "windows")]
-    let default_shortcut = "ctrl+space";
+    let default_shortcut = "alt_right";
     #[cfg(target_os = "macos")]
     let default_shortcut = "option+space";
     #[cfg(target_os = "linux")]
@@ -945,10 +945,26 @@ pub fn get_default_settings() -> AppSettings {
         },
     );
 
+    for (id, name, chord) in [
+        ("translation", "Translation", "alt_right+shift_right"),
+        ("ask", "Ask", "alt_right+space"),
+        ("stop", "Stop recording", "alt_right"),
+    ] {
+        bindings.insert(
+            id.into(),
+            ShortcutBinding {
+                id: id.into(),
+                name: name.into(),
+                description: String::new(),
+                default_binding: chord.into(),
+                current_binding: chord.into(),
+            },
+        );
+    }
     AppSettings {
         settings_schema_version: default_settings_schema_version(),
         bindings,
-        shortcut_activation: ShortcutActivation::default(),
+        shortcut_activation: ShortcutActivation::Toggle,
         hold_threshold_ms: default_hold_threshold_ms(),
         audio_feedback: false,
         audio_feedback_volume: default_audio_feedback_volume(),
@@ -1139,6 +1155,17 @@ fn apply_settings_migrations(
     settings_value: &serde_json::Value,
 ) -> bool {
     let mut updated = false;
+    // Migrate only the untouched pre-scenario Windows default; preserve custom keys.
+    #[cfg(windows)]
+    if settings_value.pointer("/bindings/stop").is_none() {
+        if let Some(binding) = settings.bindings.get_mut("transcribe") {
+            if binding.current_binding == "ctrl+space" && binding.default_binding == "ctrl+space" {
+                binding.current_binding = "alt_right".into();
+                binding.default_binding = "alt_right".into();
+                updated = true;
+            }
+        }
+    }
 
     // One-time onboarding migration: users with an explicit selected model have
     // already made it through model selection. Users who merely have compatible

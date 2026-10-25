@@ -1,5 +1,17 @@
 {
   "notype": {
+    "hotkeys": {
+      "transcribe": "Start Dictation",
+      "translation": "Start Translation",
+      "ask": "Start Ask",
+      "stop": "Stop any recording",
+      "description": "Tap a shortcut to start; tap Stop to finish. Recording starts after every key is released and the listening cue appears. Use physical key names, for example alt_right, alt_right+shift_right, alt_right+space or f9. Left and right keys are distinct.",
+      "cancel": "Esc cancels recording or processing. Unsupported input fields keep the result pending for manual copying.",
+      "save": "Save",
+      "reset": "Reset",
+      "saved": "Saved locally",
+      "invalid": "Unable to save: check physical key names, conflicting starts, or shortcut availability."
+    },
     "recognition": {
       "title": "Speech recognition",
       "mode": "Recognition profile",
