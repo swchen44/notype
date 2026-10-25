@@ -107,3 +107,98 @@ marked capped, without cross-clock subtraction.
   no driver/model/IPC root cause, latency semantic fix, p95 or hardware acceptance
   is claimed. #19 latency remains open pending safe user baseline and a separately
   reviewed concrete fix if the evidence calls for one. #22/#23 are not included.
+
+## Review fixes: true command-send origin and actual observation gate
+
+The independent review pinned source `67af80eebfc8d25b28da361309ae7fd78f196a8d`
+(same tree as integration `52e05f5ba05d2c020db4585e66c3ec94f7d31897`) and found
+one Spec/P2 and one Standards/P2 issue. The exact
+[P19-review-fix-v1 plan](https://github.com/swchen44/notype/issues/19#issuecomment-6399305016)
+received [GPT-6-Astra APPROVED / zero unresolved](https://github.com/swchen44/notype/issues/19#issuecomment-6399332937)
+before this follow-up's source/test edits. The earlier results above remain the
+historical original implementation receipt.
+
+**Spec finding:** startup created `ReadyRequest.sent_at` before the native port
+waited for the recorder mutex. This counted pre-send contention as command-queue
+time, contrary to the documented `capture-command-send` origin.
+
+The request is now unstamped while passing through startup and acquiring that
+same native guard. `AudioRecorder::start_observed` calls the shared production
+`ReadyRequest::send` immediately around channel send. It supplies one trace-clock
+instant to both `Cmd::Start` and the owned `SentReadyRequest` payload. The native
+port's recorder guard, mode, state publication and resource ownership are
+unchanged. No RT callback, DSP, model or recording algorithm was changed.
+
+The named public regression
+`command_queue_excludes_pre_send_recorder_lock_wait_but_readiness_cumulative_retains_it`
+was first run against the original production startup: the controlled port
+advanced its clock **120ms before send**, independently of **80ms send-to-consumer**.
+It went **RED: actual 200ms, expected 80ms; 0 passed / 1 failed**. After the fix,
+the same port and native recorder use the exact same `ReadyRequest::send`
+handoff. It went **GREEN: 1 passed / 0 failed**. CommandQueue is exactly 80ms,
+ActionCumulative still ends at open/request return (120ms), and first/processed
+readiness cumulative still includes both delays (200ms). No cumulative endpoint
+was moved to make the assertion pass.
+
+**Standards finding:** tests bypassed `OverlayLifecycle::observe`, the actual
+native capture/revision/capturing-stage gate. New lifecycle tests call that public
+policy directly. They exercise both Recording/Streaming positive controls,
+wrong capture/revision, matching-revision Transcribing/Processing/Hidden, and
+the old envelope after a successor, asserting rejected closures never run.
+The integration case
+`settings_observation_uses_actual_overlay_revision_gate_before_registry_deduplication`
+combines that actual outer method with the real `CaptureObservations` registry
+and diagnostic report. A wrong revision cannot enter the Settings callback or
+consume its dedup bit; the correct revision then records the expected 500ms.
+This covers Settings' deliberate reliance on the outer revision gate.
+
+For sensitivity, the actual production `observe` predicate was temporarily
+changed from capture/revision/capturing checks to `true`:
+
+```diff
+-                current.capture == capture
+-                    && current.revision == revision
+-                    && current.presentation.capturing()
++                true
+```
+
+The source diff was displayed before compiling. The named lifecycle case
+`observation_requires_exact_capturing_envelope_and_never_runs_rejected_closures`
+went **RED: Some(()) vs None, 0 passed / 1 failed**; the named Settings integration
+went **RED: Some(true) vs None, 0 passed / 1 failed**. A PowerShell `finally`
+restored the original source bytes immediately; recompiling and rerunning each
+exact named test gave **1 passed / 0 failed**. No fault injection remains.
+
+Commands (compiler `rustc 1.99.1 (58cf8f9c3 2026-10-13)`; task-owned TEMP outputs,
+no Cargo/dependency/native target writes):
+
+```powershell
+rustc --edition=2021 -A dead_code --test tests/unittest/capture_startup.rs -o "$env:TEMP/notype-p19-startup-review.exe"
+# Run only after compilation exit 0:
+& "$env:TEMP/notype-p19-startup-review.exe"
+rustc --edition=2021 -A dead_code --test tests/unittest/desktop_overlay_lifecycle.rs -o "$env:TEMP/notype-p19-overlay-review.exe"
+& "$env:TEMP/notype-p19-overlay-review.exe"
+rustc --edition=2021 -A dead_code --test tests/integration/capture_readiness.rs -o "$env:TEMP/notype-p19-readiness-review.exe"
+& "$env:TEMP/notype-p19-readiness-review.exe"
+```
+
+The first RED and subsequent GREEN used the first binary with the full
+`command_queue_excludes_pre_send_recorder_lock_wait_but_readiness_cumulative_retains_it --exact`
+filter. Mutation runs used the second/third root paths and exact names above,
+task-owned `notype-p19-observe-mutant.exe` / `notype-p19-settings-mutant.exe`, and
+`-A unused_variables` only for that deliberately bypassed predicate. Compilation
+failure always stops before invoking a binary; zero-test runs are not evidence.
+
+Final affected results: **startup 5/5, lifecycle 5/5, capture report/ACK integration
+8/8: 18 passed / 0 failed**. Existing cancellation, successor, Clear and OFF/ON
+cases remain included. `node --test tests/integration/recording-overlay.ui.mjs`:
+**8 passed / 0 failed / 0 skipped**. Desktop `npm.cmd run lint` and
+`npm.cmd run build` passed; existing Vite chunk-size and baseline-browser-mapping
+advisories remain. Changed Markdown Prettier, Rust `rustfmt --edition 2021 --check`
+and `git diff --check` passed. Public handoff/gate comments and the timing contract
+now document these precise boundaries.
+
+No native Cargo/build/clippy/binding regeneration, App/profile/microphone/
+clipboard, paid API, #22 business metadata or #23 changes were performed. The
+original Right Alt short-tap-to-READY hardware delay remains unreproduced and
+unresolved; this fixes observation attribution and its test coverage, not latency.

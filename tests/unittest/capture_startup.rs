@@ -41,8 +41,10 @@ impl RecorderPort for Recorder {
         Ok(StreamDisposition::Opened)
     }
     fn request_capture(&mut self, _: (), request: ReadyRequest) -> Result<(), Self::Error> {
-        request.command_received();
-        self.signal = Some(ReadySignal::Observed(request));
+        request.send(|_, signal| {
+            signal.command_received();
+            self.signal = Some(signal);
+        });
         Ok(())
     }
 }
@@ -220,4 +222,67 @@ fn dispatch_uses_dequeue_boundary_and_command_queue_wait_is_separate_from_waiter
         .iter()
         .any(|event| event.span == CaptureSpan::CommandQueue && event.duration_ms == Some(70)));
     assert_eq!(duration(&events, CaptureSpan::WaiterScheduling), Some(0));
+}
+
+#[test]
+fn command_queue_excludes_pre_send_recorder_lock_wait_but_readiness_cumulative_retains_it() {
+    struct DelayedRecorder {
+        clock: Arc<Clock>,
+        signal: Option<ReadySignal>,
+    }
+    impl RecorderPort for DelayedRecorder {
+        type Policy = ();
+        type Error = ();
+        fn ensure_stream(&mut self) -> Result<StreamDisposition, ()> {
+            Ok(StreamDisposition::Reused)
+        }
+        fn request_capture(&mut self, _: (), ready: ReadyRequest) -> Result<(), ()> {
+            // Native adapter waits for its existing recorder guard before send.
+            self.clock.advance(120);
+            ready.send(|sent_at, signal| {
+                assert_eq!(sent_at, self.clock.now());
+                self.signal = Some(signal);
+            });
+            Ok(())
+        }
+    }
+    let clock = Arc::new(Clock {
+        origin: Instant::now(),
+        millis: AtomicU64::new(0),
+    });
+    let observer = Arc::new(Observer::default());
+    let trace = CaptureTrace::begin(
+        AcceptedAttempt {
+            ordinal: Some(13),
+            accepted_at: clock.now(),
+            dequeued_at: None,
+        },
+        Some(CollectionToken {
+            epoch: 0,
+            revision: 0,
+        }),
+        clock.clone(),
+        observer.clone(),
+    );
+    let mut recorder = DelayedRecorder {
+        clock: clock.clone(),
+        signal: None,
+    };
+    let waiter = start_recording(&mut recorder, (), trace).unwrap();
+    // Consumer scheduling is independent from the adapter's earlier lock wait.
+    clock.advance(80);
+    recorder.signal.as_ref().unwrap().command_received();
+    process_captured_chunk(&mut recorder.signal, &[0.0; 480], |_| {});
+    assert!(waiter.wait().is_some());
+    let events = observer.0.lock().unwrap();
+    assert_eq!(duration(&events, CaptureSpan::CommandQueue), Some(80));
+    assert_eq!(duration(&events, CaptureSpan::ActionCumulative), Some(120));
+    assert_eq!(
+        duration(&events, CaptureSpan::FirstChunkCumulative),
+        Some(200)
+    );
+    assert_eq!(
+        duration(&events, CaptureSpan::ProcessedCumulative),
+        Some(200)
+    );
 }

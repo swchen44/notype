@@ -75,3 +75,64 @@ fn terminal_capture_cannot_be_revived_and_delayed_hide_is_fenced_by_exact_reques
         .unwrap();
     assert_eq!(lifecycle.commit(hidden, || "stale-native-hide"), None);
 }
+
+#[test]
+fn observation_requires_exact_capturing_envelope_and_never_runs_rejected_closures() {
+    for presentation in [Presentation::Recording, Presentation::Streaming] {
+        let mut lifecycle = OverlayLifecycle::new();
+        let current = lifecycle.reserve(CaptureId(10), presentation).unwrap();
+        let mut calls = 0;
+        assert_eq!(
+            lifecycle.observe(current.capture, current.revision, || {
+                calls += 1;
+                "accepted"
+            }),
+            Some("accepted")
+        );
+        assert_eq!(calls, 1, "matching envelope is the positive control");
+        assert_eq!(
+            lifecycle.observe(current.capture, current.revision + 1, || calls += 1),
+            None
+        );
+        assert_eq!(calls, 1, "wrong revision must not execute its closure");
+        assert_eq!(
+            lifecycle.observe(CaptureId(9), current.revision, || calls += 1),
+            None
+        );
+        assert_eq!(calls, 1, "wrong capture must not execute its closure");
+    }
+}
+
+#[test]
+fn observation_rejects_working_hidden_and_successor_envelopes_without_running_closures() {
+    let mut lifecycle = OverlayLifecycle::new();
+    let capture = CaptureId(11);
+    let old = lifecycle.reserve(capture, Presentation::Recording).unwrap();
+    let mut calls = 0;
+    for stage in [
+        Presentation::Transcribing,
+        Presentation::Processing,
+        Presentation::Hidden,
+    ] {
+        let current = lifecycle.reserve(capture, stage).unwrap();
+        assert_eq!(
+            lifecycle.observe(capture, current.revision, || calls += 1),
+            None,
+            "even the current revision cannot authorize a noncapturing stage"
+        );
+        assert_eq!(calls, 0);
+    }
+    let successor = lifecycle
+        .reserve(CaptureId(12), Presentation::Streaming)
+        .unwrap();
+    assert_eq!(
+        lifecycle.observe(old.capture, old.revision, || calls += 1),
+        None
+    );
+    assert_eq!(calls, 0, "old ACK cannot run against a successor capture");
+    assert_eq!(
+        lifecycle.observe(successor.capture, successor.revision, || calls += 1),
+        Some(())
+    );
+    assert_eq!(calls, 1, "successor's own capturing envelope remains valid");
+}

@@ -396,6 +396,8 @@ impl AudioRecorder {
     }
 
     /// Observed production handoff; readiness still follows real chunk processing.
+    /// The caller already holds the recorder guard. Stamp immediately around the
+    /// actual channel send so command-queue timing excludes that earlier wait.
     pub fn start_observed(
         &self,
         policy: VadPolicy,
@@ -405,8 +407,7 @@ impl AudioRecorder {
             .cmd_tx
             .as_ref()
             .ok_or_else(|| Error::other("Recorder is not open"))?;
-        let sent_at = ready.sent_at();
-        sender.send(Cmd::Start(policy, sent_at, ReadySignal::Observed(ready)))?;
+        ready.send(|sent_at, signal| sender.send(Cmd::Start(policy, sent_at, signal)))?;
         Ok(())
     }
 

@@ -139,3 +139,10 @@ The Rust contracts are std-only and may run with `rustc --edition=2021 --test
 `capture-startup` / `capture-readiness` in the existing desktop-contracts harness
 and Linux CI. CLI/unit legacy recorder handoffs preserve their prior semantics.
 See [exact timing/privacy contract](../docs/capture-readiness-timing.md).
+
+The approved [P19 review fixes](https://github.com/swchen44/notype/issues/19#issuecomment-6399305016)
+add a 120ms pre-send recorder-wait / 80ms consumer-delay regression at the actual
+`ReadyRequest::send` handoff, plus direct `OverlayLifecycle::observe` positive and
+rejected-closure cases in the existing `overlay-lifecycle` target. The report/ACK
+integration also verifies Settings uses that outer revision gate before dedup.
+These are synthetic attribution tests; native hardware delay is not reproduced.
