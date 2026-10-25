@@ -36,4 +36,4 @@
 
 按主視窗的 X 會收至 Windows 通知區；可從 notype 托盤重新開啟視窗，或從托盤選單結束程式。
 
-實際麥克風、人聲品質及實體快捷鍵仍需在你的使用環境試用。合成語音、程式審查與效能數據見 [Qwen 驗證](verification/qwen3-quality.md) 及 [審查紀錄](verification/local-code-review.md)；這些結果不代表完整 session p95、公司環境或五個 App 驗收通過。
+實際麥克風、人聲品質及實體快捷鍵仍需在你的使用環境試用。[完整套件驗證](verification/portable-local-assembly.md) 記錄實際離線安裝、CPU 辨識、GUI 與限定更新結果；合成語音、程式審查與效能數據另見 [Qwen 驗證](verification/qwen3-quality.md) 及 [審查紀錄](verification/local-code-review.md)。這些結果不代表完整 session p95、公司環境或五個 App 驗收通過。

@@ -52,7 +52,7 @@ Qwen 固定 6 cases／12 次推論與新版 converter 的 3 個 native 保存案
 
 使用者已確認目前不在公司網路，先完成本機版本。公司 API／Proxy 維持未驗收，現在不需要 key，也不另選公開 provider。
 
-七個已合入的實作／修正 worktrees 已清理，branch commits 與外部證據保留；目前只留下 active packaging worktree。唯一 native target 為 `D:/git/notype-build`，舊 debug／core target 已退役，不能重建第二份來迴避 cache 使用權。獨立 C++ prefix 是 `%LOCALAPPDATA%/notype-study/build-cache/native-prebuilt/transcribe-cpp-0.2.4-win64-cpu-release-E4b0TR`；舊 tcs 是指向已刪 debug 的 junction，不能當作獨立備份。清理只限確認 idle、驗證絕對範圍且不跟隨 reparse point 的 task-owned derived files；不得清除模型、歷史、來源 registry、系統或 pagefile。
+八個已合入的實作／修正 worktrees 均已清理，branch commits 與外部證據保留；目前只剩主整合 worktree。後續實作從最新整合分支建立新 worktree。唯一 native target 為 `D:/git/notype-build`，舊 debug／core target 已退役，不能重建第二份來迴避 cache 使用權。獨立 C++ prefix 是 `%LOCALAPPDATA%/notype-study/build-cache/native-prebuilt/transcribe-cpp-0.2.4-win64-cpu-release-E4b0TR`；舊 tcs 是指向已刪 debug 的 junction，不能當作獨立備份。清理只限確認 idle、驗證絕對範圍且不跟隨 reparse point 的 task-owned derived files；不得清除模型、歷史、來源 registry、系統或 pagefile。完整本機包與失敗／成功細節見 [套件驗證](docs/verification/portable-local-assembly.md)。
 
 ## 接手時特別保留的邊界
 
