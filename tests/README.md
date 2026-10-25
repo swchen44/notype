@@ -14,6 +14,7 @@ tests/
 - integration：`npm.cmd run test:integration`
 - 安全診斷報告：`node --test tests/unittest/diagnostic-issue.test.mjs`；Rust 公開報告與實際檔案匯出邊界使用 `rustc --edition=2021 -A dead_code --test tests/unittest/desktop_diagnostics.rs -o "$env:TEMP/notype-diagnostics-unit.exe"`、`rustc --edition=2021 -A dead_code --test tests/integration/desktop_diagnostics.rs -o "$env:TEMP/notype-diagnostics-export.exe"`，各編譯成功後執行對應 exe。亦註冊為 desktop-contracts 的 `desktop-diagnostics`／`diagnostics-export` targets；只讀寫自有暫存 fixture，不啟動 App。驗證與操作說明見 [診斷 receipt](../docs/verification/diagnostics.md)。
 - npm portable foundation：`node --test tests/unittest/portable-package.test.mjs tests/integration/portable-cli.test.mjs tests/integration/portable-tarball.test.mjs`。使用合成檔案與真正本機 npm tarball；不啟動 App、不含模型／runtime 大檔，詳見 [封裝契約](../packages/ASSEMBLY.md)。
+- 保留模型的 npm 交付 gate：`node --test tests/integration/portable-retained-model-install.test.mjs`。真正 tiny npm tarballs／fresh cache／不可用 model tgz，驗證兩個新角色可保留同版模型 metadata/lock；版本不符必須失敗。只在 npm 結束後才補齊 tiny weight，再以公開完整性檢查確認。沒有真實 App／模型／使用者 prefix 操作，見 [Section A receipt](../docs/verification/retained-model-install.md)。
 - local model activation：`node --test tests/integration/portable-model.test.mjs`，實際檔案、取消、並行與程序中斷後重啟；不讀寫使用者設定或選取模型。
 - native portable preflight：`cargo test --locked --manifest-path crates/notype-platform/Cargo.toml`。獨立 Rust adapter/probe，不需 Tauri、ORT／C++；實際 App Release 啟動另做驗收。
 - 真實 CPU／Edge smoke：`npm.cmd run test:runtime`，需先準備固定模型、CLI、WAV 與 Edge；見 [runtime receipt](../docs/verification/windows11-preflight.md)。缺少必要檔案會失敗，不會 skip。
