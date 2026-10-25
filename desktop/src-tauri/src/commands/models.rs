@@ -1,4 +1,5 @@
 use crate::managers::model::{ModelInfo, ModelManager};
+use crate::managers::model_storage::ModelPathAccess;
 use crate::managers::transcription::{ModelStateEvent, TranscriptionManager};
 use crate::settings::{get_settings, write_settings, ModelUnloadTimeout};
 use log::error;

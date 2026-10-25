@@ -16,6 +16,7 @@ mod physical_shortcuts;
 mod clipboard;
 mod commands;
 mod data_policy;
+mod diagnostic_files;
 mod diagnostics;
 mod helpers;
 mod input;
@@ -792,6 +793,9 @@ pub fn run(cli_args: CliArgs) {
             commands::get_log_dir_path,
             commands::set_log_level,
             commands::diagnostics::get_diagnostic_report,
+            commands::diagnostics::get_diagnostic_status,
+            commands::diagnostics::set_diagnostics_enabled,
+            commands::diagnostics::clear_diagnostics,
             commands::diagnostics::export_diagnostic_report,
             commands::open_recordings_folder,
             commands::open_log_dir,
@@ -972,6 +976,11 @@ pub fn run(cli_args: CliArgs) {
         // A future stable facade adapter must preserve explicit data overrides.
         .manage(cli_args.clone())
         .setup(move |app| {
+            // Structured collection starts OFF/uninitialized. Load only its
+            // dedicated bounded preference before retaining any startup event.
+            let diagnostic_preference = portable::app_data_dir(app.handle()).ok()
+                .map(|directory| directory.join("diagnostics-preferences.json"));
+            diagnostics::service::global().initialize(Arc::new(diagnostic_files::FileStorage::new(diagnostic_preference)));
             let diagnostic_startup_started = std::time::Instant::now();
             diagnostics::record(diagnostics::Phase::Startup, diagnostics::Outcome::Started, None);
             #[cfg(target_os = "windows")]

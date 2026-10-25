@@ -3,16 +3,17 @@
 
 use std::collections::VecDeque;
 use std::fmt::Write as _;
-use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Mutex, OnceLock};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
+#[path = "diagnostic_privacy.rs"]
+mod privacy;
+#[path = "diagnostic_service.rs"]
+pub mod service;
 
 /// Maximum app-run stage records retained; older records are discarded first.
 pub const MAX_EVENTS: usize = 128;
 const MAX_DURATION_MS: u64 = 86_400_000;
 static REPORT_SEQUENCE: AtomicU64 = AtomicU64::new(0);
-static EVENTS: OnceLock<Mutex<Diagnostics>> = OnceLock::new();
 
 macro_rules! labels {
     ($doc:literal, $name:ident { $($variant:ident => $label:literal),+ $(,)? }) => {
@@ -96,17 +97,9 @@ impl Report {
     pub fn text(&self) -> &str {
         &self.text
     }
-
-    /// Saves the immutable, previously reviewed snapshot. Never returns a path
-    /// or an OS error message; the native adapter owns the explicit dialog.
-    pub fn export_to(&self, path: &Path) -> Result<(), &'static str> {
-        if path.extension().and_then(|extension| extension.to_str()) != Some("txt") {
-            return Err("diagnostic-extension-invalid");
-        }
-        std::fs::write(path, self.text.as_bytes()).map_err(|_| "diagnostic-save-failed")
-    }
 }
 
+#[derive(Clone)]
 struct Event {
     elapsed_ms: u64,
     phase: Phase,
@@ -117,10 +110,16 @@ struct Event {
 /// In-memory, instance-owned stage ring and monotonic elapsed-time origin.
 /// Retains at most MAX_EVENTS, clamps durations to 24 hours and accepts no
 /// freeform messages. Dropping it discards its events; nothing is persisted.
+#[derive(Clone)]
 pub struct Diagnostics {
     started: Instant,
     events: VecDeque<Event>,
     discarded: u64,
+}
+impl Default for Diagnostics {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Diagnostics {
@@ -159,7 +158,11 @@ impl Diagnostics {
             .unwrap_or_default()
             .as_nanos();
         let id = format!("{:016x}-{:08x}", tick as u64, sequence as u32);
-        let version = safe_version(context.version);
+        // All other field values are finite enums/booleans/bounded numbers.
+        // Credential fields cannot enter this renderer's fixed field set.
+        let version =
+            privacy::sanitize_field("version", context.version, privacy::Encoding::Metadata)
+                .unwrap_or_else(|| "unavailable".into());
         let mut text = format!(
             "notype diagnostic report v1\nreport_id={id}\nversion={version}\nplatform={}\nlog_level={}\ndebug_mode={}\nalways_on_microphone={}\nmodel_selected={}\nmodel_available={}\nmodel_is_custom={}\nlocal_log={}\nevents_retained={}\nevents_discarded={}\n\nEmpty logs do not establish that no errors occurred.\nOnly bounded stage metadata is included. Raw logs, audio, transcripts, text results, endpoints, secrets, paths and device identifiers are excluded.\nEvents are from this app run only; elapsed_ms is relative to diagnostic initialization.\n\n",
             context.platform.label(), context.log_level.label(), context.debug_mode,
@@ -188,38 +191,9 @@ impl Diagnostics {
     }
 }
 
-fn safe_version(version: &str) -> &str {
-    if !version.is_empty()
-        && version.len() <= 32
-        && version
-            .bytes()
-            .all(|value| value.is_ascii_digit() || value == b'.')
-        && version.bytes().any(|value| value.is_ascii_digit())
-    {
-        version
-    } else {
-        "unavailable"
-    }
-}
-
-/// App-run collector, initialized lazily by the first record or report call.
-/// The process owns its bounded ring until exit. A poisoned lock cannot panic
-/// the product path; only typed codes and a bounded duration can be recorded.
+/// Shared app-run collector facade. First use creates an uninitialized/OFF
+/// service; records remain dropped until preference initialization enables it.
+/// Only typed codes and a bounded duration can cross this boundary.
 pub fn record(phase: Phase, outcome: Outcome, duration_ms: Option<u64>) {
-    let mut diagnostics = EVENTS
-        .get_or_init(|| Mutex::new(Diagnostics::new()))
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    diagnostics.record(phase, outcome, duration_ms);
-}
-
-/// Snapshots the global app-run ring, initializing an empty ring if needed.
-/// The caller owns the immutable result; collecting more events leaves it
-/// unchanged. This function never reads raw log/settings/history documents.
-pub fn report(context: ReportContext<'_>) -> Report {
-    EVENTS
-        .get_or_init(|| Mutex::new(Diagnostics::new()))
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .report(context)
+    service::global().record(phase, outcome, duration_ms);
 }

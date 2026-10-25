@@ -22,7 +22,7 @@ pub enum StorageSource {
     /// supplies an existing snapshot path; a local mirror file is the fallback.
     HuggingFace {
         /// Existing snapshot path returned by HF cache lookup, if available.
-        cached_path: Option<PathBuf>
+        cached_path: Option<PathBuf>,
     },
     /// A custom or legacy local model under the configured models directory.
     Local,
@@ -53,6 +53,33 @@ impl fmt::Display for StorageError {
 }
 impl std::error::Error for StorageError {}
 
+/// The production manager decision boundary. Native Manager supplies catalog
+/// lookup/reconciliation hooks; both native callers and portable fixtures use
+/// these exact methods, so display cannot accidentally select activation policy.
+pub trait ModelPathAccess {
+    /// Adapter error type, preserving storage failures without Tauri coupling.
+    type Error: From<StorageError>;
+    /// Obtain one owned metadata/cache snapshot without changing catalog state.
+    fn storage_snapshot(&self, model_id: &str) -> Result<ModelStorage, Self::Error>;
+    /// Reconcile missing availability while preserving the saved selection.
+    fn reconcile_missing(&self, model_id: &str);
+    /// Display an existing completed model without cleanup or reconciliation.
+    fn get_model_path_for_display(&self, model_id: &str) -> Result<PathBuf, Self::Error> {
+        self.storage_snapshot(model_id)?
+            .display_path()
+            .map_err(Into::into)
+    }
+    /// Resolve for activation, retaining stale HF partial cleanup and notifying
+    /// the manager only when an advertised completed path is missing.
+    fn get_model_path(&self, model_id: &str) -> Result<PathBuf, Self::Error> {
+        let result = self.storage_snapshot(model_id)?.activation_path();
+        if matches!(result, Err(StorageError::Missing)) {
+            self.reconcile_missing(model_id);
+        }
+        result.map_err(Into::into)
+    }
+}
+
 /// An owned storage-query snapshot. Display is read-only; activation may remove
 /// a stale HF mirror partial marker after a completed file is present. Neither
 /// operation can modify the catalog or persisted model selection.
@@ -68,8 +95,20 @@ impl ModelStorage {
     /// Captures the manager's current metadata and resolved storage roots.
     /// Construction performs no I/O; filenames come from trusted discovery or
     /// catalog metadata, and an HF cached path must be resolved by the adapter.
-    pub fn new(models_dir: PathBuf, filename: String, is_directory: bool, state: DownloadState, source: StorageSource) -> Self {
-        Self { models_dir, filename, is_directory, state, source }
+    pub fn new(
+        models_dir: PathBuf,
+        filename: String,
+        is_directory: bool,
+        state: DownloadState,
+        source: StorageSource,
+    ) -> Self {
+        Self {
+            models_dir,
+            filename,
+            is_directory,
+            state,
+            source,
+        }
     }
 
     /// Resolves an already completed model without deleting partial files or
@@ -97,7 +136,9 @@ impl ModelStorage {
             if let Some(cached) = cached_path {
                 return Ok(cached.clone());
             }
-            if !path.exists() { return Err(StorageError::Missing); }
+            if !path.exists() {
+                return Err(StorageError::Missing);
+            }
             if cleanup_stale_partial && partial.exists() {
                 // Best-effort cleanup is the pre-existing activation policy.
                 let _ = std::fs::remove_file(partial);
@@ -107,7 +148,9 @@ impl ModelStorage {
         if !path.exists() || (self.is_directory && !path.is_dir()) {
             return Err(StorageError::Missing);
         }
-        if partial.exists() { return Err(StorageError::Incomplete); }
+        if partial.exists() {
+            return Err(StorageError::Incomplete);
+        }
         Ok(path)
     }
 }

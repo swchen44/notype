@@ -184,17 +184,33 @@ test("quality receipt opener failures are translated and a retry clears the erro
   const unhandled = [];
   page.on("pageerror", (error) => unhandled.push(error.message));
   await page.evaluate(() => {
-    window.renderCard({model: {...window.fixtureModel, filename: "Qwen3-ASR-0.6B-Q6_K.gguf"}});
-    window.__TAURI_INTERNALS__.invoke = async () => { throw new Error("synthetic private opener failure"); };
+    window.renderCard({
+      model: { ...window.fixtureModel, filename: "Qwen3-ASR-0.6B-Q6_K.gguf" },
+    });
+    window.__TAURI_INTERNALS__.invoke = async () => {
+      throw new Error("synthetic private opener failure");
+    };
   });
-  await page.getByText("Advanced model information", {exact: true}).click();
-  await page.getByRole("button", {name: "Read the Qwen verification receipt"}).click({timeout: 3000});
-  await page.getByRole("alert").filter({hasText: "Unable to open the quality report. Please try again."}).waitFor({timeout: 3000});
-  assert.doesNotMatch(await page.locator("body").innerText(), /synthetic private/);
+  await page.getByText("Advanced model information", { exact: true }).click();
+  await page
+    .getByRole("button", { name: "Read the Qwen verification receipt" })
+    .click({ timeout: 3000 });
+  await page
+    .getByRole("alert")
+    .filter({ hasText: "Unable to open the quality report. Please try again." })
+    .waitFor({ timeout: 3000 });
+  assert.doesNotMatch(
+    await page.locator("body").innerText(),
+    /synthetic private/,
+  );
   assert.deepEqual(unhandled, []);
-  await page.evaluate(() => { window.__TAURI_INTERNALS__.invoke = async () => null; });
-  await page.getByRole("button", {name: "Read the Qwen verification receipt"}).click({timeout: 3000});
-  await page.getByRole("alert").waitFor({state: "detached", timeout: 3000});
+  await page.evaluate(() => {
+    window.__TAURI_INTERNALS__.invoke = async () => null;
+  });
+  await page
+    .getByRole("button", { name: "Read the Qwen verification receipt" })
+    .click({ timeout: 3000 });
+  await page.getByRole("alert").waitFor({ state: "detached", timeout: 3000 });
 });
 
 test("download UI shows actual transferred bytes and preserves verification, extraction, and missing-path states", async (t) => {

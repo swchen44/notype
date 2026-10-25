@@ -70,7 +70,9 @@ const ModelCard: React.FC<ModelCardProps> = ({
   async function openQualityReceipt() {
     setReceiptError(false);
     try {
-      await openUrl("https://github.com/swchen44/notype/blob/main/docs/verification/qwen3-quality.md");
+      await openUrl(
+        "https://github.com/swchen44/notype/blob/main/docs/verification/qwen3-quality.md",
+      );
     } catch {
       setReceiptError(true);
     }
@@ -354,7 +356,11 @@ const ModelCard: React.FC<ModelCardProps> = ({
               >
                 {t("notype.modelExplorer.qwenReceipt")}
               </button>
-              {receiptError && <p role="alert">{t("notype.modelExplorer.qwenReceiptFailed")}</p>}
+              {receiptError && (
+                <p role="alert">
+                  {t("notype.modelExplorer.qwenReceiptFailed")}
+                </p>
+              )}
             </div>
           )}
         </div>

@@ -1,7 +1,7 @@
 use super::model_capabilities::{
     CapabilityProbe, CapabilityProber, Compatibility, GgufHeaderProber,
 };
-use super::model_storage::{DownloadState, ModelStorage, StorageError, StorageSource};
+use super::model_storage::{DownloadState, ModelPathAccess, ModelStorage, StorageSource};
 use crate::settings::{get_settings, write_settings};
 use anyhow::Result;
 use flate2::read::GzDecoder;
@@ -2554,23 +2554,6 @@ impl ModelManager {
         let _ = self.app_handle.emit("models-updated", ());
     }
 
-    /// Resolve a model for activation, retaining HF mirror partial cleanup and
-    /// reconciling a missing catalog entry while preserving its saved selection.
-    pub fn get_model_path(&self, model_id: &str) -> Result<PathBuf> {
-        let result = self.storage_for_model(model_id)?.activation_path();
-        if matches!(result, Err(StorageError::Missing)) {
-            self.mark_model_unavailable(model_id);
-        }
-        result.map_err(|error| anyhow::anyhow!("{}: {}", error, model_id))
-    }
-
-    /// Resolve an existing completed model for display without cleaning files or
-    /// changing catalog availability. Missing/incomplete models remain errors.
-    pub fn get_model_path_for_display(&self, model_id: &str) -> Result<PathBuf> {
-        self.storage_for_model(model_id)?.display_path()
-            .map_err(|error| anyhow::anyhow!("{}: {}", error, model_id))
-    }
-
     fn storage_for_model(&self, model_id: &str) -> Result<ModelStorage> {
         let model_info = self
             .get_model_info(model_id)
@@ -2584,13 +2567,20 @@ impl ModelManager {
             DownloadState::Complete
         };
         let source = match &model_info.source {
-            ModelSource::HuggingFace {repo_id, revision} => StorageSource::HuggingFace {
+            ModelSource::HuggingFace { repo_id, revision } => StorageSource::HuggingFace {
                 cached_path: matches!(state, DownloadState::Complete)
-                    .then(|| hf_cached_path(repo_id, revision, &model_info.filename)).flatten(),
+                    .then(|| hf_cached_path(repo_id, revision, &model_info.filename))
+                    .flatten(),
             },
             _ => StorageSource::Local,
         };
-        Ok(ModelStorage::new(self.models_dir.clone(), model_info.filename, model_info.is_directory, state, source))
+        Ok(ModelStorage::new(
+            self.models_dir.clone(),
+            model_info.filename,
+            model_info.is_directory,
+            state,
+            source,
+        ))
     }
 
     pub fn cancel_download(&self, model_id: &str) -> Result<()> {
@@ -2625,6 +2615,16 @@ impl ModelManager {
 
         info!("Download cancellation initiated for: {}", model_id);
         Ok(())
+    }
+}
+
+impl ModelPathAccess for ModelManager {
+    type Error = anyhow::Error;
+    fn storage_snapshot(&self, model_id: &str) -> Result<ModelStorage> {
+        self.storage_for_model(model_id)
+    }
+    fn reconcile_missing(&self, model_id: &str) {
+        self.mark_model_unavailable(model_id);
     }
 }
 
