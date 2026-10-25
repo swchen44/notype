@@ -1,4 +1,5 @@
 //! Explicit OpenAI-compatible chat transport, not a company API assertion.
+use notype_core::gateway_error::GatewayError;
 use notype_core::observations::{
     ApiCallDescriptor, ApiCallGuard, ApiCallObserver, ApiEndpointClass, ApiOutcome,
     ApiProviderProfile, ApiPurpose, ApiReceipt,
@@ -579,6 +580,7 @@ impl ChatProcessor {
                 }
                 let mut response = request.send().await.map_err(failure)?;
                 let success = response.status().is_success();
+                let status_error = GatewayError::from_status(response.status().as_u16());
                 let mut bytes = Vec::new();
                 while let Some(chunk) = response.chunk().await.map_err(failure)? {
                     if bytes.len().saturating_add(chunk.len()) > 1_048_576 {
@@ -587,7 +589,9 @@ impl ChatProcessor {
                     bytes.extend_from_slice(&chunk);
                 }
                 let value: Value = serde_json::from_slice(&bytes).map_err(|_| {
-                    if success {
+                    if let Some(error) = status_error {
+                        TextFailure::Provider(error)
+                    } else if success {
                         TextFailure::InvalidResponse
                     } else {
                         TextFailure::Failed
@@ -597,7 +601,7 @@ impl ChatProcessor {
                     guard.response(ApiReceipt::from_chat_json(&value));
                 }
                 if !success {
-                    return Err(TextFailure::Failed);
+                    return Err(status_error.map_or(TextFailure::Failed, TextFailure::Provider));
                 }
                 let choice = &value["choices"][0];
                 if choice["finish_reason"] != "stop"
