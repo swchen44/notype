@@ -220,5 +220,9 @@ fn mixed_ring_and_large_call_population_keep_whole_rows_and_mandatory_bounds() {
     assert!(text.contains("ring_truncated=true"));
     assert!(text.contains("report_truncated="));
     assert!(text.contains("bytes_capped=true"));
+    assert!(
+        text.contains("api_call=100 "),
+        "bounded report must retain the latest failure tail"
+    );
     assert!(text.ends_with('\n'));
 }
