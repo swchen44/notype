@@ -52,6 +52,18 @@ async fn fixture(
     oneshot::Receiver<Value>,
     tokio::task::JoinHandle<()>,
 ) {
+    fixture_status(body, delay, 200).await
+}
+
+async fn fixture_status(
+    body: &str,
+    delay: Duration,
+    status: u16,
+) -> (
+    String,
+    oneshot::Receiver<Value>,
+    tokio::task::JoinHandle<()>,
+) {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let endpoint = format!(
         "http://{}/v1/chat/completions",
@@ -90,7 +102,7 @@ async fn fixture(
         }
         let _ = sender.send(serde_json::from_slice(&bytes[end..end + length]).unwrap());
         tokio::time::sleep(delay).await;
-        let response = format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len());
+        let response = format!("HTTP/1.1 {status} Fixture\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len());
         let _ = stream.write_all(response.as_bytes()).await;
     });
     (endpoint, receiver, server)
@@ -1150,4 +1162,36 @@ async fn real_workflow_http_receipts_export_with_exact_text_and_no_transport_sec
     assert!(!text.contains(&endpoint));
     assert!(!text.contains("Authorization"));
     assert!(!text.contains("messages"));
+}
+
+#[tokio::test]
+async fn unauthorized_html_keeps_original_and_safe_auth_category_after_sqlite_restart() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("sessions.db");
+    let workflow = DesktopWorkflow::new(SessionService::open(&path).unwrap(), Arc::new(|| {}));
+    let (endpoint, request, server) = fixture_status(
+        "<html>Bearer private-key-sentinel https://private.test/?token=secret</html>",
+        Duration::ZERO,
+        401,
+    )
+    .await;
+    let recording = workflow
+        .begin(RecognitionMode::TraditionalEnglish, None)
+        .unwrap();
+    let entry = workflow
+        .finish(recording, "recover original", configured(endpoint), vec![])
+        .await
+        .unwrap();
+    request.await.unwrap();
+    server.await.unwrap();
+    assert_eq!(entry.status, SessionStatus::Failed);
+    assert_eq!(entry.transcript, "recover original");
+    assert_eq!(entry.result, None);
+    assert_eq!(entry.api_summary.call_count, Some(1));
+    assert_eq!(entry.error.as_deref(), Some("provider-auth"));
+    let id = entry.id;
+    drop(workflow);
+    let reopened = SessionService::open(&path).unwrap().get(&id).unwrap();
+    assert_eq!(reopened.error.as_deref(), Some("provider-auth"));
+    assert_eq!(reopened.transcript, "recover original");
 }
