@@ -1,5 +1,85 @@
 # P25-live-v4 source verification
 
+## Final candidate source checkpoint — 2026-10-26
+
+Reviewed candidate `fd14f407d5c9c8457809eb6311b954cc56e2b4f3`, final integration
+base `0a0fc82c5568b5f5f774dba15c7a663568b79fb8`, is merged preserving history as
+`8ba271a180f7385c9f1972af7d1dc77abd74dd01`. Merge tree equals the reviewed
+candidate tree. Both original independent reviewers returned exact-fd14 **Spec0**
+and **Standards0** after reviewing the complete fix/composition delta; original
+Spec findings and initial Standards0 reports remain preserved. The candidate
+already composes the accepted #29 source unchanged.
+
+Authority: [live-v4](https://github.com/swchen44/notype/issues/25#issuecomment-6405986527) /
+[actual Astra0](https://github.com/swchen44/notype/issues/25#issuecomment-6406003416),
+[quality reviewfix-v1](https://github.com/swchen44/notype/issues/25#issuecomment-6409094265) /
+[actual Astra0](https://github.com/swchen44/notype/issues/25#issuecomment-6409112341),
+and [coexistence-v1](https://github.com/swchen44/notype/issues/25#issuecomment-6409393018) /
+[actual Astra0](https://github.com/swchen44/notype/issues/25#issuecomment-6409496675).
+
+The two Spec findings are resolved: exact already-saved forward text is checked
+at reverse entry before pacing/observer/reservation/send; failure halts the same
+Coordinator without erasing actual forward accounting. Finite protected-fact
+checks attach negation to deletion/slide preparation and preserve the not-five
+contrast; they do not certify general human meaning. Standards found no final
+documented-rule breaches or actionable smell advisories. The fixed deferred-npm
+resource policy uses actual QuotaGate/Windows adapters, checked arithmetic and
+monotonic retained helper peaks, with no arbitrary budget override or native
+completion/cleanup credit.
+
+The merger independently checked completed run metadata and job logs at exact
+fd14, rather than substituting prior green runs:
+
+| Exact-fd14 check | Actual result |
+| --- | --- |
+| [ALL Linux40279492394](https://github.com/swchen44/notype/actions/runs/40279492394) | completed/success; both jobs and every required step succeeded |
+| Linux helper policy / runtime | 8 / 24 passed, included in desktop234 |
+| Linux desktop contracts, 29 targets | 234 passed; inherited proxy-child role ignored in discovery and explicitly executed by its passing parent |
+| Bootstrap targets / platform / core | 19 / 4 / 49 passed; core doc1 passed |
+| Node unit / integration | 33 / 24 passed; one Windows-CMD-only integration skip on Linux |
+| UI unit / rendered integration | 3 / 94 passed; 0 failed or skipped |
+| Existing standalone offline policy / round / console | 3 / 9 / 7 passed; overlaps harness coverage |
+| [Windows40279491708](https://github.com/swchen44/notype/actions/runs/40279491708) | completed/success, push event; policy8/runtime25 and Clippy passed |
+| Windows private artifact job | explicitly skipped; no private artifact built/uploaded by that run |
+| Required formatting/Clippy/frontend lint/TypeScript/Vite | passed |
+
+Windows hosted contracts execute owned HTTP/SQLite/filesystem/API and unpinned
+ordinary-binary invalid-argument checks. They do not establish the future
+downloaded, source-pinned same-binary no-key check or live readiness. Linux's
+Windows-CMD skip is not counted as native App acceptance. The original
+[8195 full ALL40277906369](https://github.com/swchen44/notype/actions/runs/40277906369)
+About-settings acknowledgement failure remains preserved below, despite that
+pin's successful Rust and Windows contracts. The named actual behavioral
+RED/GREEN histories below remain evidence; compile/lint failures are not RED.
+
+All receipt/HANDOFF/TODO/registration status changes are assembled before the
+next integration freeze **S**. These fd14 reviews/runs do **not** claim exact-S
+success: root must repin both reviewers to the complete final delta and verify
+completed ALL Linux plus Windows contracts at that exact clean S before any
+registration/artifact/native gate. No later documentation-only commit may be
+silently substituted for S.
+
+[Workflow-registration-v1](https://github.com/swchen44/notype/issues/25#issuecomment-6409029819) /
+[actual Astra0](https://github.com/swchen44/notype/issues/25#issuecomment-6409066492)
+is approved but not executed. The Windows workflow Git blob remains byte-identical:
+SHA256 `1c80d99fe0b5cfef171fc64bdb3a1e6ec146b99325dd766acb866e5a10fcb8c8`.
+Main is not modified by this merger. Private artifact dispatch/download/service
+digest/PE/import/closure/source verification, same downloaded binary no-key check,
+fresh public contract/free-tier evidence and actual coexistence resource admission
+remain separate. No real key read, public metadata fetch, live/API request or
+spend occurred; Gemini stays sealed and old source41 remains frozen/unlaunched.
+
+P14 runner preparation/read-only audit is not a native build; its input audit
+still needs final source/artifact admission. [Optional npm remains deferred](https://github.com/swchen44/notype/issues/14#issuecomment-6409002692)
+while complete ZIP/extraction/native QA, runtime floors and all retained
+reservations remain. #25/#14/#29/#8 and live/native/full-ZIP/company/five-App
+acceptance remain open. All source/merger leases are returned after this docs
+commit; worktrees, references and old artifacts remain preserved. No local
+Cargo/native build, App, user profile/model/home/key or cleanup operation here.
+
+The remaining sections preserve earlier pin-specific evidence; their pending
+status statements are historical and superseded by this checkpoint and live issues.
+
 [Exact plan](https://github.com/swchen44/notype/issues/25#issuecomment-6405986527),
 [GPT-6-Astra APPROVED / zero unresolved](https://github.com/swchen44/notype/issues/25#issuecomment-6406003416).
 Worktree `provider-probe-v4`, branch `ticket/25-provider-probe-v4`, initially
