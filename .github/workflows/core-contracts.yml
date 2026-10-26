@@ -49,6 +49,9 @@ on:
       - desktop/src-tauri/src/transcription_coordinator.rs
       - desktop/src/lib/diagnosticIssue.ts
       - desktop/src-tauri/src/provider_*.rs
+      - desktop/src-tauri/src/offline_bootstrap*.rs
+      - desktop/src-tauri/src/settings.rs
+      - desktop/src-tauri/src/lib.rs
       - desktop/src-tauri/src/faithful_provider.rs
       - desktop/src-tauri/src/recognition.rs
       - desktop/src-tauri/src/physical_gestures.rs
@@ -121,6 +124,8 @@ jobs:
         run: rustup toolchain install 1.99.1 --profile minimal --component rustfmt --component clippy
       - name: Check core formatting
         run: cargo +1.99.1 fmt --manifest-path crates/notype-core/Cargo.toml -- --check
+      - name: Exercise first-use bootstrap without native dependencies
+        run: cargo +1.99.1 test --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test provider-bootstrap
       - name: Check platform adapter formatting
         run: cargo +1.99.1 fmt --manifest-path crates/notype-platform/Cargo.toml -- --check
       - name: Exercise the native launch policy without Tauri or speech engines
