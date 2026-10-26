@@ -121,6 +121,16 @@ pub fn quality(slot: Slot, text: &str) -> bool {
     {
         return false;
     }
+    let chinese = text.chars().any(|c| matches!(c as u32, 0x3400..=0x9fff));
+    let english_target = matches!(slot.purpose, Purpose::Translation | Purpose::ForwardReview);
+    if slot.purpose != Purpose::Connection
+        && (chinese == english_target
+            || ["here is", "here's", "以下是", "以下為", "這是翻譯", "```"]
+                .iter()
+                .any(|prefix| text.to_ascii_lowercase().starts_with(prefix)))
+    {
+        return false;
+    }
     match slot.purpose {
         Purpose::Connection => text == "OK",
         Purpose::Dictation | Purpose::Translation => {

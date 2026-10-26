@@ -66,6 +66,12 @@ fn openrouter_configuration(owned: &OwnedLoopback) -> TextConfiguration {
 async fn owned_openrouter_response(
     reply: Value,
 ) -> (notype_core::SessionEntry, Value, AdverseLatch) {
+    owned_openrouter_status(200, reply).await
+}
+async fn owned_openrouter_status(
+    status: u16,
+    reply: Value,
+) -> (notype_core::SessionEntry, Value, AdverseLatch) {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let owned = OwnedLoopback::from_listener(&listener).unwrap();
     listener.set_nonblocking(true).unwrap();
@@ -101,7 +107,7 @@ async fn owned_openrouter_response(
         stream
             .write_all(
                 format!(
-                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    "HTTP/1.1 {status} Fixture\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
                     response.len(),
                     response
                 )
@@ -132,6 +138,66 @@ async fn owned_openrouter_response(
         .await
         .unwrap();
     (result, server.await.unwrap(), latch)
+}
+
+#[tokio::test]
+async fn sealed_response_rejects_incoherent_usage_reasoning_and_model_but_retains_actual_receipt() {
+    let mut cases = vec![];
+    for (field, value) in [
+        ("prompt_tokens", json!(32769)),
+        ("completion_tokens", json!(513)),
+        ("total_tokens", json!(8)),
+        ("cost", json!("0")),
+        ("cost", json!(-1)),
+        ("cost", Value::Null),
+    ] {
+        let mut reply = good_reply();
+        reply["usage"][field] = value;
+        cases.push(reply);
+    }
+    let mut reply = good_reply();
+    reply["model"] = json!("");
+    cases.push(reply);
+    let mut reply = good_reply();
+    reply["usage"]["completion_tokens_details"] = json!({"reasoning_tokens":1});
+    cases.push(reply);
+    let mut reply = good_reply();
+    reply["usage"]["prompt_tokens_details"] = json!({"cached_tokens":6});
+    cases.push(reply);
+    let mut reply = good_reply();
+    reply["choices"][0]["message"]["reasoning_content"] = json!("synthetic unwanted reasoning");
+    cases.push(reply);
+    for reply in cases {
+        let (entry, _, latch) = owned_openrouter_response(reply).await;
+        assert_eq!(entry.error.as_deref(), Some("llm-invalid-response"));
+        assert_eq!(entry.api_summary.call_count, Some(1));
+        assert!(latch.observed().is_some());
+        assert!(entry.result.is_none());
+        assert!(entry.api_summary.fees.totals.is_empty());
+    }
+}
+
+#[tokio::test]
+async fn authoritative_non_success_status_cannot_be_hidden_by_a_valid_zero_cost_body() {
+    for (status, code) in [
+        (401, "provider-auth"),
+        (402, "provider-balance"),
+        (429, "provider-rate-limit"),
+        (500, "provider-unavailable"),
+        (503, "provider-unavailable"),
+    ] {
+        let (entry, _, latch) = owned_openrouter_status(status, good_reply()).await;
+        assert_eq!(entry.error.as_deref(), Some(code));
+        assert_eq!(
+            latch.observed(),
+            Some(AdverseSignal {
+                category: AdverseCategory::Http,
+                http_status: Some(status)
+            })
+        );
+        assert_eq!(entry.api_summary.call_count, Some(1));
+        assert!(entry.result.is_none());
+    }
 }
 
 async fn adverse_headers_case(off_before: bool) {
