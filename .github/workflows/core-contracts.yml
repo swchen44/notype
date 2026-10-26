@@ -35,6 +35,8 @@ on:
       - desktop/src-tauri/src/managers/model.rs
       - desktop/src/lib/diagnosticIssue.ts
       - desktop/src-tauri/src/provider_*.rs
+      - desktop/src-tauri/src/provider_probe/**
+      - tests/integration/provider_probe_*.rs
       - desktop/src-tauri/src/faithful_provider.rs
       - desktop/src-tauri/src/recognition.rs
       - desktop/src-tauri/src/physical_gestures.rs

@@ -4,6 +4,14 @@ version = "0.0.0"
 edition = "2021"
 publish = false
 
+[[test]]
+name = "provider-probe-policy"
+path = "../../unittest/provider_probe_policy.rs"
+
+[[test]]
+name = "provider-probe-runtime"
+path = "../provider_probe_contracts.rs"
+
 [workspace]
 
 [[bin]]
