@@ -2,6 +2,17 @@
 #[path = "../../desktop/src-tauri/src/provider_probe/policy.rs"]
 mod policy;
 use policy::*;
+#[allow(dead_code)]
+#[path = "../../desktop/src-tauri/src/provider_probe/journal.rs"]
+mod journal;
+fn identity() -> journal::Identity {
+    journal::Identity {
+        source: "a".repeat(40),
+        policy_sha256: "b".repeat(64),
+        corpus_sha256: "c".repeat(64),
+        contract_sha256: vec!["d".repeat(64); 6],
+    }
+}
 #[test]
 fn immutable_round_has_eight_paid_four_free_and_four_sealed_slots() {
     let slots = schedule();
@@ -55,4 +66,120 @@ fn machine_quality_checks_keep_identifiers_decimal_negation_and_unknown_meaning_
     ));
     assert!(!quality(schedule()[12], "OK"));
     assert!(!quality(schedule()[2], "x".repeat(16_385).as_str()));
+}
+
+#[test]
+fn actual_sqlite_authorization_seals_gemini_retains_every_reservation_and_reopens_report_only() {
+    use journal::*;
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("round");
+    let mut journal = Journal::open(&path, identity()).unwrap();
+    assert!(matches!(
+        Journal::open(&path, identity()),
+        Err(Failure::AlreadyOwned)
+    ));
+    journal.arm().unwrap();
+    assert!(journal.snapshot().records[12..]
+        .iter()
+        .all(|r| r.state == State::SealedGemini));
+    for spec in schedule().iter().take(12) {
+        let history = format!("history-{}", spec.group);
+        let call = format!("actual-call-{}", spec.number);
+        journal
+            .link(
+                spec.number,
+                &history,
+                &call,
+                if spec.number == 8 { 2 } else { 1 },
+            )
+            .unwrap();
+        journal.reserve(spec.number, &call).unwrap();
+        journal
+            .finish(spec.number, &call, Outcome::Success)
+            .unwrap();
+        let revision = journal.snapshot().revision;
+        journal.reconciled(revision, spec.number, &call).unwrap();
+    }
+    assert_eq!(journal.snapshot().reservation_units().unwrap(), 835_584);
+    assert_eq!(journal.reserve(13, "extra"), Err(Failure::Schedule));
+    drop(journal);
+    let mut reopened = Journal::open(&path, identity()).unwrap();
+    assert!(reopened.report_only());
+    assert_eq!(reopened.arm(), Err(Failure::ReportOnly));
+    assert_eq!(reopened.snapshot().reservation_units().unwrap(), 835_584);
+}
+
+#[test]
+fn actual_sqlite_commit_failure_blocks_further_admission_without_reset_or_refund() {
+    use journal::*;
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("round");
+    let mut journal = Journal::open(&path, identity()).unwrap();
+    journal.arm().unwrap();
+    journal.link(1, "history-1", "call-1", 1).unwrap();
+    let database = rusqlite::Connection::open(path.join("round.sqlite")).unwrap();
+    database.execute_batch("CREATE TRIGGER fail_reserve BEFORE UPDATE ON reservation BEGIN SELECT RAISE(FAIL,'owned storage fault');END;").unwrap();
+    assert_eq!(journal.reserve(1, "call-1"), Err(Failure::Storage));
+    assert_eq!(journal.reserve(1, "call-1"), Err(Failure::Halted));
+    drop(database);
+    drop(journal);
+    let reopened = Journal::open(&path, identity()).unwrap();
+    assert!(reopened.report_only());
+    assert_eq!(reopened.snapshot().records[0].state, State::Linked);
+}
+
+#[test]
+fn actual_sqlite_logical_corruption_cannot_reopen_impossible_schedule_or_grouping() {
+    use journal::*;
+    for corruption in [
+        "future-slot",
+        "gemini-open",
+        "duplicate-call",
+        "wrong-group",
+        "failed-unhalted",
+        "unknown-field",
+    ] {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("round");
+        let mut journal = Journal::open(&path, identity()).unwrap();
+        journal.arm().unwrap();
+        for spec in schedule().iter().take(2) {
+            let call = format!("call-{}", spec.number);
+            journal
+                .link(spec.number, &format!("history-{}", spec.group), &call, 1)
+                .unwrap();
+            journal.reserve(spec.number, &call).unwrap();
+            journal
+                .finish(spec.number, &call, Outcome::Success)
+                .unwrap();
+            journal
+                .reconciled(journal.snapshot().revision, spec.number, &call)
+                .unwrap();
+        }
+        drop(journal);
+        let connection = rusqlite::Connection::open(path.join("round.sqlite")).unwrap();
+        let payload: String = connection
+            .query_row("SELECT payload FROM reservation", [], |row| row.get(0))
+            .unwrap();
+        let mut payload: serde_json::Value = serde_json::from_str(&payload).unwrap();
+        match corruption {
+            "future-slot" => {
+                payload["records"][4] = payload["records"][1].clone();
+                payload["records"][4]["slot"] = serde_json::json!(5);
+            }
+            "gemini-open" => payload["records"][12]["state"] = serde_json::json!("NotRun"),
+            "duplicate-call" => payload["records"][1]["call"] = serde_json::json!("call-1"),
+            "wrong-group" => payload["records"][1]["history"] = serde_json::json!("history-1"),
+            "failed-unhalted" => payload["records"][1]["outcome"] = serde_json::json!("Failed"),
+            _ => payload["foreign"] = serde_json::json!(true),
+        }
+        connection
+            .execute("UPDATE reservation SET payload=?1", [payload.to_string()])
+            .unwrap();
+        drop(connection);
+        assert!(
+            matches!(Journal::open(&path, identity()), Err(Failure::Storage)),
+            "{corruption}"
+        );
+    }
 }
