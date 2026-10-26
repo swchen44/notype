@@ -99,6 +99,31 @@ fn machine_quality_rejects_wrong_target_script_and_obvious_wrapped_prose() {
 }
 
 #[test]
+fn protected_facts_require_attached_negation_and_the_distinct_not_five_contrast() {
+    for (slot,text) in [
+        (10,"Delete session_id; keep timeout at 0.5 seconds and retain 42 API requests."),
+        (11,"刪除 session_id，timeout 設成 0.5 秒，保留 42 個 API request。"),
+        (4,"星期三下午兩點，請準備投影片。"),
+        (10,"Do not remove comments; delete session_id; timeout 0.5 seconds, not 5, and retain 42 API requests."),
+        (5,"Do not stop; delete API_42; keep timeout at 0.5 seconds."),
+        (2,"不要改動備註，刪除 session_id，timeout 0.5 秒，不是 5 秒，保留 42 個 API request。"),
+        (2,"不要刪除 session_id，timeout 設成 0.5 秒，保留 42 個 API request。"),
+        (3,"Do not delete session_id; keep timeout at 0.5 seconds and retain 42 API requests."),
+        (4,"星期三下午兩點，不用提早到場，請準備投影片。"),
+    ]{assert!(!quality(schedule()[slot-1],text),"protected fact failed for fixed slot {slot}");}
+    for (slot,text) in [
+        (2,"不得刪掉 session_id，timeout 設成 0.5 秒，而非 5 秒，保留 42 個 API request。"),
+        (3,"Don't delete the session_id; keep timeout at 0.5 seconds, not 5 seconds, and retain 42 API requests."),
+        (5,"Please do not remove API_42; keep timeout at 0.5 seconds."),
+        (6,"請勿刪除 API_42，請把 timeout 保留在 0.5 秒。"),
+        (10,"Do not delete session_id; timeout is 0.5 seconds, not 5, and retain 42 API requests."),
+        (11,"不要刪除 session_id，timeout 是 0.5 秒，不是 5 秒，保留 42 個 API request。"),
+        (4,"星期三下午2點，無需準備投影片。"),
+        (12,"下週會議改到星期三下午兩點，不用準備投影片。"),
+    ]{assert!(quality(schedule()[slot-1],text),"recognised protected facts rejected for fixed slot {slot}");}
+}
+
+#[test]
 fn actual_sqlite_authorization_seals_gemini_retains_every_reservation_and_reopens_report_only() {
     use journal::*;
     let directory = tempfile::tempdir().unwrap();
