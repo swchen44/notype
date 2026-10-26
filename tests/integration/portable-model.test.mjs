@@ -45,37 +45,25 @@ test("local model activation preserves existing history/settings and reuses veri
   assert.deepEqual(await readdir(path.join(data, "models")), ["fixture.bin"]);
 });
 
-test("only a complete verified model reaches the external process-launch seam", async (t) => {
+test("application launch preserves existing model files and never performs activation", async (t) => {
   const f = await portableFixture(t);
   const data = path.join(f.root, "process-data");
+  await mkdir(path.join(data, "models"), { recursive: true });
+  await writeFile(path.join(data, "models/fixture.bin"), "unrelated existing model");
   let launches = 0;
   const options = {
-    facadeRoot: f.facade,
-    platform: "win32",
-    arch: "x64",
-    host: { integrity: "medium" },
-    env: { NOTYPE_DATA_DIR: data },
+    facadeRoot: f.facade, platform: "win32", arch: "x64", host: { integrity: "medium" }, env: { NOTYPE_DATA_DIR: data },
     launch: async (plan) => {
       launches += 1;
-      assert.equal(
-        await readFile(path.join(data, "models/fixture.bin"), "utf8"),
-        "fixture weights",
-      );
-      assert.equal(
-        plan.environment.WEBVIEW2_BROWSER_EXECUTABLE_FOLDER,
-        path.join(f.app, "webview/156.0.4314.42"),
-      );
+      assert.equal(await readFile(path.join(data, "models/fixture.bin"), "utf8"), "unrelated existing model");
+      assert.equal(plan.environment.WEBVIEW2_BROWSER_EXECUTABLE_FOLDER, path.join(f.app, "webview/156.0.4314.42"));
       return "external-launch-boundary";
     },
   };
   assert.equal(await runApplication(options), "external-launch-boundary");
-  assert.equal(launches, 1);
-  await writeFile(
-    path.join(data, "models/fixture.bin"),
-    "unrelated existing model",
-  );
-  await assert.rejects(runApplication(options), { code: "model-conflict" });
-  assert.equal(launches, 1);
+  await writeFile(path.join(f.model, "weights/fixture.bin"), "corrupt optional bytes");
+  assert.equal(await runApplication(options), "external-launch-boundary");
+  assert.equal(launches, 2);
 });
 
 test("restart recovers an actual killed copy without publishing partial weights or deleting unrelated files", async (t) => {

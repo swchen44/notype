@@ -1,5 +1,7 @@
 use crate::actions::ACTION_MAP;
 use crate::managers::audio::AudioRecordingManager;
+use crate::managers::model_root_activity::ActivityLease;
+use crate::managers::model_roots::RootService;
 use crate::settings::ShortcutActivation;
 use log::{debug, error, warn};
 use std::sync::mpsc::{self, Sender};
@@ -169,7 +171,7 @@ enum Effect {
 
 /// Commands processed sequentially by the coordinator thread.
 enum Command {
-    Input(InputEvent),
+    Input(InputEvent, Option<ActivityLease>),
     Cancel {
         recording_was_active: bool,
         owner: crate::workflow::GenerationToken,
@@ -535,6 +537,7 @@ impl CoordinatorState {
 /// returned [`Effect`]s.
 pub struct TranscriptionCoordinator {
     tx: Sender<Command>,
+    roots: Arc<RootService>,
 }
 
 pub fn is_transcribe_binding(id: &str) -> bool {
@@ -544,10 +547,15 @@ pub fn is_transcribe_binding(id: &str) -> bool {
 impl TranscriptionCoordinator {
     pub fn new(app: AppHandle) -> Self {
         let (tx, rx) = mpsc::channel();
+        let roots = app
+            .state::<Arc<crate::managers::model::ModelManager>>()
+            .roots
+            .clone();
 
         thread::spawn(move || {
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 let mut state = CoordinatorState::new();
+                let mut pending_admission: Option<ActivityLease> = None;
 
                 loop {
                     let cmd = if let Some(deadline) = state.grace_deadline() {
@@ -556,6 +564,10 @@ impl TranscriptionCoordinator {
                             Err(mpsc::RecvTimeoutError::Timeout) => {
                                 if let Some(effect) = state.on_grace_expired() {
                                     run_effect(&app, &mut state, effect);
+                                }
+                                if state.pending_press.is_none() && state.pending_release.is_none()
+                                {
+                                    pending_admission = None;
                                 }
                                 continue;
                             }
@@ -569,9 +581,15 @@ impl TranscriptionCoordinator {
                     };
 
                     match cmd {
-                        Command::Input(input) => {
+                        Command::Input(input, reservation) => {
+                            let accepted = reservation;
                             if let Some(effect) = state.on_input(input, Instant::now()) {
                                 run_effect(&app, &mut state, effect);
+                            }
+                            if state.pending_press.is_some() || state.pending_release.is_some() {
+                                if pending_admission.is_none() {
+                                    pending_admission = accepted;
+                                }
                             }
                         }
                         Command::Cancel {
@@ -587,6 +605,9 @@ impl TranscriptionCoordinator {
                             }
                         }
                     }
+                    if state.pending_press.is_none() && state.pending_release.is_none() {
+                        pending_admission = None;
+                    }
                 }
                 debug!("Transcription coordinator exited");
             }));
@@ -595,7 +616,7 @@ impl TranscriptionCoordinator {
             }
         });
 
-        Self { tx }
+        Self { tx, roots }
     }
 
     /// Send a keyboard input event for a transcribe binding. `hold_threshold`
@@ -640,16 +661,27 @@ impl TranscriptionCoordinator {
         hold_threshold: Duration,
         external: bool,
     ) {
+        let reservation = if is_pressed {
+            match self.roots.reserve() {
+                Ok(lease) => Some(lease),
+                Err(_) => return,
+            }
+        } else {
+            None
+        };
         if self
             .tx
-            .send(Command::Input(InputEvent {
-                binding_id: binding_id.to_string(),
-                hotkey_string: hotkey_string.to_string(),
-                is_pressed,
-                mode,
-                hold_threshold,
-                external,
-            }))
+            .send(Command::Input(
+                InputEvent {
+                    binding_id: binding_id.to_string(),
+                    hotkey_string: hotkey_string.to_string(),
+                    is_pressed,
+                    mode,
+                    hold_threshold,
+                    external,
+                },
+                reservation,
+            ))
             .is_err()
         {
             warn!("Transcription coordinator channel closed");

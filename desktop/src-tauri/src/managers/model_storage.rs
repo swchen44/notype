@@ -18,6 +18,8 @@ pub enum DownloadState {
 
 /// Filesystem routing metadata, without download URLs or settings access.
 pub enum StorageSource {
+    /// A verified selected-root artifact. It has no activation cleanup policy.
+    SelectedRoot { path: PathBuf },
     /// A catalog model. The existing HF cache adapter resolves revisions and
     /// supplies an existing snapshot path; a local mirror file is the fallback.
     HuggingFace {
@@ -92,6 +94,15 @@ pub struct ModelStorage {
 }
 
 impl ModelStorage {
+    pub fn selected_root(path: PathBuf) -> Self {
+        Self {
+            models_dir: PathBuf::new(),
+            filename: String::new(),
+            is_directory: false,
+            state: DownloadState::Complete,
+            source: StorageSource::SelectedRoot { path },
+        }
+    }
     /// Captures the manager's current metadata and resolved storage roots.
     /// Construction performs no I/O; filenames come from trusted discovery or
     /// catalog metadata, and an HF cached path must be resolved by the adapter.
@@ -125,6 +136,13 @@ impl ModelStorage {
     }
 
     fn resolve(&self, cleanup_stale_partial: bool) -> Result<PathBuf, StorageError> {
+        if let StorageSource::SelectedRoot { path } = &self.source {
+            return if path.is_file() {
+                Ok(path.clone())
+            } else {
+                Err(StorageError::Missing)
+            };
+        }
         match self.state {
             DownloadState::Unavailable => return Err(StorageError::Unavailable),
             DownloadState::Downloading => return Err(StorageError::Downloading),

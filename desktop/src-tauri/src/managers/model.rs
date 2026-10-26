@@ -1,6 +1,13 @@
 use super::model_capabilities::{
     CapabilityProbe, CapabilityProber, Compatibility, GgufHeaderProber,
 };
+use super::model_root_activity::ActivityLease;
+use super::model_root_dto::*;
+use super::model_roots::{
+    ArtifactDescriptor, ArtifactKey, ArtifactRecord, ArtifactStatus, Projection, RootActivity,
+    RootService, RootStatus,
+};
+use super::model_roots_files::{display_path, ArtifactUse, FileStorage, Filesystem};
 use super::model_storage::{DownloadState, ModelPathAccess, ModelStorage, StorageSource};
 use crate::settings::{get_settings, write_settings};
 use anyhow::Result;
@@ -10,6 +17,7 @@ use hf_hub::{Cache, Repo, RepoType};
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
 use specta::Type;
+use std::collections::BTreeMap;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::fs::File;
@@ -314,6 +322,7 @@ pub fn effective_language(
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct DownloadProgress {
+    pub generation: u64,
     pub model_id: String,
     pub downloaded: u64,
     pub total: u64,
@@ -329,18 +338,6 @@ pub struct DownloadProgress {
 /// tools, which download via `main` — only have `refs/main`, so lookup falls
 /// back to it. Grandfathered `main` copies may predate the pin; per policy a
 /// working local model is never invalidated by routine catalog regeneration.
-fn hf_cached_path(repo_id: &str, revision: &str, filename: &str) -> Option<PathBuf> {
-    let get = |rev: &str| {
-        Cache::from_env()
-            .repo(Repo::with_revision(
-                repo_id.to_string(),
-                RepoType::Model,
-                rev.to_string(),
-            ))
-            .get(filename)
-    };
-    get(revision).or_else(|| (revision != "main").then(|| get("main")).flatten())
-}
 
 /// Friendly name advertised by GGUF metadata, if present. Empty strings are not
 /// useful display names, so callers can keep their filename/repo fallback.
@@ -386,6 +383,7 @@ struct HfDownloadProgress {
     app_handle: AppHandle,
     model_id: String,
     state: Arc<Mutex<HfProgressState>>,
+    activity: RootActivity,
 }
 
 struct HfProgressState {
@@ -399,10 +397,11 @@ struct HfProgressState {
 }
 
 impl HfDownloadProgress {
-    fn new(app_handle: AppHandle, model_id: String) -> Self {
+    fn new(app_handle: AppHandle, model_id: String, activity: RootActivity) -> Self {
         Self {
             app_handle,
             model_id,
+            activity,
             state: Arc::new(Mutex::new(HfProgressState {
                 total: 0,
                 downloaded: 0,
@@ -426,6 +425,7 @@ impl HfDownloadProgress {
         let _ = self.app_handle.emit(
             "model-download-progress",
             &DownloadProgress {
+                generation: self.activity.root.generation,
                 model_id: self.model_id.clone(),
                 downloaded,
                 total,
@@ -514,7 +514,7 @@ impl<'a> Drop for DownloadCleanup<'a> {
 
 pub struct ModelManager {
     app_handle: AppHandle,
-    models_dir: PathBuf,
+    pub roots: Arc<RootService>,
     available_models: Mutex<HashMap<String, ModelInfo>>,
     cancel_flags: Arc<Mutex<HashMap<String, CancellationToken>>>,
     extracting_models: Arc<Mutex<HashSet<String>>>,
@@ -529,10 +529,6 @@ impl ModelManager {
         let models_dir = crate::portable::app_data_dir(app_handle)
             .map_err(|e| anyhow::anyhow!("Failed to get app data dir: {}", e))?
             .join("models");
-
-        if !models_dir.exists() {
-            fs::create_dir_all(&models_dir)?;
-        }
 
         let mut available_models = HashMap::new();
 
@@ -1121,48 +1117,171 @@ impl ModelManager {
         // find. Additive — see `seed_catalog_models`.
         Self::seed_catalog_models(&mut available_models);
 
-        // Auto-discover custom transcribe-cpp models (.bin / .gguf) in the models directory
-        if let Err(e) = Self::discover_custom_transcribe_models(&models_dir, &mut available_models)
-        {
-            warn!("Failed to discover custom models: {}", e);
+        let mut descriptors = Vec::new();
+        for descriptor in crate::catalog::CATALOG.iter() {
+            let (repo, revision) = match &descriptor.source {
+                ModelSource::HuggingFace { repo_id, revision } => {
+                    (Some(repo_id.clone()), Some(revision.clone()))
+                }
+                _ => (None, None),
+            };
+            for file in &descriptor.files {
+                descriptors.push(ArtifactDescriptor {
+                    model_id: format!("{}/{}", repo.as_deref().unwrap_or("catalog"), file.filename),
+                    filename: file.filename.clone(),
+                    size: Some(file.size_bytes),
+                    sha256: file.sha256.clone(),
+                    repo: repo.clone(),
+                    revision: revision.clone(),
+                    directory: false,
+                });
+            }
         }
-
-        // Auto-discover transcribe-cpp GGUF models already in the shared HF cache.
-        Self::discover_hf_cache_models(&mut available_models);
-
+        for model in available_models.values() {
+            if let ModelSource::Url { sha256, .. } = &model.source {
+                descriptors.push(ArtifactDescriptor {
+                    model_id: model.id.clone(),
+                    filename: model.filename.clone(),
+                    size: None,
+                    sha256: sha256.clone(),
+                    repo: None,
+                    revision: None,
+                    directory: model.is_directory,
+                });
+            }
+        }
+        let files = Arc::new(Filesystem::new(|path| {
+            matches!(
+                GgufHeaderProber.probe_file(path).verdict,
+                Compatibility::Compatible
+            )
+        }));
+        let roots = Arc::new(RootService::open_unscanned(
+            models_dir,
+            Arc::new(FileStorage::new(
+                crate::portable::app_data_dir(app_handle)
+                    .map_err(|_| anyhow::anyhow!("model-root-unavailable"))?
+                    .join("model_storage_v1.json"),
+            )),
+            files,
+            descriptors,
+            Some(Cache::from_env().path().clone()),
+        ));
         let manager = Self {
             app_handle: app_handle.clone(),
-            models_dir,
+            roots,
             available_models: Mutex::new(available_models),
             cancel_flags: Arc::new(Mutex::new(HashMap::new())),
             extracting_models: Arc::new(Mutex::new(HashSet::new())),
             is_rescanning: Arc::new(AtomicBool::new(false)),
         };
 
-        // Migrate any bundled models to user directory
-        manager.migrate_bundled_models()?;
-
-        // Migrate GigaAM from single-file to directory format
-        manager.migrate_gigaam_to_directory()?;
-
-        // Check which models are already downloaded
-        manager.update_download_status()?;
-
-        // Auto-select a model if none is currently selected
-        manager.auto_select_model_if_needed()?;
-
         Ok(manager)
     }
 
-    pub fn get_available_models(&self) -> Vec<ModelInfo> {
-        let mut list: Vec<ModelInfo> = {
-            let models = self.available_models.lock().unwrap();
-            models.values().cloned().collect()
+    pub fn start_initial_scan(self: &Arc<Self>) {
+        if self.roots.projection().root_identity.is_some() {
+            return;
+        }
+        let Ok(work) = self.roots.prepare_rescan("startup") else {
+            return;
         };
-        // Stable, reasonable order: catalog editorial rank first (lower = higher
-        // priority), then any other recommended model, then by accuracy, speed,
-        // and name. `ModelInfo` doesn't carry rank, so resolve it by id from the
-        // catalog here.
+        let manager = self.clone();
+        let generation = work.generation();
+        std::thread::spawn(move || {
+            let app = manager.app_handle.clone();
+            let _ = manager.roots.run_rescan(work, &|checked, total| {
+                let _ = app.emit(
+                    "model-root-scan-progress",
+                    ModelRootScanProgress {
+                        generation,
+                        request_id: "startup".into(),
+                        checked,
+                        total,
+                    },
+                );
+            });
+            manager.notify_models_updated();
+        });
+    }
+    pub fn notify_models_updated(&self) {
+        let _ = self.app_handle.emit(
+            "models-updated",
+            serde_json::json!({"generation":self.roots.snapshot().generation}),
+        );
+    }
+
+    pub fn get_available_models(&self) -> Vec<ModelInfo> {
+        let (_, projection) = self.roots.snapshot_projection();
+        self.render_projection(&projection)
+    }
+
+    fn render_projection(&self, projection: &Projection) -> Vec<ModelInfo> {
+        let mut models = self
+            .available_models
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        for record in projection.artifacts.values() {
+            if record.status == ArtifactStatus::Unavailable
+                && !models.contains_key(&record.key.model_id)
+            {
+                continue;
+            }
+            if !models.contains_key(&record.key.model_id) {
+                let info = if let Some((descriptor, file)) =
+                    crate::catalog::file_in_catalog(&record.filename, None)
+                {
+                    descriptor.to_model_info_for_file(file, &DiskStatus::default())
+                } else if record.custom {
+                    ModelInfo {
+                        id: record.key.model_id.clone(),
+                        name: record.key.model_id.clone(),
+                        description: "Custom / unverified".into(),
+                        filename: record.filename.clone(),
+                        source: ModelSource::Local,
+                        size_mb: record.key.fingerprint.size / (1024 * 1024),
+                        is_downloaded: false,
+                        is_downloading: false,
+                        partial_size: 0,
+                        is_directory: false,
+                        engine_type: EngineType::TranscribeCpp,
+                        accuracy_score: 0.0,
+                        speed_score: 0.0,
+                        supports_translation: false,
+                        is_recommended: false,
+                        supported_languages: Vec::new(),
+                        supports_language_selection: false,
+                        is_custom: true,
+                        supports_streaming: false,
+                        supports_language_detection: false,
+                    }
+                } else {
+                    continue;
+                };
+                models.insert(info.id.clone(), info);
+            }
+        }
+        let downloading = self.cancel_flags.lock().unwrap_or_else(|e| e.into_inner());
+        let mut list: Vec<_> = models
+            .into_values()
+            .filter(|model| {
+                !matches!(model.source, ModelSource::Url { .. })
+                    || projection
+                        .artifacts
+                        .get(&model.id)
+                        .is_some_and(|record| record.present)
+            })
+            .map(|mut model| {
+                model.is_downloaded = projection
+                    .artifacts
+                    .get(&model.id)
+                    .is_some_and(|r| r.status.loadable());
+                model.is_downloading = downloading.contains_key(&model.id);
+                model.partial_size = 0;
+                model
+            })
+            .collect();
         list.sort_by(|a, b| {
             crate::catalog::rank_of(&a.id)
                 .cmp(&crate::catalog::rank_of(&b.id))
@@ -1172,6 +1291,104 @@ impl ModelManager {
                 .then_with(|| a.name.cmp(&b.name))
         });
         list
+    }
+
+    pub fn root_path(&self) -> PathBuf {
+        self.roots.snapshot().root.clone()
+    }
+    pub fn reserve_activity(&self) -> Result<ActivityLease> {
+        Ok(self.roots.reserve()?)
+    }
+    pub fn activity(&self) -> Result<RootActivity> {
+        Ok(self.roots.admit()?)
+    }
+    pub fn acquire_artifact(
+        &self,
+        model_id: &str,
+        activity: &RootActivity,
+    ) -> Result<Arc<ArtifactUse>> {
+        Ok(self.roots.acquire(model_id, activity)?)
+    }
+    pub fn root_view(&self) -> ModelRootView {
+        let (root, projection) = self.roots.snapshot_projection();
+        self.view_from(&root, &projection)
+    }
+    fn view_from(
+        &self,
+        root: &super::model_roots::RootSnapshot,
+        projection: &Projection,
+    ) -> ModelRootView {
+        ModelRootView {
+            generation: root.generation,
+            revision: root.revision,
+            folder: display_path(&root.root),
+            status: match projection.status {
+                RootStatus::Ready => ModelRootStatus::Ready,
+                RootStatus::NoModels => ModelRootStatus::NoModels,
+                RootStatus::Unavailable => ModelRootStatus::Unavailable,
+                RootStatus::Invalid => ModelRootStatus::Invalid,
+            },
+            writable: projection.writable,
+            busy: self.roots.busy(),
+            model_count: projection.count().min(u32::MAX as usize) as u32,
+        }
+    }
+    pub fn catalog_view(&self) -> ModelCatalogView {
+        let (root, projection) = self.roots.snapshot_projection();
+        let models = self.render_projection(&projection);
+        let artifacts: BTreeMap<_, _> = projection
+            .artifacts
+            .iter()
+            .map(|(id, record)| {
+                (
+                    id.clone(),
+                    ModelArtifactView {
+                        source: if record.legacy {
+                            ModelArtifactSource::LegacyCache
+                        } else {
+                            ModelArtifactSource::SelectedRoot
+                        },
+                        status: match record.status {
+                            ArtifactStatus::Verified => ModelArtifactStatus::Verified,
+                            ArtifactStatus::CustomUnverified => {
+                                ModelArtifactStatus::CustomUnverified
+                            }
+                            ArtifactStatus::Invalid => ModelArtifactStatus::Invalid,
+                            ArtifactStatus::Incomplete => ModelArtifactStatus::Incomplete,
+                            ArtifactStatus::Unavailable => ModelArtifactStatus::Unavailable,
+                        },
+                        can_delete: record.owned
+                            && !record.legacy
+                            && !record.custom
+                            && projection.writable,
+                        can_download: !record.custom
+                            && record.status == ArtifactStatus::Unavailable
+                            && projection.writable
+                            && !models
+                                .iter()
+                                .find(|m| m.id == *id)
+                                .is_some_and(|m| m.is_directory),
+                    },
+                )
+            })
+            .collect();
+        ModelCatalogView {
+            generation: root.generation,
+            root: self.view_from(&root, &projection),
+            current_model: get_settings(&self.app_handle).selected_model,
+            models,
+            artifacts,
+        }
+    }
+    pub fn candidate_view(&self, candidate: &super::model_roots::Candidate) -> ModelRootCandidate {
+        ModelRootCandidate {
+            request_id: candidate.request_id.clone(),
+            candidate_id: candidate.id.clone(),
+            root: self.view_from(&candidate.snapshot, &candidate.projection),
+        }
+    }
+    pub fn emit_model_event(&self, name: &str, model_id: &str) {
+        let _ = self.app_handle.emit(name, serde_json::json!({ "generation": self.roots.snapshot().generation, "model_id": model_id }));
     }
 
     /// Seed the bundled catalog ([`crate::catalog::CATALOG`]) into the registry,
@@ -1219,48 +1436,18 @@ impl ModelManager {
     /// *off-lock* so readers never block on I/O; only the brief merge takes the
     /// registry lock. Concurrent calls coalesce via [`Self::try_start_rescan`].
     pub fn rescan_local_models(&self) -> Result<()> {
-        let _guard = match self.try_start_rescan() {
-            Some(g) => g,
-            None => {
-                debug!("Model rescan already in progress; skipping");
-                return Ok(());
-            }
-        };
-
-        // Snapshot the current registry and discover against the copy off-lock.
-        // The discover_* helpers are purely additive (they skip ids already in
-        // the map), so the snapshot ends up as {current} ∪ {newly-found}.
-        let mut snapshot = self.available_models.lock().unwrap().clone();
-        if let Err(e) = Self::discover_custom_transcribe_models(&self.models_dir, &mut snapshot) {
-            warn!("Rescan: failed to discover custom models: {}", e);
-        }
-        Self::discover_hf_cache_models(&mut snapshot);
-
-        // Merge only the genuinely-new ids back into the live registry. `or_insert`
-        // leaves every existing entry exactly as it was.
-        let mut added = 0usize;
-        {
-            let mut live = self.available_models.lock().unwrap();
-            for (id, info) in snapshot {
-                if let std::collections::hash_map::Entry::Vacant(entry) = live.entry(id) {
-                    entry.insert(info);
-                    added += 1;
-                }
-            }
-        }
-
-        self.update_download_status()?;
-        self.auto_select_model_if_needed()?;
-        if added > 0 {
-            info!("Model rescan discovered {} new model(s)", added);
-        }
-        let _ = self.app_handle.emit("models-updated", ());
+        self.roots.rescan("rescan", &|_, _| {})?;
+        let _ = self.app_handle.emit(
+            "models-updated",
+            serde_json::json!({ "generation": self.roots.snapshot().generation }),
+        );
         Ok(())
     }
 
     pub fn get_model_info(&self, model_id: &str) -> Option<ModelInfo> {
-        let models = self.available_models.lock().unwrap();
-        models.get(model_id).cloned()
+        self.get_available_models()
+            .into_iter()
+            .find(|model| model.id == model_id)
     }
 
     /// Reconcile a model's advertised capabilities with the ground truth from the
@@ -1278,188 +1465,41 @@ impl ModelManager {
     /// live regardless.
     pub fn set_runtime_capabilities(
         &self,
-        model_id: &str,
+        key: &ArtifactKey,
         supports_streaming: bool,
         supports_translation: bool,
         supports_language_detection: bool,
         supported_languages: Vec<String>,
     ) {
+        let model_id = key.model_id.as_str();
         let supported_languages = canonicalize_supported_languages(supported_languages);
-        let mut models = self.available_models.lock().unwrap();
-        if let Some(model) = models.get_mut(model_id) {
-            model.supports_streaming = supports_streaming;
-            model.supports_translation = supports_translation;
-            model.supports_language_detection = supports_language_detection;
-            // An empty set means the model is language-agnostic — but it is also
-            // what a failed capability read leaves behind, so keep the probed /
-            // catalog list rather than blanking a known one to nothing.
-            if !supported_languages.is_empty() {
-                model.supports_language_selection = supported_languages.len() > 1;
-                model.supported_languages = supported_languages;
+        let info = self.get_model_info(model_id);
+        self.roots.with_current(key, || {
+            let mut models = self
+                .available_models
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
+            if let Some(info) = info {
+                models.entry(model_id.to_owned()).or_insert(info);
             }
-        }
-    }
-
-    fn migrate_bundled_models(&self) -> Result<()> {
-        // Check for bundled models and copy them to user directory
-        let bundled_models = ["ggml-small.bin"]; // Add other bundled models here if any
-
-        for filename in &bundled_models {
-            let bundled_path = self.app_handle.path().resolve(
-                format!("resources/models/{}", filename),
-                tauri::path::BaseDirectory::Resource,
-            );
-
-            if let Ok(bundled_path) = bundled_path {
-                if bundled_path.exists() {
-                    let user_path = self.models_dir.join(filename);
-
-                    // Only copy if user doesn't already have the model
-                    if !user_path.exists() {
-                        info!("Migrating bundled model {} to user directory", filename);
-                        fs::copy(&bundled_path, &user_path)?;
-                        info!("Successfully migrated {}", filename);
-                    }
+            if let Some(model) = models.get_mut(model_id) {
+                model.supports_streaming = supports_streaming;
+                model.supports_translation = supports_translation;
+                model.supports_language_detection = supports_language_detection;
+                if !supported_languages.is_empty() {
+                    model.supports_language_selection = supported_languages.len() > 1;
+                    model.supported_languages = supported_languages;
                 }
             }
-        }
-
-        Ok(())
+        });
     }
 
     /// Migrate GigaAM from the old single-file format (giga-am-v3.int8.onnx)
     /// to the new directory format (giga-am-v3-int8/model.int8.onnx + vocab.txt).
     /// This was required by the transcribe-rs 0.3.x upgrade.
-    fn migrate_gigaam_to_directory(&self) -> Result<()> {
-        let old_file = self.models_dir.join("giga-am-v3.int8.onnx");
-        let new_dir = self.models_dir.join("giga-am-v3-int8");
-
-        if !old_file.exists() || new_dir.exists() {
-            return Ok(());
-        }
-
-        info!("Migrating GigaAM from single-file to directory format");
-
-        let vocab_path = self
-            .app_handle
-            .path()
-            .resolve(
-                "resources/models/gigaam_vocab.txt",
-                tauri::path::BaseDirectory::Resource,
-            )
-            .map_err(|e| anyhow::anyhow!("Failed to resolve GigaAM vocab path: {}", e))?;
-
-        info!(
-            "Resolved vocab path: {:?} (exists: {})",
-            vocab_path,
-            vocab_path.exists()
-        );
-        info!("Old file: {:?} (exists: {})", old_file, old_file.exists());
-        info!("New dir: {:?} (exists: {})", new_dir, new_dir.exists());
-
-        fs::create_dir_all(&new_dir)?;
-        fs::rename(&old_file, new_dir.join("model.int8.onnx"))?;
-        fs::copy(&vocab_path, new_dir.join("vocab.txt"))?;
-
-        // Clean up old partial file if it exists
-        let old_partial = self.models_dir.join("giga-am-v3.int8.onnx.partial");
-        if old_partial.exists() {
-            let _ = fs::remove_file(&old_partial);
-        }
-
-        info!("GigaAM migration complete");
-        Ok(())
-    }
 
     fn update_download_status(&self) -> Result<()> {
-        // Snapshot in-flight download ids before taking the registry lock (the
-        // two locks are never nested) so a mid-download entry is never dropped.
-        let downloading_ids: HashSet<String> =
-            self.cancel_flags.lock().unwrap().keys().cloned().collect();
-        let mut models = self.available_models.lock().unwrap();
-        let mut vanished_models: Vec<String> = Vec::new();
-
-        for model in models.values_mut() {
-            if let ModelSource::HuggingFace { repo_id, revision } = &model.source {
-                // A models-dir copy counts too: mirror-fallback downloads land
-                // there, and it makes manual drop-ins of catalog files work.
-                let local_path = self.models_dir.join(&model.filename);
-                let partial_path = self.models_dir.join(format!("{}.partial", &model.filename));
-                model.is_downloaded = hf_cached_path(repo_id, revision, &model.filename).is_some()
-                    || local_path.exists();
-                model.is_downloading = false;
-                model.partial_size = partial_path.metadata().map(|m| m.len()).unwrap_or(0);
-                // Alternate-quant entries exist only because their file was
-                // discovered on disk — the catalog offers just the default
-                // quant, so they are never presented for download. When the
-                // file is gone, the entry goes with it.
-                if !model.is_downloaded
-                    && !downloading_ids.contains(&model.id)
-                    && Self::disappears_when_missing(model)
-                {
-                    vanished_models.push(model.id.clone());
-                }
-                continue;
-            }
-            if model.is_directory {
-                // For directory-based models, check if the directory exists
-                let model_path = self.models_dir.join(&model.filename);
-                let partial_path = self.models_dir.join(format!("{}.partial", &model.filename));
-                let extracting_path = self
-                    .models_dir
-                    .join(format!("{}.extracting", &model.filename));
-
-                // Clean up any leftover .extracting directories from interrupted extractions
-                // But only if this model is NOT currently being extracted
-                let is_currently_extracting = {
-                    let extracting = self.extracting_models.lock().unwrap();
-                    extracting.contains(&model.id)
-                };
-                if extracting_path.exists() && !is_currently_extracting {
-                    warn!("Cleaning up interrupted extraction for model: {}", model.id);
-                    let _ = fs::remove_dir_all(&extracting_path);
-                }
-
-                model.is_downloaded = model_path.exists() && model_path.is_dir();
-                model.is_downloading = false;
-
-                // Get partial file size if it exists (for the .tar.gz being downloaded)
-                if partial_path.exists() {
-                    model.partial_size = partial_path.metadata().map(|m| m.len()).unwrap_or(0);
-                } else {
-                    model.partial_size = 0;
-                }
-            } else {
-                // For file-based models (existing logic)
-                let model_path = self.models_dir.join(&model.filename);
-                let partial_path = self.models_dir.join(format!("{}.partial", &model.filename));
-
-                model.is_downloaded = model_path.exists();
-                model.is_downloading = false;
-
-                // Get partial file size if it exists
-                if partial_path.exists() {
-                    model.partial_size = partial_path.metadata().map(|m| m.len()).unwrap_or(0);
-                } else {
-                    model.partial_size = 0;
-                }
-            }
-
-            // Custom entries are discovered from files and have no download
-            // source. Once their file is gone, keeping the entry would offer a
-            // Download action that can never succeed.
-            if !model.is_downloaded
-                && !downloading_ids.contains(&model.id)
-                && Self::disappears_when_missing(model)
-            {
-                vanished_models.push(model.id.clone());
-            }
-        }
-
-        for id in vanished_models {
-            models.remove(&id);
-        }
-
+        self.roots.rescan("download_refresh", &|_, _| {})?;
         Ok(())
     }
 
@@ -1494,80 +1534,6 @@ impl ModelManager {
     /// the resolved revision and, when the pointer is a symlink, the blob it
     /// points to. Everything else in the repo (other quants, refs) is left
     /// untouched. Returns whether anything was removed.
-    fn delete_hf_cache_file(repo_id: &str, revision: &str, filename: &str) -> bool {
-        let Some(pointer) = hf_cached_path(repo_id, revision, filename) else {
-            return false;
-        };
-        // Resolve the blob before the pointer goes away. On Windows the
-        // pointer may be a plain file (hf-hub's symlink fallback renames the
-        // blob into the snapshot), in which case there is no separate blob.
-        let is_symlink = fs::symlink_metadata(&pointer)
-            .map(|m| m.file_type().is_symlink())
-            .unwrap_or(false);
-        if is_symlink {
-            if let Ok(blob) = fs::canonicalize(&pointer) {
-                info!("Deleting HF cache blob at: {:?}", blob);
-                let _ = fs::remove_file(&blob);
-            }
-        }
-        info!("Deleting HF cache file at: {:?}", pointer);
-        fs::remove_file(&pointer).is_ok()
-    }
-
-    fn auto_select_model_if_needed(&self) -> Result<()> {
-        let mut settings = get_settings(&self.app_handle);
-
-        // A model cannot remain selected after its files disappear. Catalog
-        // entries stay in the registry so they can be downloaded again, so
-        // checking only whether the id exists is not sufficient.
-        if !settings.selected_model.is_empty() {
-            let is_available = {
-                let models = self.available_models.lock().unwrap();
-                Self::selected_model_is_available(&models, &settings.selected_model)
-            };
-
-            if !is_available {
-                info!(
-                    "Selected model '{}' is not available on disk; clearing selection",
-                    settings.selected_model
-                );
-                settings.selected_model = String::new();
-                write_settings(&self.app_handle, settings.clone());
-            }
-        }
-
-        // If onboarding is still pending, do not auto-select just because a
-        // compatible model exists on disk or in the shared HF cache. The
-        // onboarding model step should present that choice explicitly.
-        if !settings.onboarding_completed {
-            debug!("Skipping model auto-selection until onboarding is complete");
-            return Ok(());
-        }
-
-        // If no model is selected, pick the first downloaded one using the same
-        // ranked order the UI receives.
-        if settings.selected_model.is_empty() {
-            if let Some(available_model) = self
-                .get_available_models()
-                .into_iter()
-                .find(|model| model.is_downloaded)
-            {
-                info!(
-                    "Auto-selecting model: {} ({})",
-                    available_model.id, available_model.name
-                );
-
-                // Update settings with the selected model
-                let mut updated_settings = settings;
-                updated_settings.selected_model = available_model.id.clone();
-                write_settings(&self.app_handle, updated_settings);
-
-                info!("Successfully auto-selected model: {}", available_model.id);
-            }
-        }
-
-        Ok(())
-    }
 
     /// Discover custom Whisper-family models in the models directory: legacy
     /// GGML `.bin` files and `.gguf` files (both load through transcribe-cpp).
@@ -1895,17 +1861,25 @@ impl ModelManager {
         model_info: &ModelInfo,
         repo_id: String,
         revision: String,
+        activity: RootActivity,
     ) -> Result<()> {
         let model_id = model_info.id.clone();
         let filename = model_info.filename.clone();
+        super::model_roots_files::plain_ancestors(&activity.root.root.join(".hf-cache/hub"))?;
+        if fs::symlink_metadata(activity.root.root.join(".hf-cache/token")).is_ok() {
+            return Err(anyhow::anyhow!("model-root-invalid"));
+        }
 
         // Already in the shared cache (possibly from another tool), or dropped
         // into the models dir (mirror fallback / manual install)? Done.
-        if hf_cached_path(&repo_id, &revision, &filename).is_some()
-            || self.models_dir.join(&filename).exists()
+        if self
+            .roots
+            .artifacts()
+            .get(&model_id)
+            .is_some_and(|record| record.status.loadable())
         {
             self.update_download_status()?;
-            let _ = self.app_handle.emit("model-download-complete", &model_id);
+            let _ = self.emit_model_event("model-download-complete", &model_id);
             return Ok(());
         }
 
@@ -1962,7 +1936,8 @@ impl ModelManager {
 
             // Fresh client per attempt so a wedged connection from the previous
             // try can't poison the retry.
-            let api = ApiBuilder::from_env()
+            let api = ApiBuilder::from_cache(Cache::new(self.root_path().join(".hf-cache/hub")))
+                .with_cache_dir(self.root_path().join(".hf-cache/hub"))
                 // Ignore cached and environment-provided credentials. A stale token
                 // can make otherwise-public downloads fail authentication.
                 .with_token(None)
@@ -1975,7 +1950,11 @@ impl ModelManager {
                 RepoType::Model,
                 revision.clone(),
             ));
-            let progress = HfDownloadProgress::new(self.app_handle.clone(), model_id.clone());
+            let progress = HfDownloadProgress::new(
+                self.app_handle.clone(),
+                model_id.clone(),
+                activity.clone(),
+            );
 
             // hf-hub has no internal timeouts, so a wedged connection would
             // otherwise hang this attempt forever and neither the retry loop
@@ -2021,6 +2000,7 @@ impl ModelManager {
                 }
             };
             watchdog.abort();
+            let _ = watchdog.await;
 
             match result {
                 Ok(_) => break None,
@@ -2073,16 +2053,7 @@ impl ModelManager {
                         break Some(err);
                     }
                     let delay = Duration::from_secs(1_u64 << attempt);
-                    warn!(
-                        "HF download attempt {}/{} failed for {} using {} concurrent stream(s): {}; retrying with {} stream(s) in {}s",
-                        attempt,
-                        ATTEMPT_STREAMS.len(),
-                        model_id,
-                        stream_count,
-                        err,
-                        ATTEMPT_STREAMS[attempt],
-                        delay.as_secs()
-                    );
+                    warn!("HF download attempt failed; retrying");
                     tokio::select! {
                         _ = tokio::time::sleep(delay) => {}
                         _ = cancel_token.cancelled() => {
@@ -2097,10 +2068,7 @@ impl ModelManager {
 
         if let Some(hf_error) = hf_error {
             // `attempt`, not the schedule length: a sequential stall breaks out early.
-            error!(
-                "HF download failed for {} after {} attempt(s): {:?}",
-                model_id, attempt, hf_error
-            );
+            error!("HF model acquisition failed");
             let mirrors = crate::catalog::mirror_fallbacks(&model_id);
             if mirrors.is_empty() {
                 return Err(anyhow::anyhow!(
@@ -2113,7 +2081,13 @@ impl ModelManager {
             for mirror in &mirrors {
                 info!("Falling back to mirror for {}: {}", model_id, mirror.url);
                 match self
-                    .download_from_mirror(&model_id, &filename, mirror, cancel_token.clone())
+                    .download_from_mirror(
+                        &model_id,
+                        &filename,
+                        mirror,
+                        cancel_token.clone(),
+                        &activity,
+                    )
                     .await
                 {
                     Ok(true) => {
@@ -2125,10 +2099,7 @@ impl ModelManager {
                         return Ok(());
                     }
                     Err(e) => {
-                        warn!(
-                            "Mirror download failed for {} from {}: {:?}",
-                            model_id, mirror.url, e
-                        );
+                        warn!("Model mirror acquisition failed");
                     }
                 }
             }
@@ -2143,8 +2114,17 @@ impl ModelManager {
 
         cleanup.disarmed = true;
         self.update_download_status()?;
+        if !self
+            .roots
+            .artifacts()
+            .get(&model_id)
+            .is_some_and(|r| r.status == ArtifactStatus::Verified)
+        {
+            return Err(anyhow::anyhow!("model-artifact-invalid"));
+        }
+        self.roots.mark_owned(&model_id);
         self.cancel_flags.lock().unwrap().remove(&model_id);
-        let _ = self.app_handle.emit("model-download-complete", &model_id);
+        let _ = self.emit_model_event("model-download-complete", &model_id);
         info!("HF model {} downloaded", model_id);
         Ok(())
     }
@@ -2158,10 +2138,11 @@ impl ModelManager {
         filename: &str,
         mirror: &crate::catalog::MirrorFile,
         cancel_token: CancellationToken,
+        activity: &RootActivity,
     ) -> Result<bool> {
-        fs::create_dir_all(&self.models_dir)?;
-        let model_path = self.models_dir.join(filename);
-        let partial_path = self.models_dir.join(format!("{}.partial", filename));
+        fs::create_dir_all(&self.root_path())?;
+        let model_path = self.root_path().join(filename);
+        let partial_path = self.root_path().join(format!("{}.partial", filename));
 
         if model_path.exists() {
             return Ok(true);
@@ -2175,6 +2156,7 @@ impl ModelManager {
                 Some(mirror.size_bytes),
                 Some(&mirror.sha256),
                 &cancel_token,
+                activity,
             )
             .await?
         {
@@ -2191,6 +2173,7 @@ impl ModelManager {
     }
 
     pub async fn download_model(&self, model_id: &str) -> Result<()> {
+        let activity = self.roots.admit_mutation(model_id)?;
         let model_info = {
             let models = self.available_models.lock().unwrap();
             models.get(model_id).cloned()
@@ -2199,20 +2182,39 @@ impl ModelManager {
         let model_info =
             model_info.ok_or_else(|| anyhow::anyhow!("Model not found: {}", model_id))?;
 
+        if model_info.is_downloaded {
+            return Ok(());
+        }
+        if model_info.is_directory {
+            return Err(anyhow::anyhow!("model-artifact-unavailable"));
+        }
+        if self.roots.artifacts().get(model_id).is_some_and(|r| {
+            matches!(
+                r.status,
+                ArtifactStatus::Invalid | ArtifactStatus::Incomplete
+            )
+        }) {
+            return Err(anyhow::anyhow!("model-artifact-invalid"));
+        }
         let (url, expected_sha256) = match &model_info.source {
             ModelSource::Url { url, sha256 } => (url.clone(), sha256.clone()),
             ModelSource::HuggingFace { repo_id, revision } => {
                 return self
-                    .download_hf_model(&model_info, repo_id.clone(), revision.clone())
+                    .download_hf_model(
+                        &model_info,
+                        repo_id.clone(),
+                        revision.clone(),
+                        activity.clone(),
+                    )
                     .await;
             }
             ModelSource::Local => {
                 return Err(anyhow::anyhow!("No download source for model"));
             }
         };
-        let model_path = self.models_dir.join(&model_info.filename);
+        let model_path = self.root_path().join(&model_info.filename);
         let partial_path = self
-            .models_dir
+            .root_path()
             .join(format!("{}.partial", &model_info.filename));
 
         // Don't download if complete version already exists
@@ -2259,6 +2261,7 @@ impl ModelManager {
                 None,
                 expected_sha256.as_deref(),
                 &cancel_token,
+                &activity,
             )
             .await?
         {
@@ -2280,14 +2283,14 @@ impl ModelManager {
             }
 
             // Emit extraction started event
-            let _ = self.app_handle.emit("model-extraction-started", model_id);
+            let _ = self.emit_model_event("model-extraction-started", model_id);
             info!("Extracting archive for directory-based model: {}", model_id);
 
             // Use a temporary extraction directory to ensure atomic operations
             let temp_extract_dir = self
-                .models_dir
+                .root_path()
                 .join(format!("{}.extracting", &model_info.filename));
-            let final_model_dir = self.models_dir.join(&model_info.filename);
+            let final_model_dir = self.root_path().join(&model_info.filename);
 
             // Clean up any previous incomplete extraction
             if temp_extract_dir.exists() {
@@ -2355,7 +2358,7 @@ impl ModelManager {
                 extracting.remove(model_id);
             }
             // Emit extraction completed event
-            let _ = self.app_handle.emit("model-extraction-completed", model_id);
+            let _ = self.emit_model_event("model-extraction-completed", model_id);
 
             // Remove the downloaded tar.gz file
             let _ = fs::remove_file(&partial_path);
@@ -2378,147 +2381,26 @@ impl ModelManager {
         self.cancel_flags.lock().unwrap().remove(model_id);
 
         // Emit completion event
-        let _ = self.app_handle.emit("model-download-complete", model_id);
+        let _ = self.emit_model_event("model-download-complete", model_id);
 
-        info!(
-            "Successfully downloaded model {} to {:?}",
-            model_id, model_path
-        );
+        info!("Model download completed");
 
         Ok(())
     }
 
     pub fn delete_model(&self, model_id: &str) -> Result<()> {
-        debug!("ModelManager: delete_model called for: {}", model_id);
-
-        let model_info = {
-            let models = self.available_models.lock().unwrap();
-            models.get(model_id).cloned()
-        };
-
-        let model_info =
-            model_info.ok_or_else(|| anyhow::anyhow!("Model not found: {}", model_id))?;
-
-        debug!("ModelManager: Found model info: {:?}", model_info);
-
-        if let ModelSource::HuggingFace { repo_id, revision } = &model_info.source {
-            let is_alternate_quant =
-                Self::is_catalog_alternate_quant(repo_id, &model_info.filename);
-            let mut deleted = false;
-            if is_alternate_quant {
-                // Only this quant's own file: the snapshot pointer and its
-                // blob. The default (and any other quants) survive in the
-                // cache — the entry never owned more than its one file.
-                deleted |= Self::delete_hf_cache_file(repo_id, revision, &model_info.filename);
-            } else if let Some(file) = hf_cached_path(repo_id, revision, &model_info.filename) {
-                // Cached at <cache>/models--org--name/snapshots/<rev>/<file>; remove
-                // the whole repo dir (blobs + refs + snapshots). Per product decision,
-                // delete hard-removes from the shared HF cache.
-                if let Some(repo_dir) = file.ancestors().nth(3) {
-                    if repo_dir
-                        .file_name()
-                        .and_then(|n| n.to_str())
-                        .is_some_and(|n| n.starts_with("models--"))
-                    {
-                        info!("Deleting HF cache repo at: {:?}", repo_dir);
-                        fs::remove_dir_all(repo_dir)?;
-                        deleted = true;
-                    }
-                }
-            }
-            // Also remove a models-dir copy (mirror fallback / manual drop-in)
-            // and any resumable partial next to it.
-            for path in [
-                self.models_dir.join(&model_info.filename),
-                self.models_dir
-                    .join(format!("{}.partial", &model_info.filename)),
-            ] {
-                if path.exists() {
-                    info!("Deleting model file at: {:?}", path);
-                    fs::remove_file(&path)?;
-                    deleted = true;
-                }
-            }
-            // Files already missing (e.g. removed outside Handy) is not a failure —
-            // deleting is idempotent, so this still needs to fall through and clear
-            // the stale "Downloaded" entry rather than erroring out and leaving it stuck.
-            if !deleted {
-                debug!(
-                    "ModelManager: no HF cache/model files found on disk for {}; clearing stale entry",
-                    model_id
-                );
-            }
-            // Alternate-quant entries are discovery-created (the catalog only
-            // seeds defaults), so deleting one un-discovers it rather than
-            // leaving a permanent "(Q4_K_M)" row in the list.
-            if is_alternate_quant {
-                self.available_models.lock().unwrap().remove(model_id);
-            }
-            self.update_download_status()?;
-            let _ = self.app_handle.emit("model-deleted", model_id);
-            return Ok(());
+        let activity = self.roots.admit_mutation(model_id)?;
+        let record = self
+            .roots
+            .artifacts()
+            .remove(model_id)
+            .ok_or_else(|| anyhow::anyhow!("model-artifact-unavailable"))?;
+        if !record.owned || record.legacy || record.custom {
+            return Err(anyhow::anyhow!("model-root-readonly"));
         }
-
-        let model_path = self.models_dir.join(&model_info.filename);
-        let partial_path = self
-            .models_dir
-            .join(format!("{}.partial", &model_info.filename));
-        debug!("ModelManager: Model path: {:?}", model_path);
-        debug!("ModelManager: Partial path: {:?}", partial_path);
-
-        let mut deleted_something = false;
-
-        if model_info.is_directory {
-            // Delete complete model directory if it exists
-            if model_path.exists() && model_path.is_dir() {
-                info!("Deleting model directory at: {:?}", model_path);
-                fs::remove_dir_all(&model_path)?;
-                info!("Model directory deleted successfully");
-                deleted_something = true;
-            }
-        } else {
-            // Delete complete model file if it exists
-            if model_path.exists() {
-                info!("Deleting model file at: {:?}", model_path);
-                fs::remove_file(&model_path)?;
-                info!("Model file deleted successfully");
-                deleted_something = true;
-            }
-        }
-
-        // Delete partial file if it exists (same for both types)
-        if partial_path.exists() {
-            info!("Deleting partial file at: {:?}", partial_path);
-            fs::remove_file(&partial_path)?;
-            info!("Partial file deleted successfully");
-            deleted_something = true;
-        }
-
-        // Files already missing (e.g. removed outside Handy) is not a failure —
-        // deleting is idempotent, so this still needs to fall through and clear
-        // the stale "Downloaded" entry rather than erroring out and leaving it stuck.
-        if !deleted_something {
-            debug!(
-                "ModelManager: no files found on disk for {}; clearing stale entry",
-                model_id
-            );
-        }
-
-        // Custom models should be removed from the list entirely since they
-        // have no download URL and can't be re-downloaded
-        if model_info.is_custom {
-            let mut models = self.available_models.lock().unwrap();
-            models.remove(model_id);
-            debug!("ModelManager: removed custom model from available models");
-        } else {
-            // Update download status (marks predefined models as not downloaded)
-            self.update_download_status()?;
-            debug!("ModelManager: download status updated");
-        }
-
-        // Emit event to notify UI
-        let _ = self.app_handle.emit("model-deleted", model_id);
-
+        self.roots.delete_owned(&record, &activity)?;
+        self.update_download_status()?;
+        self.emit_model_event("model-deleted", model_id);
         Ok(())
     }
 
@@ -2527,93 +2409,26 @@ impl ModelManager {
     /// only runs after a definitive missing-path check and cannot disturb an
     /// unrelated in-flight download.
     fn mark_model_unavailable(&self, model_id: &str) {
-        let removed = {
-            let mut models = self.available_models.lock().unwrap();
-            let should_remove = models
-                .get(model_id)
-                .is_some_and(Self::disappears_when_missing);
-            if should_remove {
-                models.remove(model_id);
-                true
-            } else if let Some(model) = models.get_mut(model_id) {
-                model.is_downloaded = false;
-                false
-            } else {
-                return;
-            }
-        };
-
-        if removed {
-            info!("Removing vanished discovered model '{}'", model_id);
-        } else {
-            info!("Marking model '{}' as unavailable on disk", model_id);
-        }
-        // Keep the persisted preference here: an already-loaded engine may
-        // still be usable, and re-downloading this model should restore it.
-        // Startup and explicit Rescan perform the broader selection cleanup.
-        let _ = self.app_handle.emit("models-updated", ());
+        self.roots.mark_unavailable(model_id);
     }
 
     fn storage_for_model(&self, model_id: &str) -> Result<ModelStorage> {
-        let model_info = self
-            .get_model_info(model_id)
-            .ok_or_else(|| anyhow::anyhow!("Model not found: {}", model_id))?;
-
-        let state = if !model_info.is_downloaded {
-            DownloadState::Unavailable
-        } else if model_info.is_downloading {
-            DownloadState::Downloading
-        } else {
-            DownloadState::Complete
-        };
-        let source = match &model_info.source {
-            ModelSource::HuggingFace { repo_id, revision } => StorageSource::HuggingFace {
-                cached_path: matches!(state, DownloadState::Complete)
-                    .then(|| hf_cached_path(repo_id, revision, &model_info.filename))
-                    .flatten(),
-            },
-            _ => StorageSource::Local,
-        };
-        Ok(ModelStorage::new(
-            self.models_dir.clone(),
-            model_info.filename,
-            model_info.is_directory,
-            state,
-            source,
-        ))
+        let activity = self.activity()?;
+        let artifact = self.acquire_artifact(model_id, &activity)?;
+        Ok(ModelStorage::selected_root(artifact.path.clone()))
     }
 
     pub fn cancel_download(&self, model_id: &str) -> Result<()> {
-        debug!("ModelManager: cancel_download called for: {}", model_id);
-
-        // Trigger the cancellation token to stop the download. The HF path
-        // aborts its in-flight chunk tasks and unwinds promptly; the URL path
-        // observes it on the next chunk of its stream loop.
+        if let Some(token) = self
+            .cancel_flags
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(model_id)
         {
-            let flags = self.cancel_flags.lock().unwrap();
-            if let Some(token) = flags.get(model_id) {
-                token.cancel();
-                info!("Cancellation token triggered for: {}", model_id);
-            } else {
-                warn!("No active download found for: {}", model_id);
-            }
+            token.cancel();
         }
-
-        // Update state immediately for UI responsiveness
-        {
-            let mut models = self.available_models.lock().unwrap();
-            if let Some(model) = models.get_mut(model_id) {
-                model.is_downloading = false;
-            }
-        }
-
-        // Update download status to reflect current state
-        self.update_download_status()?;
-
-        // Emit cancellation event so all UI components can clear their state
-        let _ = self.app_handle.emit("model-download-cancelled", model_id);
-
-        info!("Download cancellation initiated for: {}", model_id);
+        // UI acknowledgement does not release worker/root ownership.
+        self.emit_model_event("model-download-cancelled", model_id);
         Ok(())
     }
 }

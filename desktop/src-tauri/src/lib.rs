@@ -289,8 +289,12 @@ fn create_tray_icon(app_handle: &AppHandle) -> tauri::Result<tauri::tray::TrayIc
                 if model_id == current_model {
                     return;
                 }
+                let Ok(reservation) = app.state::<Arc<ModelManager>>().reserve_activity() else {
+                    return;
+                };
                 let app_clone = app.clone();
                 std::thread::spawn(move || {
+                    let _reservation = reservation;
                     match commands::models::switch_active_model(&app_clone, &model_id) {
                         Ok(()) => {
                             log::info!("Model switched to {} via tray.", model_id);
@@ -372,6 +376,7 @@ fn initialize_core_logic(app_handle: &AppHandle) -> Result<(), Box<dyn std::erro
     // Add managers to Tauri's managed state
     app_handle.manage(recording_manager.clone());
     app_handle.manage(model_manager.clone());
+    model_manager.start_initial_scan();
     app_handle.manage(transcription_manager.clone());
     app_handle.manage(workflow);
     app_handle.manage(tray::TrayState::new());
@@ -809,6 +814,12 @@ pub fn run(cli_args: CliArgs) {
             commands::check_apple_intelligence_available,
             commands::initialize_enigo,
             commands::initialize_shortcuts,
+            commands::models::show_model_root,
+            commands::models::get_model_root,
+            commands::models::get_model_catalog,
+            commands::models::validate_model_root,
+            commands::models::apply_model_root,
+            commands::models::cancel_model_root_scan,
             commands::models::get_available_models,
             commands::models::get_model_info,
             commands::models::get_model_path,
@@ -896,6 +907,8 @@ pub fn run(cli_args: CliArgs) {
         .plugin(tauri_plugin_dialog::init())
         .plugin(
             LogBuilder::new()
+                .level_for("hf_hub", log::LevelFilter::Off)
+                .level_for("transcribe_cpp", log::LevelFilter::Off)
                 .level(log::LevelFilter::Trace) // Set to most verbose level globally
                 .max_file_size(500_000)
                 .rotation_strategy(RotationStrategy::KeepOne)
@@ -1028,7 +1041,10 @@ pub fn run(cli_args: CliArgs) {
 
                 let handle = app_handle.clone();
                 let args = cli_args.clone();
+                let reservation = app_handle.state::<Arc<ModelManager>>().reserve_activity().ok();
                 std::thread::spawn(move || {
+                    let _reservation = reservation;
+                    let _ = handle.state::<Arc<ModelManager>>().rescan_local_models();
                     let code = run_headless_guarded(|| run_headless_transcription(&handle, &args));
                     // Drop the loaded engine before teardown: ggml-metal's global
                     // device free asserts (SIGABRT) if a model's Metal resources

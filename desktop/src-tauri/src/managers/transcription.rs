@@ -7,7 +7,8 @@ use crate::capture_startup::{CaptureOutcome, CaptureSpan, CaptureTrace};
 use crate::chinese_script::{convert_chinese_script, ChineseVariety};
 use crate::managers::audio::AudioRecordingManager;
 use crate::managers::model::{EngineType, ModelManager};
-use crate::managers::model_storage::ModelPathAccess;
+use crate::managers::model_roots::{ArtifactKey, RootActivity};
+use crate::managers::model_roots_files::ArtifactUse;
 use crate::settings::{
     get_settings, AppSettings, ChineseScript, ModelUnloadTimeout, OrtAcceleratorSetting,
     TranscribeAcceleratorSetting,
@@ -45,6 +46,18 @@ use transcribe_rs::{
 const STREAM_PERF_LOG_INTERVAL: Duration = Duration::from_secs(5);
 const STREAM_FINALIZE_REPLY_TIMEOUT: Duration = Duration::from_secs(30);
 
+fn safe_model_failure(error: anyhow::Error) -> anyhow::Error {
+    if error
+        .downcast_ref::<crate::managers::model_roots::RootError>()
+        .is_some()
+        || error.to_string() == "recognition-model-incompatible"
+    {
+        error
+    } else {
+        anyhow::anyhow!("model-operation-failed")
+    }
+}
+
 fn panic_payload_message(payload: &(dyn std::any::Any + Send)) -> String {
     if let Some(message) = payload.downcast_ref::<&str>() {
         (*message).to_string()
@@ -57,6 +70,7 @@ fn panic_payload_message(payload: &(dyn std::any::Any + Send)) -> String {
 
 #[derive(Clone, Debug, Serialize)]
 pub struct ModelStateEvent {
+    pub generation: u64,
     pub event_type: String,
     pub model_id: Option<String>,
     pub model_name: Option<String>,
@@ -207,6 +221,7 @@ impl StreamRouter {
 struct LoadedEngine {
     kind: EngineKind,
     identity: ModelIdentity,
+    artifact: Arc<ArtifactUse>,
 }
 
 /// Recognition text and identity moved together from the same decoder lease.
@@ -290,7 +305,7 @@ pub struct TranscriptionManager {
     engine: Arc<Mutex<Option<LoadedEngine>>>,
     model_manager: Arc<ModelManager>,
     app_handle: AppHandle,
-    current_model_id: Arc<Mutex<Option<String>>>,
+    current_model_id: Arc<Mutex<Option<ArtifactKey>>>,
     last_activity: Arc<AtomicU64>,
     shutdown_signal: Arc<AtomicBool>,
     watcher_handle: Arc<Mutex<Option<thread::JoinHandle<()>>>>,
@@ -423,9 +438,13 @@ impl TranscriptionManager {
     }
 
     pub fn is_model_loaded(&self) -> bool {
-        // The engine may be leased out to the streaming worker (taken out of
-        // the mutex). It's still loaded, just in use, so report true.
-        self.lock_engine().is_some() || self.active_engine_lease.load(Ordering::Acquire) != 0
+        let key = self
+            .lock_engine()
+            .as_ref()
+            .map(|engine| engine.artifact.key.clone());
+        key.as_ref()
+            .is_some_and(|key| self.model_manager.roots.usable(key))
+            || self.active_engine_lease.load(Ordering::Acquire) != 0
     }
 
     /// Accelerator changes should not disturb the current transcription. Mark
@@ -452,6 +471,7 @@ impl TranscriptionManager {
     }
 
     pub fn unload_model(&self) -> Result<()> {
+        let activity = self.model_manager.activity()?;
         let unload_start = std::time::Instant::now();
         debug!("Starting to unload model");
 
@@ -469,6 +489,7 @@ impl TranscriptionManager {
         let _ = self.app_handle.emit(
             "model-state-changed",
             ModelStateEvent {
+                generation: activity.root.generation,
                 event_type: "unloaded".to_string(),
                 model_id: None,
                 model_name: None,
@@ -482,6 +503,16 @@ impl TranscriptionManager {
             unload_duration.as_millis()
         );
         Ok(())
+    }
+
+    pub fn invalidate_idle_root(&self) {
+        *self.lock_engine() = None;
+        *self
+            .current_model_id
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = None;
+        self.reload_model_on_next_use
+            .store(false, Ordering::Release);
     }
 
     fn now_ms() -> u64 {
@@ -523,13 +554,16 @@ impl TranscriptionManager {
         model_id: &str,
         device_index: Option<usize>,
     ) -> Result<()> {
+        let activity = self.model_manager.activity()?;
         let started = Instant::now();
         crate::diagnostics::record(
             crate::diagnostics::Phase::ModelLoad,
             crate::diagnostics::Outcome::Started,
             None,
         );
-        let result = self.load_model_with_device_inner(model_id, device_index);
+        let result = self
+            .load_model_with_device_inner(model_id, device_index, &activity)
+            .map_err(safe_model_failure);
         crate::diagnostics::record(
             crate::diagnostics::Phase::ModelLoad,
             if result.is_ok() {
@@ -546,6 +580,7 @@ impl TranscriptionManager {
         &self,
         model_id: &str,
         device_index: Option<usize>,
+        activity: &RootActivity,
     ) -> Result<()> {
         apply_accelerator_settings(&self.app_handle);
 
@@ -556,6 +591,7 @@ impl TranscriptionManager {
         let _ = self.app_handle.emit(
             "model-state-changed",
             ModelStateEvent {
+                generation: activity.root.generation,
                 event_type: "loading_started".to_string(),
                 model_id: Some(model_id.to_string()),
                 model_name: None,
@@ -570,10 +606,11 @@ impl TranscriptionManager {
                 let _ = self.app_handle.emit(
                     "model-state-changed",
                     ModelStateEvent {
+                        generation: activity.root.generation,
                         event_type: "loading_failed".to_string(),
                         model_id: Some(model_id.to_string()),
                         model_name: None,
-                        error: Some(error_msg.clone()),
+                        error: Some("model-load-failed".into()),
                     },
                 );
                 return Err(anyhow::anyhow!(error_msg));
@@ -586,10 +623,11 @@ impl TranscriptionManager {
             let _ = self.app_handle.emit(
                 "model-state-changed",
                 ModelStateEvent {
+                    generation: activity.root.generation,
                     event_type: "loading_failed".to_string(),
                     model_id: Some(model_id.to_string()),
                     model_name: Some(model_info.name.clone()),
-                    error: Some(error_msg.to_string()),
+                    error: Some("model-load-failed".into()),
                 },
             );
         };
@@ -600,10 +638,11 @@ impl TranscriptionManager {
             return Err(anyhow::anyhow!(error_msg));
         }
 
-        let model_path = self
+        let artifact = self
             .model_manager
-            .get_model_path(model_id)
-            .inspect_err(|error| emit_loading_failed(&error.to_string()))?;
+            .acquire_artifact(model_id, activity)
+            .inspect_err(|_| emit_loading_failed("model-artifact-unavailable"))?;
+        let model_path = artifact.path.clone();
 
         // Drop the current engine BEFORE building the new one so transcribe-cpp
         // frees the previous native context first — avoids holding two models at
@@ -681,7 +720,7 @@ impl TranscriptionManager {
                 // load-completed event below triggers the frontend refresh.
                 let caps = session.model().capabilities();
                 self.model_manager.set_runtime_capabilities(
-                    model_id,
+                    &artifact.key,
                     caps.supports_streaming,
                     caps.supports_translate,
                     caps.supports_language_detect,
@@ -777,26 +816,34 @@ impl TranscriptionManager {
             }
         };
 
-        // Update the current engine and model ID
-        {
-            let mut engine = self.lock_engine();
-            let backend = match &loaded_engine {
-                EngineKind::TranscribeCpp(session) => session.model().backend().to_string(),
-                _ => "onnx".into(),
-            };
-            *engine = Some(LoadedEngine {
-                kind: loaded_engine,
-                identity: ModelIdentity {
-                    id: model_id.to_owned(),
-                    name: Some(model_info.name.clone()),
-                    backend: Some(backend),
-                },
-            });
+        if !self.model_manager.roots.current(&artifact.key) {
+            return Err(anyhow::anyhow!("model-root-stale"));
         }
-        {
-            let mut current_model = self.current_model_id.lock().unwrap();
-            *current_model = Some(model_id.to_string());
-        }
+        self.model_manager
+            .roots
+            .with_current(&artifact.key, || {
+                {
+                    let mut engine = self.lock_engine();
+                    let backend = match &loaded_engine {
+                        EngineKind::TranscribeCpp(session) => session.model().backend().to_string(),
+                        _ => "onnx".into(),
+                    };
+                    *engine = Some(LoadedEngine {
+                        kind: loaded_engine,
+                        artifact: artifact.clone(),
+                        identity: ModelIdentity {
+                            id: model_id.to_owned(),
+                            name: Some(model_info.name.clone()),
+                            backend: Some(backend),
+                        },
+                    });
+                }
+                {
+                    let mut current_model = self.current_model_id.lock().unwrap();
+                    *current_model = Some(artifact.key.clone());
+                }
+            })
+            .ok_or_else(|| anyhow::anyhow!("model-root-stale"))?;
 
         // Reset idle timer so the watcher doesn't immediately unload a just-loaded model
         self.touch_activity();
@@ -805,6 +852,7 @@ impl TranscriptionManager {
         let _ = self.app_handle.emit(
             "model-state-changed",
             ModelStateEvent {
+                generation: activity.root.generation,
                 event_type: "loading_completed".to_string(),
                 model_id: Some(model_id.to_string()),
                 model_name: Some(model_info.name.clone()),
@@ -844,9 +892,18 @@ impl TranscriptionManager {
             return;
         }
 
+        let Ok(activity) = self.model_manager.activity() else {
+            return;
+        };
         *is_loading = true;
+        let loading = LoadingGuard {
+            is_loading: self.is_loading.clone(),
+            loading_condvar: self.loading_condvar.clone(),
+        };
         let self_clone = self.clone();
         thread::spawn(move || {
+            let _loading = loading;
+            let _activity = activity;
             let job_started = trace.as_ref().map(|trace| {
                 trace.record(CaptureSpan::ModelLoad, CaptureOutcome::Started, None);
                 trace.now()
@@ -872,15 +929,17 @@ impl TranscriptionManager {
             if let Err(e) = result {
                 error!("Failed to load model: {}", e);
             }
-            let mut is_loading = self_clone.is_loading.lock().unwrap();
-            *is_loading = false;
-            self_clone.loading_condvar.notify_all();
         });
     }
 
     pub fn get_current_model(&self) -> Option<String> {
-        let current_model = self.current_model_id.lock().unwrap();
-        current_model.clone()
+        let key = self
+            .current_model_id
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        key.filter(|key| self.model_manager.roots.current(key))
+            .map(|key| key.model_id)
     }
 
     /// The compute backend the currently-loaded engine is bound to, for
@@ -923,6 +982,9 @@ impl TranscriptionManager {
         profile: RecognitionProfile,
         owner: crate::workflow::GenerationToken,
     ) {
+        let Ok(activity) = self.model_manager.activity() else {
+            return;
+        };
         if self.router.is_open() || self.active_stream_worker.load(Ordering::Acquire) != 0 {
             warn!("start_stream called while a stream worker is already active");
             return;
@@ -941,7 +1003,10 @@ impl TranscriptionManager {
 
         let manager = self.clone();
         let capture_id = owner.capture_id();
-        thread::spawn(move || manager.run_stream_worker(rx, worker_id, profile, owner, capture_id));
+        thread::spawn(move || {
+            let _activity = activity;
+            manager.run_stream_worker(rx, worker_id, profile, owner, capture_id)
+        });
     }
 
     fn run_stream_worker(
@@ -1096,7 +1161,7 @@ impl TranscriptionManager {
             let mut stream = match session.stream(&run_options, &StreamOptions::default()) {
                 Ok(s) => s,
                 Err(e) => {
-                    error!("Failed to begin stream: {}", e);
+                    error!("Model stream failed to start");
                     break 'stream false;
                 }
             };
@@ -1140,7 +1205,7 @@ impl TranscriptionManager {
                             }
                             Err(e) => {
                                 perf.record_compute(feed_start.elapsed());
-                                warn!("stream feed failed: {}", e);
+                                warn!("Model stream feed failed");
                             }
                         }
                     }
@@ -1228,21 +1293,22 @@ impl TranscriptionManager {
     fn return_engine(
         &self,
         engine: LoadedEngine,
-        expected_model_id: &str,
+        _expected_model_id: &str,
         owner: Option<&crate::workflow::GenerationToken>,
     ) {
         let operation = || {
-            let still_current =
-                self.current_model_id.lock().unwrap().as_deref() == Some(expected_model_id);
-            if still_current {
-                *self.lock_engine() = Some(engine);
-            } else {
-                info!(
-                    "Model changed/unloaded during transcription; dropping stale engine (was '{}')",
-                    expected_model_id
-                );
-                // `engine` drops here, freeing its resources.
-            }
+            let key = engine.artifact.key.clone();
+            self.model_manager.roots.with_current(&key, || {
+                if self
+                    .current_model_id
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .as_ref()
+                    == Some(&key)
+                {
+                    *self.lock_engine() = Some(engine);
+                }
+            });
         };
         if let Some(owner) = owner {
             owner.run(operation);
@@ -1288,7 +1354,9 @@ impl TranscriptionManager {
         audio: Vec<f32>,
         profile: &RecognitionProfile,
     ) -> Result<String> {
-        let result = self.transcribe_owned(audio, profile, None);
+        let result = self
+            .transcribe_owned(audio, profile, None)
+            .map_err(safe_model_failure);
         if result.is_ok() {
             self.maybe_unload_immediately("headless transcription");
         }
@@ -1308,7 +1376,9 @@ impl TranscriptionManager {
             crate::diagnostics::Outcome::Started,
             None,
         );
-        let result = self.transcribe_owned(audio, profile, Some(owner));
+        let result = self
+            .transcribe_owned(audio, profile, Some(owner))
+            .map_err(safe_model_failure);
         crate::diagnostics::record(
             crate::diagnostics::Phase::Transcription,
             if result.is_ok() {
@@ -1326,6 +1396,7 @@ impl TranscriptionManager {
         profile: &RecognitionProfile,
         owner: Option<crate::workflow::GenerationToken>,
     ) -> Result<RecognizedText> {
+        let activity = self.model_manager.activity()?;
         #[cfg(debug_assertions)]
         if std::env::var("HANDY_FORCE_TRANSCRIPTION_FAILURE").is_ok() {
             return Err(anyhow::anyhow!(
@@ -1431,6 +1502,10 @@ impl TranscriptionManager {
                 }
             };
 
+            if !self.model_manager.roots.usable(&engine.artifact.key) {
+                return Err(anyhow::anyhow!("model-artifact-unavailable"));
+            }
+            let producing_key = engine.artifact.key.clone();
             producer_model = Some(engine.identity.clone());
             // No ownership gate or engine mutex is held during native decoding.
 
@@ -1609,10 +1684,7 @@ impl TranscriptionManager {
                     // Engine panicked — do NOT put it back (it's in an unknown state).
                     // The engine is dropped here, effectively unloading it.
                     let panic_msg = panic_payload_message(panic_payload.as_ref());
-                    error!(
-                        "Transcription engine panicked: {}. Model has been unloaded.",
-                        panic_msg
-                    );
+                    error!("Transcription engine panicked; model unloaded");
 
                     // Clear the model ID so it will be reloaded on next attempt
                     let clear = || {
@@ -1620,16 +1692,20 @@ impl TranscriptionManager {
                             .current_model_id
                             .lock()
                             .unwrap_or_else(|e| e.into_inner());
+                        if current_model.as_ref() != Some(&producing_key) {
+                            return;
+                        }
                         *current_model = None;
                         drop(current_model);
 
                         let _ = self.app_handle.emit(
                             "model-state-changed",
                             ModelStateEvent {
+                                generation: activity.root.generation,
                                 event_type: "unloaded".to_string(),
                                 model_id: None,
                                 model_name: None,
-                                error: Some(format!("Engine panicked: {}", panic_msg)),
+                                error: Some("model-engine-panicked".into()),
                             },
                         );
                     };
@@ -2116,7 +2192,9 @@ fn drain_until_finalize(rx: mpsc::Receiver<StreamCmd>) {
 /// in a `dynamic-backends` build it loads the per-ISA CPU / GPU modules. Must run
 /// before the first model load.
 pub fn init_transcribe_backend() {
-    transcribe_cpp::init_logging();
+    // Native ggml/model diagnostics can contain the selected local path.
+    // Structured bounded model-load outcomes remain the observable interface.
+    transcribe_cpp::disable_logging();
     match transcribe_cpp::init_backends_default() {
         Ok(()) => {
             if transcribe_gpu_disabled_for_host() {

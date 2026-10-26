@@ -3,7 +3,7 @@
 //! Both legacy URL models and Hugging Face mirror fallbacks use this module;
 //! source-specific orchestration and finalization remain in the parent module.
 
-use super::{DownloadProgress, ModelManager};
+use super::{DownloadProgress, ModelManager, RootActivity};
 use anyhow::Result;
 use futures_util::StreamExt;
 use hf_hub::api::tokio::CancellationToken;
@@ -107,14 +107,19 @@ impl ModelManager {
         path: &Path,
         expected_sha256: Option<&str>,
         emit: &(dyn Fn(HttpDownloadEvent<'_>) + Send + Sync),
+        activity: &RootActivity,
     ) -> Result<()> {
         emit(HttpDownloadEvent::VerificationStarted);
         let path = path.to_path_buf();
         let expected = expected_sha256.map(str::to_string);
         let id = model_id.to_string();
-        tokio::task::spawn_blocking(move || Self::verify_sha256(&path, expected.as_deref(), &id))
-            .await
-            .map_err(|e| anyhow::anyhow!("SHA256 task panicked: {}", e))??;
+        let worker = activity.clone();
+        tokio::task::spawn_blocking(move || {
+            let _worker = worker;
+            Self::verify_sha256(&path, expected.as_deref(), &id)
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("SHA256 task panicked: {}", e))??;
         emit(HttpDownloadEvent::VerificationCompleted);
         Ok(())
     }
@@ -129,9 +134,11 @@ impl ModelManager {
         expected_size: Option<u64>,
         expected_sha256: Option<&str>,
         cancel_token: &CancellationToken,
+        activity: &RootActivity,
     ) -> Result<HttpDownloadOutcome> {
         let app_handle = self.app_handle.clone();
         let id = model_id.to_string();
+        let generation = activity.root.generation;
         Self::download_http_resumable_with_events(
             model_id,
             url,
@@ -141,17 +148,24 @@ impl ModelManager {
             cancel_token,
             &move |event| {
                 let _ = match event {
-                    HttpDownloadEvent::Progress(progress) => {
-                        app_handle.emit("model-download-progress", progress)
-                    }
-                    HttpDownloadEvent::VerificationStarted => {
-                        app_handle.emit("model-verification-started", &id)
-                    }
-                    HttpDownloadEvent::VerificationCompleted => {
-                        app_handle.emit("model-verification-completed", &id)
-                    }
+                    HttpDownloadEvent::Progress(progress) => app_handle.emit(
+                        "model-download-progress",
+                        DownloadProgress {
+                            generation,
+                            ..progress.clone()
+                        },
+                    ),
+                    HttpDownloadEvent::VerificationStarted => app_handle.emit(
+                        "model-verification-started",
+                        &serde_json::json!({ "generation": generation, "model_id": &id }),
+                    ),
+                    HttpDownloadEvent::VerificationCompleted => app_handle.emit(
+                        "model-verification-completed",
+                        &serde_json::json!({ "generation": generation, "model_id": &id }),
+                    ),
                 };
             },
+            activity,
         )
         .await
     }
@@ -189,6 +203,7 @@ impl ModelManager {
         expected_sha256: Option<&str>,
         cancel_token: &CancellationToken,
         emit: &(dyn Fn(HttpDownloadEvent<'_>) + Send + Sync),
+        activity: &RootActivity,
     ) -> Result<HttpDownloadOutcome> {
         let mut resume_from = partial_path.metadata().map(|m| m.len()).unwrap_or(0);
 
@@ -201,8 +216,14 @@ impl ModelManager {
                     "Partial download of {} is already full-size; verifying",
                     model_id
                 );
-                Self::verify_file_with_events(model_id, partial_path, expected_sha256, emit)
-                    .await?;
+                Self::verify_file_with_events(
+                    model_id,
+                    partial_path,
+                    expected_sha256,
+                    emit,
+                    activity,
+                )
+                .await?;
                 return Ok(HttpDownloadOutcome::Completed);
             }
         }
@@ -246,7 +267,8 @@ impl ModelManager {
                     "server object ends before the expected size (HTTP 416)"
                 ));
             }
-            Self::verify_file_with_events(model_id, partial_path, expected_sha256, emit).await?;
+            Self::verify_file_with_events(model_id, partial_path, expected_sha256, emit, activity)
+                .await?;
             return Ok(HttpDownloadOutcome::Completed);
         }
         // A 200 to a Range request means the server ignored it and is sending
@@ -304,6 +326,7 @@ impl ModelManager {
 
         let emit_progress = |downloaded: u64| {
             emit(HttpDownloadEvent::Progress(&DownloadProgress {
+                generation: activity.root.generation,
                 model_id: model_id.to_string(),
                 downloaded,
                 total: total_size,
@@ -375,7 +398,8 @@ impl ModelManager {
 
         // The catalog hash is the trust anchor: for a mirror (an untrusted
         // host) this verification is what makes the fallback safe at all.
-        Self::verify_file_with_events(model_id, partial_path, expected_sha256, emit).await?;
+        Self::verify_file_with_events(model_id, partial_path, expected_sha256, emit, activity)
+            .await?;
         Ok(HttpDownloadOutcome::Completed)
     }
 }

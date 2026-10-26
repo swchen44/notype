@@ -12,6 +12,7 @@ use crate::capture_startup::{
     StreamDisposition,
 };
 use crate::helpers::clamshell;
+use crate::managers::model_roots::RootActivity;
 use crate::managers::transcription::StreamRouter;
 use crate::settings::{get_settings, write_settings, AppSettings, VadBackend};
 use crate::utils;
@@ -379,6 +380,7 @@ pub struct AudioRecordingManager {
     /// Never assign through this directly — route every write through
     /// `set_state()`, which keeps `recording_active` in sync.
     state: Arc<Mutex<RecordingState>>,
+    root_activity: Arc<Mutex<Option<RootActivity>>>,
     mode: Arc<Mutex<MicrophoneMode>>,
     app_handle: tauri::AppHandle,
 
@@ -424,6 +426,7 @@ impl AudioRecordingManager {
 
         let manager = Self {
             state: Arc::new(Mutex::new(RecordingState::Idle)),
+            root_activity: Arc::new(Mutex::new(None)),
             mode: Arc::new(Mutex::new(mode.clone())),
             app_handle: app.clone(),
 
@@ -561,7 +564,9 @@ impl AudioRecordingManager {
     fn schedule_lazy_close(&self) {
         let gen = self.close_generation.fetch_add(1, Ordering::SeqCst) + 1;
         let app = self.app_handle.clone();
+        let activity = self.root_activity();
         std::thread::spawn(move || {
+            let _activity = activity;
             std::thread::sleep(STREAM_IDLE_TIMEOUT);
             let rm = app.state::<Arc<AudioRecordingManager>>();
             // Hold state lock across the check AND close to serialize against
@@ -851,6 +856,11 @@ impl AudioRecordingManager {
         vad_policy: VadPolicy,
         trace: CaptureTrace,
     ) -> Result<RecordingReadiness, String> {
+        let activity = self
+            .app_handle
+            .state::<Arc<crate::managers::model::ModelManager>>()
+            .activity()
+            .map_err(|_| "model-root-busy".to_owned())?;
         let mut state = self.state.lock().unwrap();
 
         if let RecordingState::Idle = *state {
@@ -870,6 +880,7 @@ impl AudioRecordingManager {
                     binding_id: binding_id.to_string(),
                 },
             );
+            *self.root_activity.lock().unwrap_or_else(|e| e.into_inner()) = Some(activity);
             debug!("Recording requested for binding {binding_id}");
             Ok(RecordingReadiness { waiter, generation })
         } else {
@@ -1087,6 +1098,10 @@ impl AudioRecordingManager {
                     }
                 }
 
+                self.root_activity
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .take();
                 if self.was_cancelled_since(cancel_generation) {
                     debug!("Recording stop cancelled; discarding captured samples");
                     return None;
@@ -1096,6 +1111,12 @@ impl AudioRecordingManager {
                 Some(samples.with_decoder_padding())
             })
             .flatten()
+    }
+    pub fn root_activity(&self) -> Option<RootActivity> {
+        self.root_activity
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
     }
     pub fn is_recording(&self) -> bool {
         // Lock-free: mirrors the `state` {Recording, Stopping} membership via
@@ -1138,6 +1159,10 @@ impl AudioRecordingManager {
                     }
                 }
                 self.set_state(&mut state, RecordingState::Idle);
+                self.root_activity
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .take();
             }
             RecordingState::Idle => {}
         }

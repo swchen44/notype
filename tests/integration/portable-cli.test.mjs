@@ -53,10 +53,10 @@ test("actual CLI refuses a missing runtime before app spawn and does not expose 
   );
 });
 
-test("actual CLI refuses corrupted model bytes and unassembled releases", async (t) => {
+test("actual full CLI check refuses corrupted model bytes and unassembled releases", async (t) => {
   const f = await cliFixture(t);
   await writeFile(path.join(f.model, "weights/fixture.bin"), "corrupted bytes");
-  const corrupt = cli(f);
+  const corrupt = cli(f, ["--check"]);
   assert.equal(corrupt.status, 2);
   assert.match(
     corrupt.stderr,
