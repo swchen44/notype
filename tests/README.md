@@ -10,6 +10,7 @@ RootService coordinator run without Tauri/speech engines:
 ```powershell
 cargo test --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test provider-bootstrap
 cargo test --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test offline-bootstrap-store
+cargo test --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test bootstrap-preflight --test runtime-startup
 node --test tests/integration/bootstrap-recovery.ui.mjs
 node --test tests/unittest/offline_bundle.test.mjs tests/integration/offline-bundle.test.mjs
 ```
@@ -26,6 +27,18 @@ program/Node/runtime/bootstrap gates remain mandatory. None of these tests reads
 user settings/home.env/keys/weights or establishes native App/clean-host/company
 API/physical capture acceptance. Actual commands/counts/source pins belong in the
 verification receipt after execution.
+
+The approved [P29 review fixes](https://github.com/swchen44/notype/issues/29#issuecomment-6408412474)
+([Astra0](https://github.com/swchen44/notype/issues/29#issuecomment-6408691967)) add
+the actual read-only native placement policy with owned-tree/sentinel inventories,
+including rejected missing descendants, original alias ancestry and injected Known
+Folder inputs. The production runtime factory is exercised with owned audio/worker
+ports: repeated audio failure starts zero workers, successful retry shares one
+router and one owned worker, and duplicate/in-flight retries cannot publish twice.
+Existing SQLite history and applied real domain stores survive these failures.
+The actual History UI Copy Original/Result seam uses IPC doubles during incomplete
+setup; no real clipboard or speech device is touched. These are source contracts;
+Windows native compilation/launch remains separately reported.
 
 使用者已指定以下目錄，後續實作沿用此結構：
 

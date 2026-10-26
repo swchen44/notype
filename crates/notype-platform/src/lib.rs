@@ -290,11 +290,8 @@ pub fn preflight_offline_placement(
 fn display_local_path(path: &Path) -> PathBuf {
     #[cfg(windows)]
     {
-        return PathBuf::from(
-            path.to_string_lossy()
-                .strip_prefix(r"\\?\")
-                .unwrap_or(&path.to_string_lossy()),
-        );
+        let text = path.to_string_lossy();
+        return PathBuf::from(text.strip_prefix(r"\\?\").unwrap_or(&text));
     }
     #[cfg(not(windows))]
     {

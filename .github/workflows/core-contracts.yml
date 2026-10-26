@@ -135,6 +135,8 @@ jobs:
         run: cargo +1.99.1 fmt --manifest-path crates/notype-core/Cargo.toml -- --check
       - name: Exercise first-use bootstrap without native dependencies
         run: cargo +1.99.1 test --locked --no-fail-fast --manifest-path tests/integration/desktop-contracts/Cargo.toml --test provider-bootstrap --test offline-bootstrap-store --test runtime-startup --test bootstrap-preflight
+      - name: Lint bootstrap placement and runtime ownership without native dependencies
+        run: cargo +1.99.1 clippy --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test provider-bootstrap --test offline-bootstrap-store --test runtime-startup --test bootstrap-preflight -- -D warnings
       - name: Check platform adapter formatting
         run: cargo +1.99.1 fmt --manifest-path crates/notype-platform/Cargo.toml -- --check
       - name: Exercise the native launch policy without Tauri or speech engines

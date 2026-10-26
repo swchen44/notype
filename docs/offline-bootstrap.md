@@ -12,6 +12,14 @@ is `app/node_modules/notype-win32-x64/app/notype.exe` under that root, verifies
 the declared application-manifest and optional bootstrap digests, and uses its
 compiled catalog/RootService to verify models before initialization.
 
+The first native `run` boundary validates the entire bundle/data placement before
+portable directories, logs, plugins or model services can write. It captures the
+override or authoritative Windows Known Folder once and carries checked immutable
+placement into composition; it never consults APPDATA as a replacement. Original
+local-path/reparse checks precede canonicalization, including nonexistent data
+descendants. Domain retry revalidates the frozen context before commits. Ordinary
+non-bundle npm launches retain their existing placement behavior.
+
 `bundle.json` schema1 has `mode:"offline-bundle"`, `id`, `version`, 40-hex
 `source`, application pin `{name,version,manifest:"payload.json",sha256}`,
 `model:{model_id,root:"models",pin:{name,version,manifest:"payload.json",sha256}}`,
@@ -45,3 +53,9 @@ full bundle --check still fails any missing declared asset. Required fresh
 domains are validated together, committed independently with durable applied
 markers, then readiness is published. Partial failure blocks capture/API and
 preserves History/safe settings/root Recovery until explicit retry.
+
+History Original/Result copy remains available through `copy_history_text` while
+capture, model-list/generation and processing retry are blocked. Native runtime
+retry serializes readiness checking, audio preparation, transcription-worker
+construction and publication. Fallible audio prepares first; successful audio and
+transcription share the same router, and only a complete pair publishes readiness.

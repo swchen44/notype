@@ -34,6 +34,9 @@ mod bootstrap_selection;
 #[allow(dead_code)]
 #[path = "../../desktop/src-tauri/src/offline_bootstrap.rs"]
 mod offline_bootstrap;
+#[allow(dead_code)]
+#[path = "../../desktop/src-tauri/src/runtime_startup.rs"]
+mod runtime_startup;
 use bootstrap_selection::SelectionStore;
 use provider_config::{files::FileStorage, ConnectionStore};
 use std::{path::Path, sync::Arc};
@@ -421,4 +424,73 @@ async fn bootstrap_and_safe_view_send_zero_http_until_an_explicit_model_list() {
     };
     let (_, result) = tokio::join!(server, discovery.query(store, request, &NeverHome));
     assert_eq!(result.unwrap().models[0].id, "synthetic-explicit");
+}
+
+#[test]
+fn failed_runtime_after_committed_domains_keeps_actual_history_and_bootstrap_state() {
+    let directory = tempfile::tempdir().unwrap();
+    let models = directory.path().join("models");
+    std::fs::create_dir(&models).unwrap();
+    std::fs::write(models.join("Q6.gguf"), b"abc").unwrap();
+    let roots = make_roots(directory.path());
+    let provider_path = directory.path().join("provider_connections_v2.json");
+    let settings_path = directory.path().join("settings_store.json");
+    let root_path = directory.path().join("model_storage_v1.json");
+    let provider =
+        ConnectionStore::open(Arc::new(FileStorage::new(provider_path.clone()))).unwrap();
+    let selection = SelectionStore::new(Arc::new(FileStorage::new(settings_path.clone())));
+    let mut preset = input();
+    preset.connection = Some(connection());
+    offline_bootstrap::initialize(
+        &preset,
+        &models,
+        &roots,
+        &provider,
+        &selection,
+        serde_json::json!({}),
+    )
+    .unwrap();
+    let before = (
+        std::fs::read(&root_path).unwrap(),
+        std::fs::read(&provider_path).unwrap(),
+        std::fs::read(&settings_path).unwrap(),
+    );
+    let history = notype_core::SessionService::open(directory.path().join("sessions.db")).unwrap();
+    let entry = history
+        .create(
+            "owned retained original",
+            notype_core::SessionOptions::default(),
+        )
+        .unwrap();
+    let factory = runtime_startup::RuntimeStartup::new();
+    for _ in 0..4 {
+        assert_eq!(
+            factory.initialize(
+                || false,
+                || (),
+                |_| Err::<(), _>("audio-unavailable"),
+                |_| panic!("failed audio must not create transcription"),
+                |_, _: ()| Ok(())
+            ),
+            Err("audio-unavailable")
+        );
+        assert_eq!(
+            history.get(&entry.id).unwrap().transcript,
+            "owned retained original"
+        );
+        assert!(roots.initialized());
+        assert_eq!(provider.view().unwrap().revision, 1);
+        assert_eq!(
+            selection.read().unwrap().unwrap()["selected_model"],
+            "synthetic/stt/Q6.gguf"
+        );
+        assert_eq!(
+            (
+                std::fs::read(&root_path).unwrap(),
+                std::fs::read(&provider_path).unwrap(),
+                std::fs::read(&settings_path).unwrap()
+            ),
+            before
+        );
+    }
 }
