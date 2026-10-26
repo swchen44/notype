@@ -243,3 +243,83 @@ fn concurrent_imports_publish_one_identity_and_one_revision() {
     assert_eq!(store.view().unwrap().revision, 1);
     assert_eq!(store.view().unwrap().connections.len(), 1);
 }
+
+#[test]
+fn partial_cross_domain_commit_reopens_and_fills_only_missing_selection() {
+    let directory = tempfile::tempdir().unwrap();
+    let models = directory.path().join("models");
+    let settings_dir = directory.path().join("settings");
+    std::fs::create_dir(&models).unwrap();
+    std::fs::create_dir(&settings_dir).unwrap();
+    std::fs::write(models.join("Q6.gguf"), b"abc").unwrap();
+    let roots = make_roots(directory.path());
+    let provider_path = directory.path().join("provider_connections_v2.json");
+    let provider =
+        ConnectionStore::open(Arc::new(FileStorage::new(provider_path.clone()))).unwrap();
+    let selection = SelectionStore::new(Arc::new(FileStorage::new(
+        settings_dir.join("settings_store.json"),
+    )));
+    let mut preset = input();
+    preset.connection = Some(connection());
+    std::fs::rename(&settings_dir, directory.path().join("held-settings")).unwrap();
+    assert!(offline_bootstrap::initialize(
+        &preset,
+        &models,
+        &roots,
+        &provider,
+        &selection,
+        serde_json::json!({})
+    )
+    .is_err());
+    assert!(roots.initialized());
+    assert_eq!(provider.view().unwrap().revision, 1);
+    assert!(selection.pending().unwrap());
+    let provider_before = std::fs::read(&provider_path).unwrap();
+    let root_before = std::fs::read(directory.path().join("model_storage_v1.json")).unwrap();
+    std::fs::rename(directory.path().join("held-settings"), &settings_dir).unwrap();
+    let reopened_roots = make_roots(directory.path());
+    let reopened_provider =
+        ConnectionStore::open(Arc::new(FileStorage::new(provider_path.clone()))).unwrap();
+    offline_bootstrap::initialize(
+        &preset,
+        &models,
+        &reopened_roots,
+        &reopened_provider,
+        &selection,
+        serde_json::json!({}),
+    )
+    .unwrap();
+    assert_eq!(std::fs::read(provider_path).unwrap(), provider_before);
+    assert_eq!(
+        std::fs::read(directory.path().join("model_storage_v1.json")).unwrap(),
+        root_before
+    );
+    assert_eq!(
+        selection.read().unwrap().unwrap()["selected_model"],
+        "synthetic/stt/Q6.gguf"
+    );
+}
+
+#[test]
+fn durable_domains_do_not_admit_capture_or_api_before_native_runtime_is_ready() {
+    offline_bootstrap::begin();
+    assert!(offline_bootstrap::admit().is_err());
+    offline_bootstrap::finish(Ok(()));
+    assert!(offline_bootstrap::domains_ready());
+    assert!(offline_bootstrap::admit().is_err());
+    assert!(offline_bootstrap::recovery_command("get_history_entries"));
+    assert!(offline_bootstrap::recovery_command(
+        "get_text_configuration"
+    ));
+    for command in [
+        "list_text_models",
+        "initialize_shortcuts",
+        "debug_begin_session",
+        "retry_history_entry_processing",
+        "save_text_connection",
+    ] {
+        assert!(!offline_bootstrap::recovery_command(command));
+    }
+    offline_bootstrap::runtime_ready();
+    assert!(offline_bootstrap::admit().is_ok());
+}
