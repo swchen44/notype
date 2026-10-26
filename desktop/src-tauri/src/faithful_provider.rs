@@ -426,6 +426,7 @@ impl TextConfiguration {
 }
 
 struct ChatProcessor {
+    experiment: Option<experiment::ExperimentContract>,
     credential: Option<RuntimeCredential>,
     request_parameters: Option<notype_core::observations::RequestParameters>,
     credential_source: Option<String>,
@@ -499,6 +500,7 @@ impl ChatProcessor {
         }
         let client = client.build().map_err(|_| invalid)?;
         Ok(Self {
+            experiment: None,
             credential,
             request_parameters: configuration.request_parameters,
             credential_source: configuration.credential_source,
@@ -657,6 +659,7 @@ impl ChatProcessor {
         let thinking_override = self.thinking_override;
         let temperature = self.temperature;
         let top_p = self.top_p;
+        let experiment = self.experiment.clone();
         Box::pin(async move {
             if cancellation.is_cancelled() {
                 return Err(TextFailure::Cancelled);
@@ -696,6 +699,9 @@ impl ChatProcessor {
             }
             if let Some(value) = max_output_tokens {
                 body["max_tokens"] = json!(value);
+            }
+            if let Some(policy) = &experiment {
+                policy.apply(&mut body);
             }
             let wire = serde_json::to_vec(&body).map_err(|_| TextFailure::ConfigurationRequired)?;
             if let Some(parameters) = &mut request_parameters {
@@ -744,6 +750,9 @@ impl ChatProcessor {
                     })
                 }) && body.get("tools").is_none(),
             };
+            if let Some(policy) = &experiment {
+                policy.validate_wire(&endpoint, &wire, &descriptor)?;
+            }
             let revision = observer
                 .as_ref()
                 .and_then(|observer| observer.processing_revision());

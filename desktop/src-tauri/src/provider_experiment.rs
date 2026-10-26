@@ -133,6 +133,114 @@ pub struct ExperimentProcessor {
     inner: ChatProcessor,
     latch: AdverseLatch,
 }
+
+#[derive(Clone)]
+pub(super) struct ExperimentContract {
+    endpoint: String,
+    kind: ExperimentKind,
+    latch: AdverseLatch,
+}
+impl ExperimentContract {
+    fn model(&self) -> &'static str {
+        match self.kind {
+            ExperimentKind::DeepSeekFlash => "deepseek-flash",
+            ExperimentKind::OpenRouterGemma31bFreeGoogleAiStudio => "google/gemma-4-31b-it:free",
+        }
+    }
+    pub(super) fn apply(&self, body: &mut Value) {
+        if self.kind == ExperimentKind::OpenRouterGemma31bFreeGoogleAiStudio {
+            body["provider"] = json!({"only":["google-ai-studio"],"allow_fallbacks":false,"require_parameters":true,"max_price":{"prompt":0,"completion":0,"request":0}});
+        }
+    }
+    pub(super) fn validate_wire(
+        &self,
+        endpoint: &reqwest::Url,
+        wire: &[u8],
+        descriptor: &ApiCallDescriptor,
+    ) -> Result<(), TextFailure> {
+        let invalid = || {
+            self.latch.mark(AdverseCategory::Contract, None);
+            TextFailure::ConfigurationRequired
+        };
+        if self.latch.observed().is_some()
+            || endpoint.as_str() != self.endpoint
+            || wire.len() > 8192
+            || wire.is_empty()
+        {
+            return Err(invalid());
+        }
+        let body: Value = serde_json::from_slice(wire).map_err(|_| invalid())?;
+        let messages = body["messages"].as_array().ok_or_else(invalid)?;
+        let deepseek = self.kind == ExperimentKind::DeepSeekFlash;
+        let profile = if deepseek {
+            ApiProviderProfile::DeepSeek
+        } else {
+            ApiProviderProfile::OpenRouter
+        };
+        let effort = if deepseek { Some("none") } else { None };
+        if body["model"] != self.model()
+            || body["stream"] != false
+            || body["max_tokens"] != 512
+            || messages.is_empty()
+            || messages.len() > 4
+            || messages.iter().any(|message| {
+                message.as_object().is_none_or(|object| object.len() != 2)
+                    || !matches!(message["role"].as_str(), Some("system" | "user"))
+                    || !message["content"].is_string()
+            })
+            || descriptor.profile != profile
+            || descriptor.requested_model.as_deref() != Some(self.model())
+            || descriptor.requested_effort.as_deref() != effort
+            || descriptor.thinking != Some(false)
+            || descriptor.max_output_tokens != Some(512)
+            || descriptor.wire_bytes != wire.len() as u64
+            || descriptor.message_count != messages.len() as u32
+            || !descriptor.non_streaming
+            || !descriptor.plain_text_only
+        {
+            return Err(invalid());
+        }
+        let fields: &[&str] = if deepseek {
+            &[
+                "model",
+                "messages",
+                "stream",
+                "max_tokens",
+                "thinking",
+                "reasoning_effort",
+                "temperature",
+            ]
+        } else {
+            &[
+                "model",
+                "messages",
+                "stream",
+                "max_tokens",
+                "reasoning",
+                "provider",
+            ]
+        };
+        if body.as_object().is_none_or(|object| {
+            object.len() != fields.len() || object.keys().any(|key| !fields.contains(&key.as_str()))
+        }) {
+            return Err(invalid());
+        }
+        if deepseek {
+            if body["thinking"] != json!({"type":"disabled"})
+                || body["reasoning_effort"] != "none"
+                || body["temperature"] != 0
+            {
+                return Err(invalid());
+            }
+        } else if body["reasoning"] != json!({"enabled":false})
+            || body["provider"]
+                != json!({"only":["google-ai-studio"],"allow_fallbacks":false,"require_parameters":true,"max_price":{"prompt":0,"completion":0,"request":0}})
+        {
+            return Err(invalid());
+        }
+        Ok(())
+    }
+}
 impl ExperimentProcessor {
     /// Read shared monotonic status without a marking/reset capability.
     pub fn adverse(&self) -> Option<AdverseSignal> {
@@ -165,8 +273,43 @@ pub fn experiment_processor(
     policy: ExperimentPolicy,
     tracing: diagnostic::TraceContext,
 ) -> Result<ExperimentProcessor, TextFailure> {
-    let (_, _, latch) = policy.parts();
+    let (endpoint, kind, latch) = policy.parts();
+    let fixture = matches!(policy, ExperimentPolicy::OwnedLoopback(..));
+    let expected_profile = if kind == ExperimentKind::DeepSeekFlash {
+        TextProviderProfile::DeepSeek
+    } else {
+        TextProviderProfile::OpenRouter
+    };
+    let expected_model = if kind == ExperimentKind::DeepSeekFlash {
+        "deepseek-flash"
+    } else {
+        "google/gemma-4-31b-it:free"
+    };
+    let expected_effort = if kind == ExperimentKind::DeepSeekFlash {
+        Some("none")
+    } else {
+        None
+    };
+    if configuration.endpoint != endpoint
+        || configuration.provider_profile != expected_profile
+        || configuration.model != expected_model
+        || configuration.thinking_override != Some(false)
+        || configuration.effort.as_deref() != expected_effort
+        || configuration.max_output_tokens != Some(512)
+        || (!fixture
+            && (configuration.authentication != TextAuthentication::Bearer
+                || configuration.runtime_credential.is_none()
+                || !configuration.api_key.is_empty()))
+    {
+        latch.mark(AdverseCategory::Contract, None);
+        return Err(TextFailure::ConfigurationRequired);
+    }
     let mut inner = ChatProcessor::new_with_policy(configuration, true)?;
     inner.tracing = tracing;
+    inner.experiment = Some(ExperimentContract {
+        endpoint,
+        kind,
+        latch: latch.clone(),
+    });
     Ok(ExperimentProcessor { inner, latch })
 }
