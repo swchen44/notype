@@ -1,5 +1,15 @@
 # Windows 11 開發接手
 
+## 最新 checkpoint：簡體 recovery 來源合入，重新凍結完整 S；API 舊 round 已 HALTED
+
+2026-10-26：依 [P29-zhcn-recovery-v1](https://github.com/swchen44/notype/issues/29#issuecomment-6411382409)／[實際 Astra0](https://github.com/swchen44/notype/issues/29#issuecomment-6411399601)，candidate `f8c2dd8b56c47e06926e89ff663fe15cdb3b76f8` 的最終獨立 Spec0／Standards0 已正式完成，保留歷史 merge `f81f00f524ffe4b9da938a8bf3936f30a3b38d1d` 合入。唯一產品改動為 zh-CN 四個 bootstrap recovery 字串；實際 i18next direct-resource 與 rendered component／hook 測試先 RED 後 GREEN。[Frontend40292723964](https://github.com/swchen44/notype/actions/runs/40292723964) exact產品 `88f9527` unit4／rendered95、lint／TypeScript／Vite通過；portable job skipped，**不是f8／新merged S的完整ALL**。最終workflow diff為零。見 [來源receipt](docs/verification/bootstrap-zhcn.md)。
+
+本次所有文件一起納入新的完整 integration **S**；之後 root 須取得 exact-new-S ALL／Windows contracts（build_private_artifact=false）與兩軸 delta repin0，native source／input／preflight才可採用新S，不能沿用6dd為未來App編譯來源。凍結後不追加改SHA文件。[Native external r3計畫](https://github.com/swchen44/notype/issues/14#issuecomment-6411176335)／[Astra0](https://github.com/swchen44/notype/issues/14#issuecomment-6411205513) 的外部runner／fixtures仍在準備；目前沒有compiler／operation baseline／native build／App／大型ZIP，先前零操作失敗證據與cache保留。#14 optional npm deferral不減完整ZIP／extracted QA／runtime floors。
+
+**API證據保留原6dd來源與已關閉identity，不改稱新S artifact**：[實際結果](https://github.com/swchen44/notype/issues/25#issuecomment-6411081019) 為 private build40284216049／artifact12634086594及同binary synthetic check通過後，真實round六次DeepSeek／五筆history，在slot6 reverse翻譯了受保護literal timeout而HALTED；費用 **UNKNOWN**，不是0或估算，六個reservations保留。SQLite五筆history／六call，CSV仍是前一步四列snapshot，完整production export未驗收。slot7/8、所有OpenRouter與Gemini live未做，不重試、不resume、不另開round。本簡體修正不授權key／API request或重建APIartifact。見 [保留的API receipt](docs/verification/provider-probe-v4.md)。
+
+#29/#25/#14/#8／native／fullZIP／公司／五App保持open；本merger沒有native／App／key／API／profile／模型操作或清理，全部source/review leases已交還，worktrees／舊artifacts／receipts保留。以下較舊checkpoint時態以本節、actual-source receipts及live issues為準。
+
 ## 最新 checkpoint：P25 helper 來源合入；等待完整 integration S gates，尚未啟動
 
 2026-10-26：P25-live-v4 helper exact candidate `fd14f407d5c9c8457809eb6311b954cc56e2b4f3` 已在確認最終獨立 Spec0／Standards0 後，以保留歷史 merge `8ba271a180f7385c9f1972af7d1dc77abd74dd01` 合入；原兩項品質 finding 已修正、原審查保留。[完整 ALL40279492394](https://github.com/swchen44/notype/actions/runs/40279492394) exact fd14 completed/success，Linux helper8／24（desktop234內）、bootstrap19、core49＋doc1／platform4、Node33／24＋1 Windows-CMD-only Linux skip、UI3／94；[Windows40279491708](https://github.com/swchen44/notype/actions/runs/40279491708) helper8／25與Clippy通過，artifact明確skipped。見 [完整 receipt／實際 RED→GREEN](docs/verification/provider-probe-v4.md)。8195 的 ALL About-settings assertion 失敗如實保留，未用 Rust／Windows green 代替完整 ALL。

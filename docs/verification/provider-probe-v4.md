@@ -1,5 +1,31 @@
 # P25-live-v4 source verification
 
+## Closed actual API round at source6dd — later status checkpoint
+
+The source/artifact/activation steps described as future work below subsequently
+ran at **source6dd9ca1165461c842d81d6654086d2e883b730dc**. Preserve that provenance:
+private build40284216049/artifact12634086594, followed by the same downloaded
+binary's successful synthetic12-call/9-history check. The actual live round is
+closed **HALTED**, with no continuation/retry/replacement round.
+[Safe actual results](https://github.com/swchen44/notype/issues/25#issuecomment-6411081019)
+record six DeepSeek calls and five saved histories; input2989/output128 tokens.
+Actual billed charge was not returned and remains **UNKNOWN**. Six reservations
+remain retained. The reverse translated protected literal timeout, so the fixed
+machine gate stopped after slot6; this is not complete human language acceptance.
+Cancel/retry slots7/8, OpenRouter calls and Gemini live access were not run.
+
+SQLite retains five histories/six calls. The preserved CSV is the last successful
+four-history snapshot, not a complete final export. A complete production export
+remains an acceptance item; no ad-hoc converter or closed-round mutation was
+substituted. Read-only report restart retained all six calls/reservations.
+
+The later zh-CN recovery merge creates a new source freeze for future native
+builds only. It does not relabel/rebuild this API artifact or resume its closed
+identity. No further key lookup/provider call is authorized by that fix.
+#25/#23/#14/#29/#8 and their unperformed native/delivery/quality acceptances remain
+open. These actual6dd results supersede older no-live/no-artifact status below,
+whose original candidate-pin/source evidence remains preserved.
+
 ## Final candidate source checkpoint — 2026-10-26
 
 Reviewed candidate `fd14f407d5c9c8457809eb6311b954cc56e2b4f3`, final integration

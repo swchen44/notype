@@ -1,5 +1,43 @@
 # Simplified Chinese bootstrap recovery source verification (#29)
 
+## Merged candidate checkpoint — 2026-10-26
+
+Clean candidate `f8c2dd8b56c47e06926e89ff663fe15cdb3b76f8` has final independent
+**Spec0** and **Standards0 / zero actionable advisories** against fixed base
+`6dd9ca1165461c842d81d6654086d2e883b730dc`. Both formal reports cover the entire
+five-file delta and return their review leases. History-preserving merge
+`f81f00f524ffe4b9da938a8bf3936f30a3b38d1d` has the identical candidate tree.
+
+The merger independently checked [frontend40292723964](https://github.com/swchen44/notype/actions/runs/40292723964)
+metadata and completed logs at product source
+`88f9527448d1f6a4b706aeb9134c67e074faba75`: unit4/rendered95, zero failures/skips,
+frontend lint/TypeScript/Vite passed. Its portable/core job was explicitly
+skipped. This is **not** a full ALL result at f8 or the later merged source.
+Final .github/workflows delta from6dd is empty; temporary test ordering is absent.
+
+All source checkpoint/HANDOFF/TODO/research status documentation is assembled
+before a new integration freeze S. Root must obtain exact-new-S full ALL plus
+Windows contracts with build_private_artifact=false and both final review delta
+repins before native source/input/preflight admission. No later documentation
+commit may silently substitute a different S. #29 remains open for actual native/
+full ZIP/clean-host/real-model/private provisioning acceptance; UI mocks prove
+none of those.
+
+The prior API artifact and closed HALTED live round remain pinned to source6dd;
+see [actual safe results](https://github.com/swchen44/notype/issues/25#issuecomment-6411081019).
+Six DeepSeek calls/five histories were retained; actual fee remains UNKNOWN.
+The last successful CSV has four rows while SQLite has five histories, so a
+complete research export remains pending. No API retry/new round/new artifact,
+key access or provider request is authorized by this locale correction.
+[Native external r3](https://github.com/swchen44/notype/issues/14#issuecomment-6411176335) /
+[actual Astra0](https://github.com/swchen44/notype/issues/14#issuecomment-6411205513)
+preparation/fixtures remain separate; no compiler, native operation baseline or
+App/ZIP acceptance has been created. Worktrees, old receipts/artifacts, native
+cache and user data remain preserved.
+
+The earlier implementation evidence below remains pinned to its actual source;
+older pending-review wording is superseded by this checkpoint.
+
 Date: 2026-10-26. Fixed base:
 `6dd9ca1165461c842d81d6654086d2e883b730dc`.
 Authority: [P29-zhcn-recovery-v1](https://github.com/swchen44/notype/issues/29#issuecomment-6411382409)
