@@ -715,3 +715,280 @@ async fn actual_error_transport_and_bound_reports_retain_only_status_and_safe_li
         assert!(!report.contains("OWNED_KEY_SENTINEL"));
     }
 }
+
+#[tokio::test]
+async fn generation_stalled_body_timeout_keeps_observed_headers_separate_from_request_wait() {
+    let directory = tempfile::tempdir().unwrap();
+    let diagnostic = service(directory.path());
+    let sessions = SessionService::open(directory.path().join("sessions.db")).unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let endpoint = format!(
+        "http://{}/v1/chat/completions",
+        listener.local_addr().unwrap()
+    );
+    let partial = b"{\"choices\":[{\"partial\":\"PRIVATE_PARTIAL_BODY";
+    let (ready, headers_sent) = oneshot::channel();
+    let (release, held) = oneshot::channel();
+    let server = tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.unwrap();
+        let mut bytes = vec![];
+        let mut buffer = [0; 4096];
+        let (end, length) = loop {
+            let n = stream.read(&mut buffer).await.unwrap();
+            assert!(n > 0);
+            bytes.extend_from_slice(&buffer[..n]);
+            if let Some(end) = bytes.windows(4).position(|part| part == b"\r\n\r\n") {
+                let headers = std::str::from_utf8(&bytes[..end]).unwrap();
+                let length = headers
+                    .lines()
+                    .find_map(|line| {
+                        line.to_ascii_lowercase()
+                            .strip_prefix("content-length:")
+                            .map(|value| value.trim().parse::<usize>().unwrap())
+                    })
+                    .unwrap();
+                break (end + 4, length);
+            }
+        };
+        while bytes.len() < end + length {
+            let n = stream.read(&mut buffer).await.unwrap();
+            assert!(n > 0);
+            bytes.extend_from_slice(&buffer[..n]);
+        }
+        stream
+            .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 100000\r\nConnection: close\r\n\r\n")
+            .await
+            .unwrap();
+        stream.write_all(partial).await.unwrap();
+        ready.send(()).unwrap();
+        let _ = held.await;
+    });
+    let (store, mut draft, revision) = configure(directory.path(), &endpoint, false);
+    draft.timeout_ms = 2000;
+    store.save(revision, draft, KeyAction::Keep).unwrap();
+    let entry = sessions
+        .create("stalled body original", SessionOptions::default())
+        .unwrap();
+    let processor = traced(
+        &diagnostic,
+        &entry.id,
+        store.resolve_active(&NeverHome).unwrap(),
+    );
+    let worker = sessions.clone();
+    let id = entry.id.clone();
+    let task = tokio::spawn(async move { worker.process(&id, vec![], processor).await });
+    headers_sent.await.unwrap();
+    // Observe the real headers stage while the server is still withholding EOF.
+    // This checks attribution, without asserting a machine/network latency target.
+    let header_before_timeout = tokio::time::timeout(Duration::from_secs(1), async {
+        loop {
+            let text = report(&diagnostic);
+            if let Some(line) = text
+                .lines()
+                .find(|line| line.contains("api_span=headers_received "))
+            {
+                assert!(!text.contains("api_span=finished"));
+                break line.to_owned();
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    let result = tokio::time::timeout(Duration::from_secs(4), task)
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    let _ = release.send(());
+    server.await.unwrap();
+    assert_eq!(result.error.as_deref(), Some("llm-timeout"));
+    assert_eq!(result.transcript, "stalled body original");
+    assert_eq!(result.result, None);
+    assert_eq!(result.api_summary.call_count, Some(1));
+    assert_eq!(result.api_summary.input.total, None);
+    assert_eq!(result.api_summary.output.total, None);
+    assert!(result.api_summary.reported_models.is_empty());
+    let text = report(&diagnostic);
+    let header_after_timeout = text
+        .lines()
+        .find(|line| line.contains("api_span=headers_received "))
+        .unwrap();
+    assert_eq!(header_after_timeout, header_before_timeout);
+    let terminal = text
+        .lines()
+        .find(|line| line.contains("api_span=finished "))
+        .unwrap();
+    assert!(terminal.contains("http_status=200"));
+    assert!(terminal.contains("api_result=timeout"));
+    assert!(terminal.contains("category=timeout"));
+    assert!(terminal.contains("body_complete=false"));
+    assert!(terminal.contains(&format!("body_bytes={}", partial.len())));
+    assert!(
+        terminal.contains("timeout_source=local_deadline")
+            || terminal.contains("timeout_source=transport_predicate")
+    );
+    assert_eq!(text.matches("api_span=finished").count(), 1);
+    assert!(!text.contains("PRIVATE_PARTIAL_BODY"));
+    assert!(text.contains("DNS/TLS subphase timing is unobservable"));
+}
+
+// This role is invoked only by the parent regression below. It receives a
+// completely cleared environment plus synthetic loopback proxy/route values.
+#[cfg(unix)]
+#[tokio::test]
+#[ignore = "controlled child role; exercised by custom_https_and_local_proxy_policy"]
+async fn owned_proxy_generation_child() {
+    let role = std::env::var("NOTYPE_OWNED_PROXY_ROLE").unwrap();
+    assert!(matches!(role.as_str(), "local" | "custom"));
+    let endpoint = std::env::var("NOTYPE_OWNED_PROXY_ENDPOINT").unwrap();
+    let directory = tempfile::tempdir().unwrap();
+    let (store, mut draft, revision) = configure(directory.path(), &endpoint, false);
+    if role == "custom" {
+        draft.kind = ConnectionKind::Custom;
+        store.save(revision, draft, KeyAction::Keep).unwrap();
+    }
+    let sessions = SessionService::open(directory.path().join("sessions.db")).unwrap();
+    let entry = sessions
+        .create("proxy fixture original", SessionOptions::default())
+        .unwrap();
+    let result = sessions
+        .process(
+            &entry.id,
+            vec![],
+            workflow::text_processor(store.resolve_active(&NeverHome).unwrap()),
+        )
+        .await
+        .unwrap();
+    assert_eq!(result.api_summary.call_count, Some(1));
+    assert_eq!(result.transcript, "proxy fixture original");
+    if role == "local" {
+        assert_eq!(result.result.as_deref(), Some("proxy fixture result"));
+    } else {
+        assert_eq!(result.error.as_deref(), Some("provider-transport"));
+        assert_eq!(result.result, None);
+    }
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn custom_https_and_local_proxy_policy_use_only_owned_routes_and_cleared_child_env() {
+    struct OwnedChild(Option<std::process::Child>);
+    impl Drop for OwnedChild {
+        fn drop(&mut self) {
+            if let Some(child) = &mut self.0 {
+                let _ = child.kill();
+                let _ = child.wait();
+            }
+        }
+    }
+    for local in [false, true] {
+        let proxy = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let destination = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let proxy_url = format!("http://{}", proxy.local_addr().unwrap());
+        let target = destination.local_addr().unwrap();
+        let endpoint = format!(
+            "{}://{target}/v1/chat/completions",
+            if local { "http" } else { "https" }
+        );
+        let mut command = std::process::Command::new(std::env::current_exe().unwrap());
+        command
+            .args(["--exact", "owned_proxy_generation_child", "--ignored"])
+            .env_clear()
+            .env(
+                "NOTYPE_OWNED_PROXY_ROLE",
+                if local { "local" } else { "custom" },
+            )
+            .env("NOTYPE_OWNED_PROXY_ENDPOINT", endpoint)
+            .env("HTTP_PROXY", &proxy_url)
+            .env("http_proxy", &proxy_url)
+            .env("HTTPS_PROXY", &proxy_url)
+            .env("https_proxy", &proxy_url)
+            .env("NO_PROXY", "")
+            .env("no_proxy", "")
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped());
+        let mut child = OwnedChild(Some(command.spawn().unwrap()));
+        let (via_proxy,mut stream)=tokio::time::timeout(Duration::from_secs(5),async{tokio::select!{result=proxy.accept()=>{let(stream,_)=result.unwrap();(true,stream)},result=destination.accept()=>{let(stream,_)=result.unwrap();(false,stream)}}}).await.unwrap();
+        assert_eq!(
+            via_proxy, !local,
+            "regular Custom HTTPS must retain proxy behavior; Local must bypass it"
+        );
+        let mut bytes = vec![];
+        let mut buffer = [0; 4096];
+        let (end, length) = loop {
+            let n = stream.read(&mut buffer).await.unwrap();
+            assert!(n > 0);
+            bytes.extend_from_slice(&buffer[..n]);
+            assert!(bytes.len() <= 32768);
+            if let Some(end) = bytes.windows(4).position(|part| part == b"\r\n\r\n") {
+                let headers = std::str::from_utf8(&bytes[..end]).unwrap();
+                let length = headers
+                    .lines()
+                    .find_map(|line| {
+                        line.to_ascii_lowercase()
+                            .strip_prefix("content-length:")
+                            .map(|value| value.trim().parse::<usize>().unwrap())
+                    })
+                    .unwrap_or(0);
+                assert!(length <= 32768);
+                break (end + 4, length);
+            }
+        };
+        while bytes.len() < end + length {
+            let n = stream.read(&mut buffer).await.unwrap();
+            assert!(n > 0);
+            bytes.extend_from_slice(&buffer[..n]);
+        }
+        if local {
+            assert!(bytes.starts_with(b"POST /v1/chat/completions HTTP/1.1"));
+            assert!(std::str::from_utf8(&bytes)
+                .unwrap()
+                .contains("proxy fixture original"));
+            stream
+                .write_all(chat("proxy fixture result", "fixture", 3, 1).as_bytes())
+                .await
+                .unwrap();
+        } else {
+            assert!(bytes.starts_with(format!("CONNECT {target} HTTP/1.1").as_bytes()));
+            assert!(!std::str::from_utf8(&bytes)
+                .unwrap()
+                .contains("OWNED_KEY_SENTINEL"));
+            stream
+                .write_all(
+                    b"HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                )
+                .await
+                .unwrap();
+        }
+        drop(stream);
+        tokio::time::timeout(Duration::from_secs(5), async {
+            loop {
+                if child.0.as_mut().unwrap().try_wait().unwrap().is_some() {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .unwrap();
+        let output = child.0.take().unwrap().wait_with_output().unwrap();
+        assert!(output.stdout.len() < 16384 && output.stderr.len() < 16384);
+        assert!(
+            output.status.success(),
+            "owned child failed: {}",
+            String::from_utf8_lossy(&output.stdout)
+        );
+        assert!(
+            tokio::time::timeout(Duration::from_millis(75), proxy.accept())
+                .await
+                .is_err()
+        );
+        assert!(
+            tokio::time::timeout(Duration::from_millis(75), destination.accept())
+                .await
+                .is_err()
+        );
+    }
+}
