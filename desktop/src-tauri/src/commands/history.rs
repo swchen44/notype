@@ -1,3 +1,8 @@
+use crate::provider_config::{
+    credentials::CurrentUserReader, ConnectionDraft, ConnectionKind, ConnectionSettingsView,
+    ConnectionStore, KeyAction, ProviderDialect,
+};
+use crate::provider_models::{ModelDiscovery, ModelListRequest, ModelListResult};
 use crate::{
     portable, settings,
     workflow::{DesktopWorkflow, TextConfiguration, TranslationSettings},
@@ -5,10 +10,10 @@ use crate::{
 use notype_core::{RecognitionMode, Scenario, SessionEntry, SessionStatus};
 use serde::{Deserialize, Serialize};
 use specta::Type;
+use std::sync::OnceLock;
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_clipboard_manager::ClipboardExt;
-use tauri_plugin_store::StoreExt;
 
 #[path = "history_metrics.rs"]
 mod history_metrics;
@@ -129,44 +134,116 @@ pub struct WorkflowReadiness {
     pub legacy_import_error: Option<String>,
 }
 
-pub(crate) fn read_configuration(app: &AppHandle) -> Result<TextConfiguration, String> {
+static CONFIGURATION_STORE: Mutex<Option<Arc<ConnectionStore>>> = Mutex::new(None);
+fn configuration_store(app: &AppHandle) -> Result<Arc<ConnectionStore>, String> {
+    let mut current = CONFIGURATION_STORE
+        .lock()
+        .map_err(|_| "configuration-storage-failed".to_owned())?;
+    if let Some(store) = current.as_ref() {
+        return Ok(Arc::clone(store));
+    }
     let path = portable::app_data_dir(app)
         .map_err(|_| "configuration-storage-failed")?
-        .join("text_processing_store.json");
-    let store = app
-        .store(path)
-        .map_err(|_| "configuration-storage-failed")?;
-    store
-        .get("configuration")
-        .map(serde_json::from_value)
-        .transpose()
-        .map_err(|_| "configuration-required".to_string())
-        .map(|configuration| configuration.unwrap_or_default())
+        .join("provider_connections_v2.json");
+    let store = Arc::new(
+        ConnectionStore::open(Arc::new(crate::provider_config::files::FileStorage::new(
+            path,
+        )))
+        .map_err(|error| error.to_string())?,
+    );
+    *current = Some(Arc::clone(&store));
+    Ok(store)
 }
-
+pub(crate) fn read_configuration(app: &AppHandle) -> Result<TextConfiguration, String> {
+    let configuration = match configuration_store(app) {
+        Ok(store) => store.processing_snapshot(&CurrentUserReader),
+        Err(_) => crate::provider_config::failed_preparation(crate::provider_config::ConfigError(
+            "configuration-storage-failed",
+        )),
+    };
+    Ok(configuration)
+}
+/// Return only safe fields; no key resolution is performed while listing records.
 #[tauri::command]
 #[specta::specta]
-pub fn get_text_configuration(app: AppHandle) -> Result<TextConfiguration, String> {
-    read_configuration(&app)
+pub fn get_text_configuration(app: AppHandle) -> Result<ConnectionSettingsView, String> {
+    configuration_store(&app)?
+        .view()
+        .map_err(|error| error.to_string())
 }
-
+/// Add a blank-model/OFF/no-key record without activation or network access.
 #[tauri::command]
 #[specta::specta]
-pub fn set_text_configuration(
+pub fn create_text_connection(
     app: AppHandle,
-    mut configuration: TextConfiguration,
-) -> Result<(), String> {
-    if !configuration.options_valid() {
-        return Err("configuration-invalid-options".into());
-    }
-    let _lock = CONFIGURATION_WRITE
-        .lock()
-        .map_err(|_| "configuration-storage-failed")?;
-    // The API form saves only its fields. A stale form cannot overwrite profiles.
-    let current = read_configuration(&app)?;
-    configuration.prompts = current.prompts;
-    configuration.translation = current.translation;
-    persist_configuration(&app, configuration)
+    expected_revision: u64,
+    display_name: String,
+    kind: ConnectionKind,
+    dialect: ProviderDialect,
+) -> Result<ConnectionSettingsView, String> {
+    configuration_store(&app)?
+        .create(expected_revision, display_name, kind, dialect)
+        .map_err(|error| error.to_string())
+}
+/// Atomically save one connection with explicit bound credential policy.
+#[tauri::command]
+#[specta::specta]
+pub fn save_text_connection(
+    app: AppHandle,
+    expected_revision: u64,
+    connection: ConnectionDraft,
+    key_action: KeyAction,
+) -> Result<ConnectionSettingsView, String> {
+    configuration_store(&app)?
+        .save(expected_revision, connection, key_action)
+        .map_err(|error| error.to_string())
+}
+/// Persist deliberate active selection; selecting an editor row never calls this.
+#[tauri::command]
+#[specta::specta]
+pub fn activate_text_connection(
+    app: AppHandle,
+    expected_revision: u64,
+    id: Option<String>,
+) -> Result<ConnectionSettingsView, String> {
+    configuration_store(&app)?
+        .activate(expected_revision, id)
+        .map_err(|error| error.to_string())
+}
+/// Remove one record and leave active unset when its ID was selected.
+#[tauri::command]
+#[specta::specta]
+pub fn remove_text_connection(
+    app: AppHandle,
+    expected_revision: u64,
+    id: String,
+) -> Result<ConnectionSettingsView, String> {
+    configuration_store(&app)?
+        .remove(expected_revision, &id)
+        .map_err(|error| error.to_string())
+}
+fn model_discovery() -> &'static ModelDiscovery {
+    static SERVICE: OnceLock<ModelDiscovery> = OnceLock::new();
+    SERVICE.get_or_init(ModelDiscovery::new)
+}
+/// Explicit reference GET only; no automatic field change, save or activation.
+#[tauri::command]
+#[specta::specta]
+pub async fn list_text_models(
+    app: AppHandle,
+    request: ModelListRequest,
+) -> Result<ModelListResult, String> {
+    model_discovery()
+        .query(configuration_store(&app)?, request, &CurrentUserReader)
+        .await
+        .map_err(|error| error.to_string())
+}
+/// Cancel an explicit model-list request; late replies are also editor-fenced.
+#[tauri::command]
+#[specta::specta]
+pub fn cancel_text_models(request_id: String) -> Result<(), String> {
+    model_discovery().cancel(&request_id);
+    Ok(())
 }
 
 /// Explicit all-history save. Native selection/space probing occur outside the
@@ -254,81 +331,42 @@ impl notype_core::csv::CsvSpaceProbe for NativeCsvSpace {
         Err(notype_core::csv::CsvExportError::SpaceUnavailable)
     }
 }
-static CONFIGURATION_WRITE: Mutex<()> = Mutex::new(());
-fn persist_configuration(app: &AppHandle, configuration: TextConfiguration) -> Result<(), String> {
-    let path = portable::app_data_dir(app)
-        .map_err(|_| "configuration-storage-failed")?
-        .join("text_processing_store.json");
-    let store = app
-        .store(path)
-        .map_err(|_| "configuration-storage-failed")?;
-    store.set(
-        "configuration",
-        serde_json::to_value(configuration).map_err(|_| "configuration-required")?,
-    );
-    store
-        .save()
-        .map_err(|_| "configuration-storage-failed".to_string())
-}
-
+/// Save exactly one prompt under CAS and return the same safe collection view.
 #[tauri::command]
 #[specta::specta]
 pub fn save_scenario_prompt(
     app: AppHandle,
     scenario: SceneId,
     prompt: String,
-) -> Result<TextConfiguration, String> {
-    let _lock = CONFIGURATION_WRITE
-        .lock()
-        .map_err(|_| "configuration-storage-failed")?;
-    let mut configuration = read_configuration(&app)?;
-    configuration.set_prompt(scenario.into(), prompt)?;
-    persist_configuration(&app, configuration.clone())?;
-    Ok(configuration)
+    expected_revision: u64,
+) -> Result<ConnectionSettingsView, String> {
+    configuration_store(&app)?
+        .prompt(expected_revision, scenario.into(), Some(prompt))
+        .map_err(|error| error.to_string())
 }
+/// Reset exactly one prompt, preserving current connection records and globals.
 #[tauri::command]
 #[specta::specta]
 pub fn reset_scenario_prompt(
     app: AppHandle,
     scenario: SceneId,
-) -> Result<TextConfiguration, String> {
-    let _lock = CONFIGURATION_WRITE
-        .lock()
-        .map_err(|_| "configuration-storage-failed")?;
-    let mut configuration = read_configuration(&app)?;
-    configuration.reset_prompt(scenario.into());
-    persist_configuration(&app, configuration.clone())?;
-    Ok(configuration)
+    expected_revision: u64,
+) -> Result<ConnectionSettingsView, String> {
+    configuration_store(&app)?
+        .prompt(expected_revision, scenario.into(), None)
+        .map_err(|error| error.to_string())
 }
+/// Save translation settings independently of connection edits; never return keys.
 #[tauri::command]
 #[specta::specta]
 pub fn save_translation_settings(
     app: AppHandle,
     translation: TranslationSettings,
-) -> Result<TextConfiguration, String> {
-    if translation.target_language.trim().is_empty()
-        || translation.target_language.len() > 100
-        || translation.domain.len() > 2000
-        || translation.tone.len() > 2000
-        || translation.glossary.len() > 1000
-        || translation.glossary.iter().any(|term| {
-            term.source.trim().is_empty()
-                || term.target.trim().is_empty()
-                || term.target_language.trim().is_empty()
-                || term.source.len() > 1000
-                || term.target.len() > 1000
-                || term.target_language.len() > 100
-        })
-    {
-        return Err("translation-settings-invalid".into());
-    }
-    let _lock = CONFIGURATION_WRITE
-        .lock()
-        .map_err(|_| "configuration-storage-failed")?;
-    let mut configuration = read_configuration(&app)?;
-    configuration.translation = translation;
-    persist_configuration(&app, configuration.clone())?;
-    Ok(configuration)
+    expected_revision: u64,
+) -> Result<ConnectionSettingsView, String> {
+    configuration_store(&app)?
+        .translation(expected_revision, translation)
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]

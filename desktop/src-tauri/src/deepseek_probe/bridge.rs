@@ -247,6 +247,9 @@ impl<S: RoundStore + Send> BudgetObserver<S> {
     }
 }
 impl<S: RoundStore + Send> ApiCallObserver for BudgetObserver<S> {
+    fn processing_revision(&self) -> Option<u64> {
+        self.core.processing_revision()
+    }
     fn begin(&self, descriptor: ApiCallDescriptor) -> Result<String, TextFailure> {
         let expected = if self.slot == 6 {
             ApiPurpose::BackTranslation

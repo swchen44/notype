@@ -4,6 +4,31 @@ import { createServer } from "node:http";
 import { once } from "node:events";
 import { desktopFixture, invoke } from "./desktop-driver.mjs";
 
+async function configureOwnedConnection(page, initial, address, model, authentication, key, active) {
+  let view = await invoke(page, "create_text_connection", {
+    expectedRevision: initial.revision, displayName: "Owned fixture",
+    kind: "custom", dialect: "generic",
+  });
+  const record = view.connections.at(-1);
+  const connection = {
+    id: record.id, display_name: record.display_name, kind: record.kind,
+    dialect: record.dialect, address_mode: "full_chat_endpoint", api_address: address,
+    models_endpoint: null, model, authentication, timeout_ms: 2000,
+    thinking_preference: "off", effort: null, temperature: null, top_p: null,
+    max_output_tokens: null,
+    capability_declaration: { kind: "non_reasoning", minimum_effort: null,
+      supported_efforts: [], temperature_supported: true, top_p_supported: true },
+  };
+  view = await invoke(page, "save_text_connection", {
+    expectedRevision: view.revision, connection,
+    keyAction: key ? { action: "replace", value: key } : { action: "clear" },
+  });
+  if (active) view = await invoke(page, "activate_text_connection", {
+    expectedRevision: view.revision, id: record.id,
+  });
+  return view;
+}
+
 test(
   "visible scenario prompts and selected-only reset persist across native restart",
   { timeout: 120000 },
@@ -13,15 +38,9 @@ test(
     try {
       app = await fixture.launch();
       const initial = await invoke(app.page, "get_text_configuration");
-      await invoke(app.page, "set_text_configuration", {
-        configuration: {
-          ...initial,
-          endpoint: "https://api.example.test/v1/chat/completions",
-          model: "preserved-model",
-          authentication: "bearer",
-          api_key: "NONSECRET_TEST_KEY",
-        },
-      });
+      await configureOwnedConnection(app.page, initial,
+        "https://api.example.test/v1/chat/completions", "preserved-model",
+        "bearer", "NONSECRET_TEST_KEY", false);
       await app.page.getByText("文字整理", { exact: true }).first().click();
       const scene = app.page.getByLabel("場景", { exact: true });
       await scene.waitFor({ timeout: 4000 });
@@ -69,14 +88,12 @@ test(
       assert.equal(config.translation.target_language, "fr-FR");
       assert.equal(config.translation.domain, "software");
       assert.equal(config.translation.back_translation, true);
-      assert.equal(config.transport, "disabled");
-      assert.equal(
-        config.endpoint,
-        "https://api.example.test/v1/chat/completions",
-      );
-      assert.equal(config.model, "preserved-model");
-      assert.equal(config.api_key, "NONSECRET_TEST_KEY");
-      assert.equal(config.authentication, "bearer");
+      assert.equal(config.active_connection_id, null);
+      assert.equal(config.connections[0].api_address, "https://api.example.test/v1/chat/completions");
+      assert.equal(config.connections[0].model, "preserved-model");
+      assert.equal(config.connections[0].authentication, "bearer");
+      assert.equal(config.connections[0].app_key_present, true);
+      assert.ok(!JSON.stringify(config).includes("NONSECRET_TEST_KEY"));
       await fixture.close(app);
       app = await fixture.launch();
       assert.deepEqual(
@@ -130,18 +147,11 @@ test(
     try {
       app = await fixture.launch();
       let config = await invoke(app.page, "get_text_configuration");
-      config = {
-        ...config,
-        transport: "open_ai_chat",
-        authentication: "none",
-        endpoint: `http://127.0.0.1:${server.address().port}/v1/chat/completions`,
-        model: "fixture",
-        timeout_ms: 2000,
-      };
-      await invoke(app.page, "set_text_configuration", {
-        configuration: config,
-      });
-      await invoke(app.page, "save_translation_settings", {
+      config = await configureOwnedConnection(app.page, config,
+        `http://127.0.0.1:${server.address().port}/v1/chat/completions`,
+        "fixture", "none", null, true);
+      config = await invoke(app.page, "save_translation_settings", {
+        expectedRevision: config.revision,
         translation: { ...config.translation, back_translation: true },
       });
       const generation = await invoke(app.page, "debug_begin_session", {
@@ -149,6 +159,7 @@ test(
         scenario: "translation",
       });
       await invoke(app.page, "save_scenario_prompt", {
+        expectedRevision: config.revision,
         scenario: "translation",
         prompt: "LATE_PROMPT_MUST_NOT_CHANGE_ACTIVE_SESSION",
       });

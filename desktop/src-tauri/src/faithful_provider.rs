@@ -1,4 +1,5 @@
 //! Explicit OpenAI-compatible chat transport, not a company API assertion.
+use crate::diagnostics::api as diagnostic;
 use notype_core::gateway_error::GatewayError;
 use notype_core::observations::{
     ApiCallDescriptor, ApiCallGuard, ApiCallObserver, ApiEndpointClass, ApiOutcome,
@@ -40,6 +41,29 @@ pub enum TextProviderProfile {
     /// Documented DeepSeek thinking/effort/output-limit controls.
     #[serde(rename = "deepseek")]
     DeepSeek,
+    /// Explicit OpenRouter reasoning object.
+    #[serde(rename = "openrouter")]
+    OpenRouter,
+    /// Explicit Gemini compatibility controls.
+    Gemini,
+    /// Explicit Ollama OpenAI-compatible protocol.
+    #[serde(rename = "ollama_openai")]
+    OllamaOpenAi,
+}
+
+/// Runtime-only resolved credential. No Debug/Serialize/Display implementation;
+/// cloned immutable snapshots share the owned secret rather than returning it.
+#[derive(Clone)]
+pub struct RuntimeCredential(Arc<str>);
+impl RuntimeCredential {
+    /// Consume backend-only resolved input; never used as an IPC return type.
+    pub fn new(value: String) -> Self {
+        Self(Arc::from(value))
+    }
+    /// Prevent literal credential reflection in provider-supplied reference IDs.
+    pub(crate) fn reflected_in(&self, text: &str) -> bool {
+        !self.0.is_empty() && text.contains(self.0.as_ref())
+    }
 }
 
 // Deliberately no Debug: configuration contains a locally stored credential.
@@ -48,6 +72,32 @@ pub enum TextProviderProfile {
 /// Locally persisted provider preferences, cloned into each recording's processing snapshot.
 /// Contains credentials and deliberately does not implement Debug.
 pub struct TextConfiguration {
+    /// Runtime source association only; absent from serialized views/reports.
+    #[serde(skip)]
+    #[specta(skip)]
+    pub connection_id: Option<String>,
+    /// Runtime-only credential from the selected record/home resolver.
+    #[serde(skip)]
+    #[specta(skip)]
+    pub runtime_credential: Option<RuntimeCredential>,
+    /// Runtime-only typed failure; processor surfaces it after original saving.
+    #[serde(skip)]
+    #[specta(skip)]
+    pub preparation_failure: Option<notype_core::PreparationFailure>,
+    /// Safe configured/wire tuple destined for business history, not diagnostics.
+    #[serde(skip)]
+    #[specta(skip)]
+    pub request_parameters: Option<notype_core::observations::RequestParameters>,
+    /// Already-resolved provenance only; no credential discovery by diagnostics.
+    pub credential_source: Option<String>,
+    /// Effective switch resolved from requested preference/capability.
+    pub thinking_override: Option<bool>,
+    /// Actual serialized sampling, omitting documented ignored fields.
+    pub temperature: Option<f64>,
+    /// Actual serialized nucleus sampling.
+    pub top_p: Option<f64>,
+    /// Explicit Local connection policy; other normal clients retain proxy behavior.
+    pub bypass_proxy: bool,
     pub transport: TextTransport,
     pub endpoint: String,
     pub model: String,
@@ -66,6 +116,15 @@ pub struct TextConfiguration {
 impl Default for TextConfiguration {
     fn default() -> Self {
         Self {
+            connection_id: None,
+            runtime_credential: None,
+            preparation_failure: None,
+            request_parameters: None,
+            credential_source: None,
+            thinking_override: None,
+            temperature: None,
+            top_p: None,
+            bypass_proxy: false,
             transport: TextTransport::Disabled,
             endpoint: String::new(),
             model: String::new(),
@@ -126,20 +185,58 @@ impl Default for TranslationSettings {
     }
 }
 impl TextConfiguration {
+    /// Build a sensitive header for the already selected runtime snapshot. The
+    /// raw secret has no getter; None/unspecified policy never discovers a key.
+    pub(crate) fn authorization_header(
+        &self,
+    ) -> Result<Option<reqwest::header::HeaderValue>, TextFailure> {
+        match self.authentication {
+            TextAuthentication::None => Ok(None),
+            TextAuthentication::Unspecified => Err(TextFailure::ConfigurationRequired),
+            TextAuthentication::Bearer => {
+                let key = self
+                    .runtime_credential
+                    .as_ref()
+                    .map_or(self.api_key.as_str(), |key| key.0.as_ref());
+                if key.trim().is_empty() {
+                    return Err(TextFailure::ConfigurationRequired);
+                }
+                let mut value =
+                    reqwest::header::HeaderValue::from_str(&format!("Bearer {}", key.trim()))
+                        .map_err(|_| TextFailure::ConfigurationRequired)?;
+                value.set_sensitive(true);
+                Ok(Some(value))
+            }
+        }
+    }
     /// Validate explicit option spellings/bounds without a request or settings I/O.
     pub fn options_valid(&self) -> bool {
         let effort = self
             .effort
             .as_deref()
             .is_none_or(|value| match self.provider_profile {
-                TextProviderProfile::Generic => notype_core::observations::valid_effort(value),
+                TextProviderProfile::Generic
+                | TextProviderProfile::OpenRouter
+                | TextProviderProfile::Gemini
+                | TextProviderProfile::OllamaOpenAi => {
+                    notype_core::observations::valid_effort(value)
+                }
                 TextProviderProfile::DeepSeek => matches!(value, "none" | "low" | "high" | "max"),
             });
         let maximum = match self.provider_profile {
-            TextProviderProfile::Generic => 1_000_000,
+            TextProviderProfile::Generic
+            | TextProviderProfile::OpenRouter
+            | TextProviderProfile::Gemini
+            | TextProviderProfile::OllamaOpenAi => 1_000_000,
             TextProviderProfile::DeepSeek => 393_216,
         };
         effort
+            && self
+                .temperature
+                .is_none_or(|value| value.is_finite() && (0.0..=2.0).contains(&value))
+            && self
+                .top_p
+                .is_none_or(|value| value.is_finite() && value > 0.0 && value <= 1.0)
             && self
                 .max_output_tokens
                 .is_none_or(|limit| (1..=maximum).contains(&limit))
@@ -246,7 +343,7 @@ fn messages(
     ]
 }
 
-struct NotConfigured;
+struct NotConfigured(TextFailure);
 impl TextProcessor for NotConfigured {
     fn generate_observed(
         &self,
@@ -265,7 +362,8 @@ impl TextProcessor for NotConfigured {
         self.back_translate(request, cancellation)
     }
     fn polish(&self, _: TextRequest, _: CancellationToken) -> TextFuture {
-        Box::pin(async { Err(TextFailure::ConfigurationRequired) })
+        let error = self.0;
+        Box::pin(async move { Err(error) })
     }
 }
 
@@ -274,7 +372,37 @@ impl TextProcessor for NotConfigured {
 pub fn processor(configuration: TextConfiguration) -> Arc<dyn TextProcessor> {
     match ChatProcessor::new(configuration) {
         Ok(processor) => Arc::new(processor),
-        Err(_) => Arc::new(NotConfigured),
+        Err(error) => Arc::new(NotConfigured(error)),
+    }
+}
+
+/// Same production transport with a generation-fenced numeric workflow scope.
+/// A stale scope disables tracing without changing request/admission behavior.
+pub fn scoped_processor(
+    configuration: TextConfiguration,
+    scope: Option<diagnostic::ScopeBinding>,
+) -> Arc<dyn TextProcessor> {
+    match ChatProcessor::new(configuration) {
+        Ok(mut processor) => {
+            processor.tracing = diagnostic::TraceContext::global(scope);
+            Arc::new(processor)
+        }
+        Err(error) => Arc::new(NotConfigured(error)),
+    }
+}
+
+/// Same real transport with explicitly composed observational ports. Diagnostics
+/// cannot alter durable admission, HTTP polling, response validation or retries.
+pub fn processor_with_trace(
+    configuration: TextConfiguration,
+    tracing: diagnostic::TraceContext,
+) -> Arc<dyn TextProcessor> {
+    match ChatProcessor::new(configuration) {
+        Ok(mut processor) => {
+            processor.tracing = tracing;
+            Arc::new(processor)
+        }
+        Err(error) => Arc::new(NotConfigured(error)),
     }
 }
 
@@ -283,7 +411,7 @@ pub fn processor(configuration: TextConfiguration) -> Arc<dyn TextProcessor> {
 pub fn probe_processor(configuration: TextConfiguration) -> Arc<dyn TextProcessor> {
     match ChatProcessor::new_with_policy(configuration, true) {
         Ok(processor) => Arc::new(processor),
-        Err(_) => Arc::new(NotConfigured),
+        Err(error) => Arc::new(NotConfigured(error)),
     }
 }
 
@@ -295,6 +423,13 @@ impl TextConfiguration {
 }
 
 struct ChatProcessor {
+    credential: Option<RuntimeCredential>,
+    request_parameters: Option<notype_core::observations::RequestParameters>,
+    credential_source: Option<String>,
+    thinking_override: Option<bool>,
+    temperature: Option<f64>,
+    top_p: Option<f64>,
+    tracing: diagnostic::TraceContext,
     client: reqwest::Client,
     endpoint: reqwest::Url,
     model: String,
@@ -305,7 +440,6 @@ struct ChatProcessor {
     provider_profile: TextProviderProfile,
     effort: Option<String>,
     max_output_tokens: Option<u32>,
-    probe_network: bool,
 }
 impl ChatProcessor {
     fn new(configuration: TextConfiguration) -> Result<Self, TextFailure> {
@@ -316,6 +450,9 @@ impl ChatProcessor {
         probe_network: bool,
     ) -> Result<Self, TextFailure> {
         let invalid = TextFailure::ConfigurationRequired;
+        if let Some(error) = configuration.preparation_failure {
+            return Err(TextFailure::Preparation(error));
+        }
         if configuration.transport != TextTransport::OpenAiChat
             || !configuration.options_valid()
             || configuration.authentication == TextAuthentication::Unspecified
@@ -341,31 +478,31 @@ impl ChatProcessor {
         {
             return Err(invalid);
         }
-        let authorization = if configuration.authentication == TextAuthentication::Bearer {
-            if configuration.api_key.trim().is_empty() {
-                return Err(invalid);
-            }
-            let mut value = reqwest::header::HeaderValue::from_str(&format!(
-                "Bearer {}",
-                configuration.api_key.trim()
-            ))
-            .map_err(|_| invalid)?;
-            value.set_sensitive(true);
-            Some(value)
-        } else {
-            None
-        };
+        let authorization = configuration.authorization_header()?;
+        let credential = authorization
+            .as_ref()
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| value.strip_prefix("Bearer "))
+            .filter(|value| !value.is_empty())
+            .map(|value| RuntimeCredential::new(value.to_owned()));
         let deadline = Duration::from_millis(configuration.timeout_ms);
         let mut client = reqwest::Client::builder()
             .timeout(deadline)
             .connect_timeout(deadline.min(Duration::from_secs(5)))
             .retry(reqwest::retry::never())
             .redirect(reqwest::redirect::Policy::none());
-        if probe_network {
+        if probe_network || configuration.bypass_proxy {
             client = client.no_proxy();
         }
         let client = client.build().map_err(|_| invalid)?;
         Ok(Self {
+            credential,
+            request_parameters: configuration.request_parameters,
+            credential_source: configuration.credential_source,
+            thinking_override: configuration.thinking_override,
+            temperature: configuration.temperature,
+            top_p: configuration.top_p,
+            tracing: diagnostic::TraceContext::global(None),
             client,
             endpoint,
             model: configuration.model.trim().into(),
@@ -376,7 +513,6 @@ impl ChatProcessor {
             provider_profile: configuration.provider_profile,
             effort: configuration.effort,
             max_output_tokens: configuration.max_output_tokens,
-            probe_network,
         })
     }
 }
@@ -436,6 +572,7 @@ impl ChatProcessor {
             return Box::pin(async { Err(TextFailure::InvalidPrompt) });
         }
         let envelope = request.back_translation;
+        let scenario = request.scenario;
         let mut wire = messages(request, prompt, self.translation.clone());
         if envelope {
             wire.insert(2,Message{role:"system",content:"Transport requirement for the enabled independent back-translation review: in this SAME response identify the original source language and encode the selected prompt's translated output as a JSON object with exactly text (translated text string) and source_language (BCP-47 language tag, or null if unknown). For mixed input use its primary natural language, not code identifiers. This envelope is removed locally; the displayed and delivered text is only text. Do not guess unknown source language or add quality claims.".into()});
@@ -447,6 +584,7 @@ impl ChatProcessor {
             observer,
             ApiPurpose::Generation,
             envelope,
+            scenario,
         )
     }
     fn back_inner(
@@ -487,6 +625,7 @@ impl ChatProcessor {
             observer,
             ApiPurpose::BackTranslation,
             false,
+            Scenario::Translation,
         );
         Box::pin(async move { future.await.map(|output| output.text) })
     }
@@ -498,6 +637,7 @@ impl ChatProcessor {
         observer: Option<Arc<dyn ApiCallObserver>>,
         purpose: ApiPurpose,
         envelope: bool,
+        scenario: Scenario,
     ) -> GenerationFuture {
         let client = self.client.clone();
         let endpoint = self.endpoint.clone();
@@ -507,31 +647,63 @@ impl ChatProcessor {
         let profile = self.provider_profile;
         let effort = self.effort.clone();
         let max_output_tokens = self.max_output_tokens;
-        let probe_network = self.probe_network;
+        let tracing = self.tracing.clone();
+        let credential = self.credential.clone();
+        let mut request_parameters = self.request_parameters.clone();
+        let credential_source = self.credential_source.clone();
+        let thinking_override = self.thinking_override;
+        let temperature = self.temperature;
+        let top_p = self.top_p;
         Box::pin(async move {
             if cancellation.is_cancelled() {
                 return Err(TextFailure::Cancelled);
             }
             let mut body = json!({"model":model,"messages":messages});
-            if probe_network {
-                body["stream"] = json!(false);
-            }
-            let thinking = if profile == TextProviderProfile::DeepSeek {
-                effort.as_ref().map(|value| value != "none")
-            } else {
-                None
-            };
+            body["stream"] = json!(false);
+            let thinking = thinking_override.or_else(|| {
+                if profile == TextProviderProfile::DeepSeek {
+                    effort.as_ref().map(|value| value != "none")
+                } else {
+                    None
+                }
+            });
             if let Some(enabled) = thinking {
-                body["thinking"] = json!({"type":if enabled {"enabled"}else{"disabled"}});
+                match profile {
+                    TextProviderProfile::DeepSeek => {
+                        body["thinking"] = json!({"type":if enabled {"enabled"}else{"disabled"}})
+                    }
+                    TextProviderProfile::OpenRouter => {
+                        body["reasoning"] = json!({"enabled":enabled})
+                    }
+                    _ => {}
+                }
             }
             if let Some(value) = &effort {
-                body["reasoning_effort"] = json!(value);
+                if profile == TextProviderProfile::OpenRouter {
+                    body["reasoning"]["effort"] = json!(value);
+                } else {
+                    body["reasoning_effort"] = json!(value);
+                }
+            }
+            if let Some(value) = temperature {
+                body["temperature"] = json!(value);
+            }
+            if let Some(value) = top_p {
+                body["top_p"] = json!(value);
             }
             if let Some(value) = max_output_tokens {
                 body["max_tokens"] = json!(value);
             }
             let wire = serde_json::to_vec(&body).map_err(|_| TextFailure::ConfigurationRequired)?;
+            if let Some(parameters) = &mut request_parameters {
+                parameters.effective_thinking = thinking;
+                parameters.effective_effort = effort.clone();
+                parameters.wire_temperature = temperature.map(|value| value.to_string());
+                parameters.wire_top_p = top_p.map(|value| value.to_string());
+                parameters.max_output_tokens = max_output_tokens;
+            }
             let descriptor = ApiCallDescriptor {
+                parameters: request_parameters,
                 endpoint_class: if endpoint.as_str() == "https://api.deepseek.com/chat/completions"
                 {
                     ApiEndpointClass::DeepSeekHttps
@@ -549,6 +721,9 @@ impl ChatProcessor {
                 profile: match profile {
                     TextProviderProfile::Generic => ApiProviderProfile::Generic,
                     TextProviderProfile::DeepSeek => ApiProviderProfile::DeepSeek,
+                    TextProviderProfile::OpenRouter => ApiProviderProfile::OpenRouter,
+                    TextProviderProfile::Gemini => ApiProviderProfile::Gemini,
+                    TextProviderProfile::OllamaOpenAi => ApiProviderProfile::OllamaOpenAi,
                 },
                 requested_model: Some(model),
                 requested_effort: effort,
@@ -566,9 +741,92 @@ impl ChatProcessor {
                     })
                 }) && body.get("tools").is_none(),
             };
-            let mut guard = observer
+            let revision = observer
+                .as_ref()
+                .and_then(|observer| observer.processing_revision());
+            let options = diagnostic::SafeOptions {
+                scenario: match scenario {
+                    Scenario::Dictation => diagnostic::ApiScenario::Dictation,
+                    Scenario::Translation => diagnostic::ApiScenario::Translation,
+                    Scenario::Ask => diagnostic::ApiScenario::Ask,
+                },
+                purpose: match purpose {
+                    ApiPurpose::Generation => diagnostic::ApiPurpose::Generation,
+                    ApiPurpose::BackTranslation => diagnostic::ApiPurpose::BackTranslation,
+                },
+                method: diagnostic::ApiMethod::Post,
+                profile: match profile {
+                    TextProviderProfile::Generic => diagnostic::ApiProfile::Generic,
+                    TextProviderProfile::DeepSeek => diagnostic::ApiProfile::DeepSeek,
+                    TextProviderProfile::OpenRouter => diagnostic::ApiProfile::OpenRouter,
+                    TextProviderProfile::Gemini => diagnostic::ApiProfile::Gemini,
+                    TextProviderProfile::OllamaOpenAi => diagnostic::ApiProfile::OllamaOpenAi,
+                },
+                endpoint: match descriptor.endpoint_class {
+                    ApiEndpointClass::Loopback => diagnostic::EndpointClass::Loopback,
+                    ApiEndpointClass::DeepSeekHttps => diagnostic::EndpointClass::PublicPreset,
+                    _ => diagnostic::EndpointClass::Other,
+                },
+                auth: if authorization.is_some() {
+                    diagnostic::AuthKind::Bearer
+                } else {
+                    diagnostic::AuthKind::None
+                },
+                credential_source: match credential_source.as_deref() {
+                    Some("app") => diagnostic::CredentialSource::App,
+                    Some("home_env") => diagnostic::CredentialSource::HomeEnv,
+                    Some("none") => diagnostic::CredentialSource::None,
+                    _ => diagnostic::CredentialSource::Unknown,
+                },
+                credential_present: authorization.is_some(),
+                model_present: descriptor.requested_model.is_some(),
+                effort: match descriptor.requested_effort.as_deref() {
+                    None => diagnostic::Effort::Omitted,
+                    Some("none") => diagnostic::Effort::None,
+                    Some("minimal") => diagnostic::Effort::Minimal,
+                    Some("low") => diagnostic::Effort::Low,
+                    Some("medium") => diagnostic::Effort::Medium,
+                    Some("high") => diagnostic::Effort::High,
+                    Some("xhigh") => diagnostic::Effort::Xhigh,
+                    _ => diagnostic::Effort::Other,
+                },
+                thinking,
+                max_output_tokens,
+                timeout_ms: deadline.as_millis().min(u128::from(u64::MAX)) as u64,
+                request_bytes: wire.len() as u64,
+                message_count: descriptor.message_count,
+                non_streaming: true,
+                plain_text_only: descriptor.plain_text_only,
+            };
+            let mut trace = tracing.begin(
+                options,
+                revision,
+                Arc::new(TraceCancellation(cancellation.clone())),
+            );
+            let mut guard = match observer
                 .map(|observer| ApiCallGuard::begin(observer, descriptor))
-                .transpose()?;
+                .transpose()
+            {
+                Ok(guard) => guard,
+                Err(error) => {
+                    trace.observe(
+                        diagnostic::ApiSpan::AdmissionFailed,
+                        diagnostic::ApiResult::Failed,
+                    );
+                    let (result, category) = trace_failure(error);
+                    trace.finish(result, category);
+                    return Err(error);
+                }
+            };
+            if guard.is_some() {
+                if let Some(event) = trace.metadata() {
+                    event.durable_admission = true;
+                }
+                trace.observe(
+                    diagnostic::ApiSpan::Admitted,
+                    diagnostic::ApiResult::Success,
+                );
+            }
             let mut request = client
                 .post(endpoint)
                 .header(reqwest::header::CONTENT_TYPE, "application/json")
@@ -578,23 +836,58 @@ impl ChatProcessor {
             }
             let operation = async {
                 if let Some(guard) = &mut guard {
-                    guard.mark_sent()?;
+                    if let Err(error) = guard.mark_sent() {
+                        trace.observe(
+                            diagnostic::ApiSpan::PreSendRejected,
+                            diagnostic::ApiResult::Failed,
+                        );
+                        return Err(error);
+                    }
                 }
-                let mut response = request.send().await.map_err(failure)?;
+                if let Some(event) = trace.metadata() {
+                    event.possibly_sent = true;
+                }
+                trace.observe(
+                    diagnostic::ApiSpan::SendStarted,
+                    diagnostic::ApiResult::Started,
+                );
+                let mut response = request
+                    .send()
+                    .await
+                    .map_err(|error| trace_transport(&mut trace, error))?;
                 let success = response.status().is_success();
                 let status = response.status().as_u16();
+                if let Some(event) = trace.metadata() {
+                    event.http_status = Some(status);
+                }
+                trace.observe(
+                    diagnostic::ApiSpan::HeadersReceived,
+                    diagnostic::ApiResult::Success,
+                );
                 let status_error = GatewayError::from_status(status);
                 let mut bytes = Vec::new();
-                while let Some(chunk) = response.chunk().await.map_err(|error| {
-                    status_error.map_or_else(|| failure(error), TextFailure::Provider)
-                })? {
+                while let Some(chunk) = match response.chunk().await {
+                    Ok(chunk) => chunk,
+                    Err(error) => {
+                        trace.body(bytes.len() as u64, false, false);
+                        return Err(status_error.map_or_else(
+                            || trace_transport(&mut trace, error),
+                            TextFailure::Provider,
+                        ));
+                    }
+                } {
                     if bytes.len().saturating_add(chunk.len()) > 1_048_576 {
+                        trace.body(bytes.len().saturating_add(chunk.len()) as u64, false, true);
                         return Err(TextFailure::Provider(
                             status_error.unwrap_or(GatewayError::Oversize),
                         ));
                     }
                     bytes.extend_from_slice(&chunk);
+                    if let Some(event) = trace.metadata() {
+                        event.body_bytes = bytes.len() as u64;
+                    }
                 }
+                trace.body(bytes.len() as u64, true, false);
                 let value: Value = serde_json::from_slice(&bytes).map_err(|_| {
                     if let Some(error) = status_error {
                         TextFailure::Provider(error)
@@ -604,11 +897,35 @@ impl ChatProcessor {
                         TextFailure::Failed
                     }
                 })?;
+                let mut receipt = ApiReceipt::from_chat_json(&value);
+                let reflected = |text: &str| {
+                    credential
+                        .as_ref()
+                        .is_some_and(|key| key.reflected_in(text))
+                };
+                let private_metadata = receipt.reported_model.as_deref().is_some_and(reflected)
+                    || receipt.reported_effort.as_deref().is_some_and(reflected);
+                if receipt.reported_model.as_deref().is_some_and(reflected) {
+                    receipt.reported_model = None;
+                }
+                if receipt.reported_effort.as_deref().is_some_and(reflected) {
+                    receipt.reported_effort = None;
+                }
                 if let Some(guard) = &mut guard {
-                    guard.response(ApiReceipt::from_chat_json(&value));
+                    guard.response(receipt);
+                }
+                if let Some(event) = trace.metadata() {
+                    event.reported_model_present = value["model"].is_string();
+                    event.model_matches_requested = value["model"]
+                        .as_str()
+                        .zip(body["model"].as_str())
+                        .map(|(reported, requested)| reported == requested);
                 }
                 if let Some(error) = GatewayError::classify(status, Some(&value)) {
                     return Err(TextFailure::Provider(error));
+                }
+                if private_metadata {
+                    return Err(TextFailure::InvalidResponse);
                 }
                 let choice = &value["choices"][0];
                 if choice["finish_reason"] != "stop"
@@ -628,9 +945,40 @@ impl ChatProcessor {
                     .as_str()
                     .filter(|s| !s.trim().is_empty())
                     .ok_or(TextFailure::InvalidResponse)?;
-                decode_output(content, envelope)
+                let output = decode_output(content, envelope)?;
+                if reflected(&output.text)
+                    || output.source_language.as_deref().is_some_and(reflected)
+                {
+                    return Err(TextFailure::InvalidResponse);
+                }
+                Ok(output)
             };
             let result = tokio::select! {biased; _=cancellation.cancelled()=>Err(TextFailure::Cancelled),result=tokio::time::timeout(deadline,operation)=>result.unwrap_or(Err(TextFailure::Timeout))};
+            let (trace_result, category) = result
+                .as_ref()
+                .map(|_| {
+                    (
+                        diagnostic::ApiResult::Success,
+                        diagnostic::ApiErrorCategory::None,
+                    )
+                })
+                .unwrap_or_else(|error| trace_failure(*error));
+            if let Some(event) = trace.metadata() {
+                event.error = category;
+                if category == diagnostic::ApiErrorCategory::Timeout
+                    && event.timeout_source == diagnostic::TimeoutSource::None
+                {
+                    event.timeout_source = if matches!(
+                        result,
+                        Err(TextFailure::Provider(GatewayError::ProviderTimeout))
+                    ) {
+                        diagnostic::TimeoutSource::ProviderStatus
+                    } else {
+                        diagnostic::TimeoutSource::LocalDeadline
+                    };
+                }
+            }
+            trace.finish(trace_result, category);
             if let Some(guard) = guard {
                 guard.finish(match &result {
                     Ok(_) => ApiOutcome::Success,
@@ -649,6 +997,56 @@ impl ChatProcessor {
             result
         })
     }
+}
+struct TraceCancellation(CancellationToken);
+impl diagnostic::CancellationFlag for TraceCancellation {
+    fn cancelled(&self) -> bool {
+        self.0.is_cancelled()
+    }
+}
+fn trace_transport(trace: &mut diagnostic::CallTrace, error: reqwest::Error) -> TextFailure {
+    if let Some(event) = trace.metadata() {
+        event.connect_related = Some(error.is_connect());
+        if error.is_timeout() {
+            event.timeout_source = diagnostic::TimeoutSource::TransportPredicate;
+        }
+    }
+    failure(error)
+}
+fn trace_failure(error: TextFailure) -> (diagnostic::ApiResult, diagnostic::ApiErrorCategory) {
+    use diagnostic::{ApiErrorCategory as E, ApiResult as R};
+    let category = match error {
+        TextFailure::Preparation(_) => E::Configuration,
+        TextFailure::ConfigurationRequired => E::Configuration,
+        TextFailure::InvalidPrompt => E::InvalidPrompt,
+        TextFailure::HistoryStorage => E::HistoryStorage,
+        TextFailure::Timeout => E::Timeout,
+        TextFailure::Cancelled => E::Cancelled,
+        TextFailure::InvalidResponse => E::Protocol,
+        TextFailure::Failed => E::Unknown,
+        TextFailure::Provider(error) => match error {
+            GatewayError::AuthError => E::Auth,
+            GatewayError::PermissionDenied => E::Permission,
+            GatewayError::InsufficientBalance => E::Balance,
+            GatewayError::RateLimit => E::RateLimit,
+            GatewayError::ContextWindowExceeded => E::Context,
+            GatewayError::ProviderTimeout => E::Timeout,
+            GatewayError::UpstreamValidationError => E::Validation,
+            GatewayError::UpstreamUnavailable => E::Unavailable,
+            GatewayError::Transport => E::Transport,
+            GatewayError::Protocol => E::Protocol,
+            GatewayError::Oversize => E::Oversize,
+            GatewayError::Unknown { .. } => E::Unknown,
+        },
+    };
+    (
+        match category {
+            E::Timeout => R::Timeout,
+            E::Cancelled => R::Cancelled,
+            _ => R::Failed,
+        },
+        category,
+    )
 }
 fn decode_output(content: &str, envelope: bool) -> Result<TextOutput, TextFailure> {
     if !envelope {

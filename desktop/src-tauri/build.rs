@@ -1,4 +1,5 @@
 fn main() {
+    emit_diagnostic_build_context();
     #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
     build_apple_intelligence_bridge();
 
@@ -35,6 +36,26 @@ fn main() {
     stage_vc_runtime_dlls();
 
     tauri_build::build()
+}
+
+fn emit_diagnostic_build_context() {
+    println!("cargo:rerun-if-env-changed=NOTYPE_BUILD_SOURCE_REVISION_INPUT");
+    println!("cargo:rerun-if-env-changed=NOTYPE_BUILD_DIRTY_INPUT");
+    let source = std::env::var("NOTYPE_BUILD_SOURCE_REVISION_INPUT")
+        .ok()
+        .filter(|value| {
+            (7..=40).contains(&value.len())
+                && value
+                    .bytes()
+                    .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+        })
+        .unwrap_or_else(|| "unavailable".into());
+    let dirty = std::env::var("NOTYPE_BUILD_DIRTY_INPUT")
+        .ok()
+        .filter(|value| matches!(value.as_str(), "true" | "false"))
+        .unwrap_or_else(|| "unknown".into());
+    println!("cargo:rustc-env=NOTYPE_BUILD_SOURCE_REVISION={source}");
+    println!("cargo:rustc-env=NOTYPE_BUILD_DIRTY={dirty}");
 }
 
 /// Stage the MSVC runtime DLLs into `transcribe-libs/` for app-local deployment.

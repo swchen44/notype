@@ -189,28 +189,54 @@ test("model-list authentication errors are actionable while manual input stays a
   );
 });
 
-test("a rejected model-list invocation can be explicitly retried", async (t) => {
-  const page = await providerConnectionsFixture(t, "en", [savedConnection]);
-  await page
-    .getByRole("button", { name: "Edit Company writing", exact: true })
-    .click();
-  await page.evaluate(() => (window.modelMode = "invoke-error"));
-  await page
-    .getByRole("button", { name: "View model ID list", exact: true })
-    .click();
-  await page.getByRole("alert").waitFor();
-  await page.evaluate(() => (window.modelMode = "ok"));
-  await page
-    .getByRole("button", { name: "View model ID list", exact: true })
-    .click();
-  await page
-    .getByRole("list", { name: "Model ID list", exact: true })
-    .waitFor();
-  assert.doesNotMatch(
-    await page.locator("body").innerText(),
-    /upstream-secret/,
-  );
-});
+for (const mode of ["invoke-error", "invoke-error-object"]) {
+  test(`a rejected model-list invocation can be explicitly retried (${mode})`, async (t) => {
+    const page = await providerConnectionsFixture(t, "en", [savedConnection]);
+    await page
+      .getByRole("button", { name: "Edit Company writing", exact: true })
+      .click();
+    await page.evaluate((mode) => (window.modelMode = mode), mode);
+    await page
+      .getByRole("button", { name: "View model ID list", exact: true })
+      .click();
+    await page.getByRole("alert").waitFor();
+    await page.evaluate(() => (window.modelMode = "ok"));
+    await page
+      .getByRole("button", { name: "View model ID list", exact: true })
+      .click();
+    await page
+      .getByRole("list", { name: "Model ID list", exact: true })
+      .waitFor();
+    assert.doesNotMatch(
+      await page.locator("body").innerText(),
+      /upstream-secret|UNIQUE_MODEL_REJECTION_PRIVATE_SENTINEL/,
+    );
+    assert.equal(
+      await page.evaluate(
+        () =>
+          window.calls.filter((call) => call.cmd === "list_text_models").length,
+      ),
+      2,
+    );
+    assert.equal(
+      await page
+        .getByLabel("Model ID (manual entry)", { exact: true })
+        .inputValue(),
+      "manual-model",
+    );
+    assert.equal(
+      await page.evaluate(
+        () =>
+          window.calls.filter((call) =>
+            ["save_text_connection", "activate_text_connection"].includes(
+              call.cmd,
+            ),
+          ).length,
+      ),
+      0,
+    );
+  });
+}
 
 test("explicit model-list cancellation fences a late reply and permits a new query", async (t) => {
   const page = await providerConnectionsFixture(t, "en", [savedConnection]);
@@ -240,6 +266,48 @@ test("explicit model-list cancellation fences a late reply and permits a new que
   await page
     .getByRole("list", { name: "Model ID list", exact: true })
     .waitFor();
+});
+
+test("a cancelled query finalizer cannot clear its successor's pending request", async (t) => {
+  const page = await providerConnectionsFixture(t, "en", [savedConnection]);
+  await page
+    .getByRole("button", { name: "Edit Company writing", exact: true })
+    .click();
+  await page.evaluate(() => (window.modelMode = "pending"));
+  await page
+    .getByRole("button", { name: "View model ID list", exact: true })
+    .click();
+  await page.waitForFunction(() => typeof window.releaseModels === "function");
+  await page.evaluate(
+    () => (window.previousModelsRelease = window.releaseModels),
+  );
+  await page.getByRole("button", { name: "Cancel query", exact: true }).click();
+  await page
+    .getByRole("button", { name: "View model ID list", exact: true })
+    .click();
+  await page.waitForFunction(
+    () => window.releaseModels !== window.previousModelsRelease,
+  );
+  await page.evaluate(async () => {
+    window.previousModelsRelease();
+    await new Promise((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(resolve)),
+    );
+  });
+  await page
+    .getByRole("button", { name: "Cancel query", exact: true })
+    .waitFor();
+  await page.evaluate(() => window.releaseModels());
+  await page
+    .getByRole("list", { name: "Model ID list", exact: true })
+    .waitFor();
+  assert.equal(
+    await page.evaluate(
+      () =>
+        window.calls.filter((call) => call.cmd === "list_text_models").length,
+    ),
+    2,
+  );
 });
 
 test("new local connections have a blank model and are not implicitly activated", async (t) => {

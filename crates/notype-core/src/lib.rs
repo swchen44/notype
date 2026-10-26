@@ -97,6 +97,8 @@ pub struct TextRequest {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TextFailure {
+    /// Safe local snapshot/credential preparation failure, after original saving.
+    Preparation(PreparationFailure),
     /// Safe provider category; never contains an upstream body or transport URL.
     Provider(gateway_error::GatewayError),
     ConfigurationRequired,
@@ -107,6 +109,33 @@ pub enum TextFailure {
     Cancelled,
     /// History accounting could not safely precede or commit the request.
     HistoryStorage,
+}
+
+/// Fixed preparation categories; no credential/path/URL or filesystem message.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PreparationFailure {
+    /// Selected credential missing or selected home file unavailable/invalid.
+    Credentials,
+    /// Unknown capability needs an explicit declaration before generation.
+    Capability,
+    /// Invalid or unbound route.
+    Route,
+    /// Unsupported/invalid request option.
+    Options,
+    /// Failed to read the fresh settings store.
+    Storage,
+}
+impl PreparationFailure {
+    /// Fixed safe history code; UI localizes without formatting rejected input.
+    pub fn code(self) -> &'static str {
+        match self {
+            Self::Credentials => "configuration-credentials-unavailable",
+            Self::Capability => "configuration-capability-required",
+            Self::Route => "configuration-route-invalid",
+            Self::Options => "configuration-invalid-options",
+            Self::Storage => "configuration-storage-failed",
+        }
+    }
 }
 
 pub type TextFuture = Pin<Box<dyn Future<Output = Result<String, TextFailure>> + Send>>;
@@ -877,6 +906,7 @@ impl SessionService {
         let mut source_language = None;
         let mut back_translation = None;
         let (status, result, error) = match response {
+            Err(TextFailure::Preparation(error)) => ("failed", None, Some(error.code())),
             Err(TextFailure::ConfigurationRequired) => {
                 ("failed", None, Some("configuration-required"))
             }
