@@ -106,7 +106,9 @@ mod platform {
             Intent,
             Instant,
             Option<crate::capture_startup::AcceptedAttempt>,
+            Option<crate::managers::model_root_activity::ActivityLease>,
         )>,
+        roots: std::sync::Arc<crate::managers::model_roots::RootService>,
     }
     #[repr(C)]
     struct KeyEvent {
@@ -251,10 +253,20 @@ mod platform {
                     Intent::Dictation | Intent::Translation | Intent::Ask
                 )
                 .then(|| crate::capture_startup::AcceptedAttempt::at(accepted_at));
-                if state
-                    .sender
-                    .try_send((intent, accepted_at, attempt))
-                    .is_err()
+                let starts = matches!(
+                    intent,
+                    Intent::Dictation | Intent::Translation | Intent::Ask
+                );
+                let reservation = if starts {
+                    state.roots.reserve().ok()
+                } else {
+                    None
+                };
+                if (starts && reservation.is_none())
+                    || state
+                        .sender
+                        .try_send((intent, accepted_at, attempt, reservation))
+                        .is_err()
                 {
                     state.router.reset();
                 }
@@ -280,6 +292,10 @@ mod platform {
             .set(Mutex::new(HookState {
                 router: GestureRouter::new(bindings.clone()),
                 sender,
+                roots: app
+                    .state::<std::sync::Arc<crate::managers::model::ModelManager>>()
+                    .roots
+                    .clone(),
             }))
             .map_err(|_| "physical-shortcuts-unavailable")?;
         let (ready_tx, ready_rx) = sync_channel(1);
@@ -309,7 +325,8 @@ mod platform {
         }
         let app = app.clone();
         std::thread::spawn(move || {
-            while let Ok((intent, accepted, attempt)) = receiver.recv() {
+            while let Ok((intent, accepted, attempt, reservation)) = receiver.recv() {
+                let _reservation = reservation;
                 let attempt = attempt.map(|attempt| attempt.dequeued());
                 use crate::actions::ACTION_MAP;
                 use crate::diagnostics::{record, Outcome, Phase as DiagnosticPhase};

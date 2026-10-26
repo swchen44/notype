@@ -4,6 +4,19 @@ use model_storage::{DownloadState, ModelPathAccess, ModelStorage, StorageError, 
 use std::cell::RefCell;
 use std::path::PathBuf;
 
+#[test]
+fn selected_root_display_and_activation_never_run_legacy_partial_cleanup() {
+    let fixture = Fixture::new("selected-root");
+    let path = fixture.0.join("models/catalog.gguf");
+    let partial = fixture.0.join("models/catalog.gguf.partial");
+    std::fs::write(&path, b"verified fixture").unwrap();
+    std::fs::write(&partial, b"retain unowned bytes").unwrap();
+    let snapshot = ModelStorage::selected_root(path.clone());
+    assert_eq!(snapshot.display_path().unwrap(), path);
+    assert_eq!(snapshot.activation_path().unwrap(), path);
+    assert_eq!(std::fs::read(partial).unwrap(), b"retain unowned bytes");
+}
+
 struct Fixture(PathBuf);
 impl Fixture {
     fn new(name: &str) -> Self {
@@ -57,6 +70,23 @@ struct Host {
     catalog_available: RefCell<bool>,
     selection: RefCell<String>,
     reconciliations: RefCell<Vec<String>>,
+}
+
+#[test]
+fn a_missing_selected_root_snapshot_cannot_reconcile_a_successor_by_model_id() {
+    struct SelectedHost(RefCell<u32>);
+    impl ModelPathAccess for SelectedHost {
+        type Error = StorageError;
+        fn storage_snapshot(&self, _: &str) -> Result<ModelStorage, Self::Error> {
+            Ok(ModelStorage::selected_root(PathBuf::new()))
+        }
+        fn reconcile_missing(&self, _: &str) {
+            *self.0.borrow_mut() += 1;
+        }
+    }
+    let host = SelectedHost(RefCell::new(0));
+    assert_eq!(host.get_model_path("same-id"), Err(StorageError::Missing));
+    assert_eq!(*host.0.borrow(), 0);
 }
 impl ModelPathAccess for Host {
     type Error = StorageError;

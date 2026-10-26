@@ -1,5 +1,51 @@
 {
   "notype": {
+    "modelFolder": {
+      "cancel": "Cancel",
+      "reload": "Reload model folder",
+      "otherModels": "Other models",
+      "storageSource": "Storage: {{source}}",
+      "origins": {
+        "selected_root": "Model folder",
+        "legacy_cache": "Read-only legacy cache"
+      },
+      "modelCount_one": "{{count}} model available",
+      "modelCount_other": "{{count}} models available",
+      "title": "Model folder",
+      "description": "Choose an existing folder to reuse your models. You can move the whole folder yourself and choose it again after reinstalling.",
+      "choose": "Choose model folder",
+      "rescan": "Rescan models",
+      "showLocation": "Show folder",
+      "candidate": "Folder to use",
+      "apply": "Apply folder",
+      "validating": "Checking models…",
+      "progress": "Checked {{checked}} of {{total}} models",
+      "readonly": "Read-only: models can be used, but downloads and deletion are unavailable.",
+      "busy": "Finish or cancel the current work, wait for it to finish, then retry applying the folder.",
+      "states": {
+        "ready": "Models ready",
+        "no_models": "No models in this folder",
+        "unavailable": "Folder unavailable",
+        "invalid": "Folder or models failed validation"
+      },
+      "artifacts": {
+        "verified": "Verified",
+        "custom_unverified": "Custom · unverified",
+        "invalid": "Invalid model",
+        "incomplete": "Incomplete model",
+        "unavailable": "Model unavailable"
+      },
+      "errors": {
+        "busy": "Finish or cancel the current work, wait for it to finish, then retry applying the folder.",
+        "invalid": "Choose a readable local model folder with valid models.",
+        "stale": "The folder changed. Choose it again before applying.",
+        "cancelled": "Model scan cancelled.",
+        "unavailable": "Unable to access the model folder. Please try again.",
+        "persistence-failed": "Unable to save the folder. Your previous folder is still in use.",
+        "readonly": "This folder is read-only. Choose a writable folder to download or delete models.",
+        "limit": "This folder exceeds the supported scan limits."
+      }
+    },
     "modelExplorer": {
       "advanced": "Advanced model information",
       "languages": "Supported languages",

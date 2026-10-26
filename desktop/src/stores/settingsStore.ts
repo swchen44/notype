@@ -13,6 +13,8 @@ import type {
 } from "@/bindings";
 import { commands } from "@/bindings";
 import { toast } from "sonner";
+import { useModelStore } from "./modelStore";
+import type { ModelGenerationEvent } from "@/bindings";
 
 interface SettingsStore {
   settings: Settings | null;
@@ -654,8 +656,9 @@ export const useSettingsStore = create<SettingsStore>()(
 
       // Re-fetch settings when the backend changes them (e.g. language
       // reset during model switch). The backend is the source of truth.
-      listen("model-state-changed", () => {
-        get().refreshSettings();
+      listen<ModelGenerationEvent>("model-state-changed", (event) => {
+        if (event.payload.generation === useModelStore.getState().generation)
+          get().refreshSettings();
       });
       listen<{ setting?: string }>("settings-changed", (event) => {
         get().refreshSettings();

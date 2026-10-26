@@ -28,6 +28,8 @@ import { Sidebar, SidebarSection, SECTIONS_CONFIG } from "./components/Sidebar";
 import { WhatsNewGate } from "./components/whats-new";
 import { useSettings } from "./hooks/useSettings";
 import { useSettingsStore } from "./stores/settingsStore";
+import { useModelStore } from "./stores/modelStore";
+import { ModelFolderControl } from "./components/settings/models/ModelFolderControl";
 import { commands } from "@/bindings";
 import { getLanguageDirection, initializeRTL } from "@/lib/utils/rtl";
 
@@ -62,6 +64,16 @@ function App() {
   const [currentSection, setCurrentSection] =
     useState<SidebarSection>("general");
   const { settings, updateSetting } = useSettings();
+  const modelState = useModelStore();
+  const selectedArtifact = modelState.artifacts[modelState.currentModel];
+  const hasReadyModel =
+    modelState.root?.status === "ready" &&
+    modelState.models.some(
+      (model) => model.id === modelState.currentModel && model.is_downloaded,
+    ) &&
+    selectedArtifact !== undefined &&
+    ["verified", "custom_unverified"].includes(selectedArtifact.status);
+  const needsModelRecovery = modelState.initialized && !hasReadyModel;
   const direction = getLanguageDirection(i18n.language);
   const refreshAudioDevices = useSettingsStore(
     (state) => state.refreshAudioDevices,
@@ -230,14 +242,17 @@ function App() {
   // Listen for model loading failures and show a toast
   useEffect(() => {
     const unlisten = listen<ModelStateEvent>("model-state-changed", (event) => {
-      if (event.payload.event_type === "loading_failed") {
+      if (
+        event.payload.generation === useModelStore.getState().generation &&
+        event.payload.event_type === "loading_failed"
+      ) {
         toast.error(
           t("errors.modelLoadFailed", {
             model:
               event.payload.model_name || t("errors.modelLoadFailedUnknown"),
           }),
           {
-            description: event.payload.error,
+            description: t("notype.modelFolder.errors.unavailable"),
           },
         );
       }
@@ -403,6 +418,9 @@ function App() {
               <div className="settings-content flex flex-col items-center gap-6">
                 <AccessibilityPermissions />
                 <SecureInputWarning />
+                {needsModelRecovery && currentSection !== "models" && (
+                  <ModelFolderControl />
+                )}
                 {renderSettingsContent(currentSection, setOnboardingPreview)}
               </div>
             </div>

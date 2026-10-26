@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
 import { unlink, writeFile, readFile, mkdir, symlink } from "node:fs/promises";
-import { prepareLaunch } from "../../packages/notype/lib/launcher.mjs";
+import { prepareLaunch, inspectRelease } from "../../packages/notype/lib/launcher.mjs";
 import {
   portableFixture,
   json,
@@ -100,19 +100,12 @@ test("missing fixed runtime refuses a launch plan instead of falling back to Eve
   );
 });
 
-test("same-size corruption of any pinned dependency refuses a launch plan", async (t) => {
+test("full inventory check rejects corrupt optional weights while normal launch exposes recovery", async (t) => {
   const f = await portableFixture(t);
   await writeFile(path.join(f.model, "weights/fixture.bin"), "FIXTURE weights");
-  await assert.rejects(
-    prepareLaunch({
-      facadeRoot: f.facade,
-      platform: "win32",
-      arch: "x64",
-      env: { APPDATA: f.root },
-      host: { integrity: "medium" },
-    }),
-    { code: "payload-corrupt" },
-  );
+  const options = { facadeRoot: f.facade, platform: "win32", arch: "x64", env: { APPDATA: f.root }, host: { integrity: "medium" } };
+  await assert.rejects(inspectRelease(options), { code: "payload-corrupt" });
+  assert.equal((await prepareLaunch(options)).model, undefined);
 });
 
 test("unsupported platform and elevated hosts refuse before package lookup or mutable data work", async (t) => {
@@ -171,7 +164,7 @@ test("absolute data override keeps existing history, while package-local or rela
   await writeFile(path.join(f.facade, "release.json"), json(f.release));
   await writeFile(
     path.join(f.facade, "package.json"),
-    json({ name: "notype", version: "1.0.0", type: "module" }),
+    json({ name: "notype", version: "1.0.0", type: "module", dependencies: { [f.appPin.name]: f.appPin.version } }),
   );
   const updated = await prepareLaunch({
     ...options,

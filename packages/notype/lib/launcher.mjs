@@ -2,7 +2,6 @@ import path from "node:path";
 import { createRequire } from "node:module";
 import { realpath } from "node:fs/promises";
 import { spawn } from "node:child_process";
-import { activateModel } from "./model.mjs";
 import {
   PackageError,
   jsonFile,
@@ -58,6 +57,7 @@ async function inspectInputs(
     env = process.env,
   },
   probe,
+  strictModels = false,
 ) {
   if (platform !== "win32" || arch !== "x64")
     throw new PackageError(
@@ -65,19 +65,20 @@ async function inspectInputs(
       "This release supports Windows x64 only.",
     );
   const release = await jsonFile(path.join(facadeRoot, "release.json"));
-  if (release.schema !== 1 || release.status !== "assembled")
+  if (release.schema !== 2 || release.status !== "assembled")
     throw new PackageError(
       "release-not-assembled",
-      "This package is a packaging foundation. A verified application and model release has not been assembled.",
+      "This package is a packaging foundation. A verified application release has not been assembled.",
     );
   validatePin(release.application);
-  validatePin(release.model);
   const facade = await jsonFile(path.join(facadeRoot, "package.json"));
   if (facade.version !== release.version)
     throw new PackageError(
       "invalid-manifest",
       "Facade and release versions differ.",
     );
+  if (Object.keys(facade.dependencies ?? {}).length !== 1 || facade.dependencies?.[release.application.name] !== release.application.version || Object.keys(facade.optionalDependencies ?? {}).length !== 0)
+    throw new PackageError("invalid-manifest", "The base facade must depend only on its pinned application payload.");
   const require = createRequire(path.join(facadeRoot, "package.json"));
   function packageRoot(pin) {
     try {
@@ -90,13 +91,23 @@ async function inspectInputs(
     }
   }
   const applicationRoot = packageRoot(release.application);
-  const modelRoot = packageRoot(release.model);
   const application = await verifyPackage(
     applicationRoot,
     release.application,
     "application",
   );
-  const model = await verifyPackage(modelRoot, release.model, "model");
+  let modelRoot;
+  let model;
+  if (release.model !== undefined) {
+    try {
+      validatePin(release.model);
+      modelRoot = packageRoot(release.model);
+      model = await verifyPackage(modelRoot, release.model, "model");
+    } catch (error) {
+      if (strictModels) throw error;
+      model = undefined;
+    }
+  }
   const hostProbe = path.join(applicationRoot, application.hostProbe);
   const host = probe
     ? await probe({ hostProbe, cpu: application.cpu })
@@ -122,7 +133,7 @@ async function inspectInputs(
     );
   const dataDirectory = path.resolve(configured);
   const resolvedData = await resolvedFuturePath(dataDirectory);
-  for (const root of [facadeRoot, applicationRoot, modelRoot]) {
+  for (const root of [facadeRoot, applicationRoot, modelRoot].filter(Boolean)) {
     const packageDirectory = await realpath(root);
     if (
       contains(packageDirectory, resolvedData) ||
@@ -149,7 +160,7 @@ async function inspectInputs(
     host,
     cpu: application.cpu,
     dataDirectory,
-    model: {
+    model: model && {
       identity: model.identity,
       root: modelRoot,
       files: model.modelFiles,
@@ -170,7 +181,7 @@ async function inspectInputs(
 }
 
 export async function inspectRelease(options) {
-  return inspectInputs(options);
+  return inspectInputs(options, undefined, true);
 }
 
 export async function prepareLaunch(options) {
@@ -202,14 +213,10 @@ export async function prepareLaunch(options) {
 
 export async function runApplication(options) {
   const plan = await prepareLaunch(options);
-  await activateModel(plan, {
-    signal: options.signal,
-    onProgress: options.onProgress,
-  });
   if (options.signal?.aborted)
     throw new PackageError(
-      "model-activation-cancelled",
-      "Local launch was cancelled; verified models and history have been retained.",
+      "launch-cancelled",
+      "Local launch was cancelled.",
     );
   if (options.launch) return options.launch(plan);
   return new Promise((resolve, reject) => {

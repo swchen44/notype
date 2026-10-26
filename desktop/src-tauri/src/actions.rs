@@ -37,6 +37,7 @@ struct FinishGuard {
     app: AppHandle,
     owner: crate::workflow::GenerationToken,
     _cleanup: crate::workflow::GenerationCleanup,
+    _root_activity: Option<crate::managers::model_roots::RootActivity>,
 }
 /// Ownership is rechecked when the queued UI operation actually executes.
 pub(crate) fn generation_ui(
@@ -92,6 +93,10 @@ impl ShortcutAction for TranscribeAction {
         _shortcut: &str,
         accepted: AcceptedAttempt,
     ) {
+        let Ok(activity) = app.state::<Arc<ModelManager>>().activity() else {
+            let _ = app.emit("session-error", "model-root-busy");
+            return;
+        };
         let trace = crate::capture_observations::begin(accepted);
         let start_time = Instant::now();
         record(Phase::RecordingStart, Outcome::Started, None);
@@ -105,7 +110,9 @@ impl ShortcutAction for TranscribeAction {
         let kickoff_started = Instant::now();
         tm.initiate_model_load_for_capture(Some(trace.clone()));
         let rm_clone = Arc::clone(&rm);
+        let vad_activity = activity.clone();
         std::thread::spawn(move || {
+            let _activity = vad_activity;
             if let Err(e) = rm_clone.preload_vad() {
                 debug!("VAD pre-load failed: {}", e);
             }
@@ -243,7 +250,9 @@ impl ShortcutAction for TranscribeAction {
                 let rm_clone = Arc::clone(&rm);
                 let ready_owner = owner.clone();
                 record(Phase::MicrophoneReady, Outcome::Started, None);
+                let ready_activity = activity.clone();
                 std::thread::spawn(move || {
+                    let _activity = ready_activity;
                     let Some(observation) = readiness.wait() else {
                         debug!("Microphone readiness wait ended without receiving samples");
                         record(
@@ -400,6 +409,9 @@ impl ShortcutAction for TranscribeAction {
         });
         let binding_id = binding_id.to_string();
         record(Phase::RecordingStopped, Outcome::Started, None);
+        // Own admission before spawning; cancellation cannot free an active worker.
+        let root_activity = rm.root_activity();
+        let decode_activity = root_activity.clone();
         // Esc remains registered through STT and HTTP, until FinishGuard drops.
         tauri::async_runtime::spawn(async move {
             let cleanup_app = ah.clone();
@@ -408,6 +420,7 @@ impl ShortcutAction for TranscribeAction {
             let _guard = FinishGuard {
                 app: ah.clone(),
                 owner: owner.clone(),
+                _root_activity: root_activity,
                 _cleanup: owner.cleanup(move || {
                     shortcut::unregister_cancel_shortcut(&cleanup_app);
                     cleanup_tm.maybe_unload_immediately("transcription session");
@@ -455,15 +468,17 @@ impl ShortcutAction for TranscribeAction {
             };
             let decoder_owner = owner.clone();
             let samples = captured.samples;
-            let transcription =
-                tauri::async_runtime::spawn_blocking(move || match finalization.wait_observed() {
+            let transcription = tauri::async_runtime::spawn_blocking(move || {
+                let _activity = decode_activity;
+                match finalization.wait_observed() {
                     Ok(Some(text)) if !text.text.trim().is_empty() => Ok(text),
                     Ok(_) => {
                         transcriber.transcribe_for_generation(samples, &profile, decoder_owner)
                     }
                     Err(error) => Err(error),
-                })
-                .await;
+                }
+            })
+            .await;
             if rm.was_cancelled_since(cancel_generation) {
                 let _ = owner.cancel();
                 return;

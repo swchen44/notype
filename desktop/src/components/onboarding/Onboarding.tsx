@@ -7,6 +7,7 @@ import type { ModelCardStatus } from "./ModelCard";
 import ModelCard, { isLegacySource } from "./ModelCard";
 import HandyTextLogo from "../icons/HandyTextLogo";
 import { useModelStore } from "../../stores/modelStore";
+import { ModelFolderControl } from "../settings/models/ModelFolderControl";
 
 interface OnboardingProps {
   onModelSelected: () => void;
@@ -20,6 +21,9 @@ const Onboarding: React.FC<OnboardingProps> = ({
   const { t } = useTranslation();
   const {
     models,
+    artifacts,
+    generation,
+    error,
     downloadModel,
     selectModel,
     downloadingModels,
@@ -32,17 +36,25 @@ const Onboarding: React.FC<OnboardingProps> = ({
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
   const hasStartedSelection = useRef(false);
+  const selectionGeneration = useRef(generation);
+  const selectionRequest = useRef(0);
+  useEffect(() => {
+    ++selectionRequest.current;
+    hasStartedSelection.current = false;
+    setSelectedModelId(null);
+  }, [generation]);
 
   const isBusy = selectedModelId !== null;
 
   // Curate the download list: legacy (.bin/ONNX) downloads are deprecated and
-  // never shown here (they still appear in the compatible section if already on
-  // disk). The catalog arrives rank-sorted, so the first two recommended models
+  // never offered for download. Retained unsupported artifacts remain visible
+  // below. The catalog arrives rank-sorted, so the first two recommended models
   // are the featured picks — currently Parakeet Unified (English) and Nemotron
   // Streaming (multilingual). Everything else hides behind "Show all".
   const { downloadable, topPicks, otherRecommended, rest } = useMemo(() => {
     const downloadable = models.filter(
-      (m: ModelInfo) => !m.is_downloaded && !isLegacySource(m),
+      (m: ModelInfo) =>
+        !m.is_downloaded && !isLegacySource(m) && artifacts[m.id]?.can_download,
     );
     const recommended = downloadable.filter((m: ModelInfo) => m.is_recommended);
     // `models` arrives in editorial rank order (the backend sorts by rank_of,
@@ -55,7 +67,7 @@ const Onboarding: React.FC<OnboardingProps> = ({
       otherRecommended: recommended.slice(2),
       rest,
     };
-  }, [models]);
+  }, [models, artifacts]);
 
   const hasRecommended = topPicks.length > 0 || otherRecommended.length > 0;
   // When nothing recommended remains to download (e.g. all already on disk),
@@ -67,7 +79,7 @@ const Onboarding: React.FC<OnboardingProps> = ({
     // Debug previews are inert: never switch the user's active model. Guarded
     // here as well as in the handlers because this is where the backend call
     // actually happens.
-    if (preview) return;
+    if (preview || selectionGeneration.current !== generation) return;
 
     if (!selectedModelId) {
       hasStartedSelection.current = false;
@@ -87,9 +99,16 @@ const Onboarding: React.FC<OnboardingProps> = ({
       !hasStartedSelection.current
     ) {
       hasStartedSelection.current = true;
+      const request = ++selectionRequest.current;
+      const expected = generation;
 
       // Model is ready — select it and transition
       selectModel(selectedModelId).then((success) => {
+        if (
+          request !== selectionRequest.current ||
+          useModelStore.getState().generation !== expected
+        )
+          return;
         if (success) {
           onModelSelected();
         } else {
@@ -108,34 +127,44 @@ const Onboarding: React.FC<OnboardingProps> = ({
     selectModel,
     onModelSelected,
     preview,
+    generation,
     t,
   ]);
 
   const handleDownloadModel = async (modelId: string) => {
     if (preview) return;
-
+    selectionGeneration.current = generation;
     setSelectedModelId(modelId);
+    const expected = generation;
+    const request = ++selectionRequest.current;
 
-    // Error toast is handled centrally by the model-download-failed event listener
-    // in modelStore — no toast here to avoid duplicates.
     const success = await downloadModel(modelId);
-    if (!success) {
+    if (
+      request === selectionRequest.current &&
+      useModelStore.getState().generation === expected &&
+      !success
+    ) {
       setSelectedModelId(null);
     }
   };
 
   const handleCancelDownload = async (modelId: string) => {
     if (preview) return;
-
+    const expected = generation;
+    const request = ++selectionRequest.current;
     const success = await cancelDownload(modelId);
-    if (success) {
+    if (
+      request === selectionRequest.current &&
+      useModelStore.getState().generation === expected &&
+      success
+    ) {
       setSelectedModelId(null);
     }
   };
 
   const handleSelectExistingModel = (modelId: string) => {
     if (preview) return;
-
+    selectionGeneration.current = generation;
     setSelectedModelId(modelId);
   };
 
@@ -170,6 +199,12 @@ const Onboarding: React.FC<OnboardingProps> = ({
 
       <div className="max-w-[600px] w-full mx-auto text-center flex-1 flex flex-col min-h-0">
         <div className="space-y-6 pb-6">
+          <ModelFolderControl preview={preview} />
+          {error && (
+            <p role="alert" className="text-sm text-warning">
+              {t(`notype.modelFolder.errors.${error}`)}
+            </p>
+          )}
           {models.some((m: ModelInfo) => m.is_downloaded) && (
             <div className="space-y-3">
               <div className="text-left">
@@ -183,8 +218,34 @@ const Onboarding: React.FC<OnboardingProps> = ({
                   <ModelCard
                     key={model.id}
                     model={model}
+                    artifact={artifacts[model.id]}
                     status={getExistingModelStatus(model.id)}
                     disabled={isBusy}
+                    onSelect={handleSelectExistingModel}
+                    showRecommended={false}
+                  />
+                ))}
+            </div>
+          )}
+
+          {models.some(
+            (model) => isLegacySource(model) && !model.is_downloaded,
+          ) && (
+            <div className="space-y-3 text-left">
+              <h2 className="text-sm font-medium text-text/60">
+                {t("notype.modelFolder.otherModels")}
+              </h2>
+              {models
+                .filter(
+                  (model) => isLegacySource(model) && !model.is_downloaded,
+                )
+                .map((model) => (
+                  <ModelCard
+                    key={model.id}
+                    model={model}
+                    artifact={artifacts[model.id]}
+                    status="downloadable"
+                    disabled
                     onSelect={handleSelectExistingModel}
                     showRecommended={false}
                   />
@@ -204,6 +265,7 @@ const Onboarding: React.FC<OnboardingProps> = ({
                 <ModelCard
                   key={model.id}
                   model={model}
+                  artifact={artifacts[model.id]}
                   variant="featured"
                   status={getModelStatus(model.id)}
                   disabled={isBusy}
@@ -222,6 +284,7 @@ const Onboarding: React.FC<OnboardingProps> = ({
                 <ModelCard
                   key={model.id}
                   model={model}
+                  artifact={artifacts[model.id]}
                   status={getModelStatus(model.id)}
                   disabled={isBusy}
                   onSelect={handleDownloadModel}
@@ -259,6 +322,7 @@ const Onboarding: React.FC<OnboardingProps> = ({
                   <ModelCard
                     key={model.id}
                     model={model}
+                    artifact={artifacts[model.id]}
                     status={getModelStatus(model.id)}
                     disabled={isBusy}
                     onSelect={handleDownloadModel}

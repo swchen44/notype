@@ -9,6 +9,49 @@ use tempfile::TempDir;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 
+struct NoPreferences;
+impl crate::managers::model_roots::RootStorage for NoPreferences {
+    fn load(&self) -> crate::managers::model_roots::RootResult<Option<Vec<u8>>> {
+        Ok(None)
+    }
+    fn commit(&self, _: &[u8]) -> crate::managers::model_roots::RootResult<()> {
+        Err(crate::managers::model_roots::RootError("fixture-no-commit"))
+    }
+}
+fn transfer_owner(path: &Path) -> (Arc<RootService>, RootActivity, std::path::PathBuf) {
+    let root = std::fs::canonicalize(path.parent().unwrap()).unwrap();
+    let root_input =
+        std::path::PathBuf::from(crate::managers::model_roots_files::display_path(&root));
+    let roots = Arc::new(RootService::open(
+        root_input,
+        Arc::new(NoPreferences),
+        Arc::new(crate::managers::model_roots_files::Filesystem::new(|_| {
+            false
+        })),
+        Vec::new(),
+        None,
+    ));
+    let owner = roots.admit_mutation("fixture").unwrap();
+    let path = owner.root.root.join(path.file_name().unwrap());
+    // Pre-existing test bytes are owned fixture input. Recreate them through
+    // the same exclusive reservation used by the production transfer.
+    if let Ok(bytes) = std::fs::read(&path) {
+        std::fs::remove_file(&path).unwrap();
+        roots
+            .open_partial(&path, &owner)
+            .unwrap()
+            .write_all(&bytes)
+            .unwrap();
+    }
+    (roots, owner, path)
+}
+async fn verify_owned(path: &Path, hash: Option<&str>) -> Result<()> {
+    let (roots, owner, path) = transfer_owner(path);
+    ModelManager::verify_file_with_events("fixture", &path, hash, &|_| {}, &owner, &roots)
+        .await
+        .map(|_| ())
+}
+
 // ── SHA256 verification tests ─────────────────────────────────────────────
 
 /// Helper: write `data` to a temp file and return (TempDir, path).
@@ -21,24 +64,24 @@ fn write_temp_file(data: &[u8]) -> (TempDir, std::path::PathBuf) {
     (dir, path)
 }
 
-#[test]
-fn test_verify_sha256_skipped_when_none() {
+#[tokio::test]
+async fn test_verify_sha256_skipped_when_none() {
     // Custom models have no expected hash — verification must be a no-op.
     let (_dir, path) = write_temp_file(b"anything");
-    assert!(ModelManager::verify_sha256(&path, None, "custom").is_ok());
+    assert!(verify_owned(&path, None).await.is_ok());
     assert!(
         path.exists(),
         "file must be untouched when verification is skipped"
     );
 }
 
-#[test]
-fn test_verify_sha256_passes_on_correct_hash() {
-    // Compute the real hash so the test is self-consistent.
+#[tokio::test]
+async fn test_verify_sha256_passes_on_correct_hash() {
+    // Independent standard SHA256 hello-world vector.
     let (_dir, path) = write_temp_file(b"hello world");
-    let actual = ModelManager::compute_sha256(&path).unwrap();
+    let actual = "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9";
     assert!(
-        ModelManager::verify_sha256(&path, Some(&actual), "test_model").is_ok(),
+        verify_owned(&path, Some(actual)).await.is_ok(),
         "should pass when hash matches"
     );
     assert!(
@@ -47,16 +90,19 @@ fn test_verify_sha256_passes_on_correct_hash() {
     );
 }
 
-#[test]
-fn test_verify_sha256_fails_and_deletes_partial_on_mismatch() {
+#[tokio::test]
+async fn test_verify_sha256_fails_and_deletes_partial_on_mismatch() {
     let (_dir, path) = write_temp_file(b"this is not the real model");
     let wrong_hash = "0000000000000000000000000000000000000000000000000000000000000000";
 
-    let result = ModelManager::verify_sha256(&path, Some(wrong_hash), "bad_model");
+    let result = verify_owned(&path, Some(wrong_hash)).await;
 
     assert!(result.is_err(), "mismatch must return an error");
     assert!(
-        result.unwrap_err().to_string().contains("corrupt"),
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("model-artifact-invalid"),
         "error message should mention corruption"
     );
     assert!(
@@ -65,15 +111,14 @@ fn test_verify_sha256_fails_and_deletes_partial_on_mismatch() {
     );
 }
 
-#[test]
-fn test_verify_sha256_fails_and_deletes_partial_when_file_missing() {
+#[tokio::test]
+async fn test_verify_sha256_fails_and_deletes_partial_when_file_missing() {
     // Simulate a partial file that was already removed (e.g. disk full mid-download).
     let dir = TempDir::new().unwrap();
     let missing_path = dir.path().join("gone.partial");
     // Don't create the file — it should not exist.
 
-    let result =
-        ModelManager::verify_sha256(&missing_path, Some("anyexpectedhash"), "missing_model");
+    let result = verify_owned(&missing_path, Some("anyexpectedhash")).await;
 
     assert!(result.is_err(), "missing file must return an error");
 }
@@ -138,14 +183,17 @@ async fn run_download(
     expected_sha256: Option<&str>,
     cancel: &CancellationToken,
 ) -> Result<HttpDownloadOutcome> {
+    let (roots, owner, canonical_partial) = transfer_owner(partial);
     ModelManager::download_http_resumable_with_events(
         "test/model",
         url,
-        partial,
+        &canonical_partial,
         expected_size,
         expected_sha256,
         cancel,
         &|_| {},
+        &owner,
+        &roots,
     )
     .await
 }
@@ -172,7 +220,7 @@ async fn http_fresh_download_completes_and_verifies() {
     .await
     .unwrap();
 
-    assert!(matches!(out, HttpDownloadOutcome::Completed));
+    assert!(matches!(out, HttpDownloadOutcome::Completed(_)));
     assert_eq!(fs::read(&partial).unwrap(), body);
     let head = server.await.unwrap();
     assert!(
@@ -207,7 +255,7 @@ async fn http_resume_appends_with_valid_content_range() {
     .await
     .unwrap();
 
-    assert!(matches!(out, HttpDownloadOutcome::Completed));
+    assert!(matches!(out, HttpDownloadOutcome::Completed(_)));
     assert_eq!(fs::read(&partial).unwrap(), full);
     let head = server.await.unwrap();
     assert!(head.contains("range: bytes=5-"), "got request: {head}");
@@ -268,7 +316,7 @@ async fn http_range_ignored_200_restarts_from_zero() {
     .await
     .unwrap();
 
-    assert!(matches!(out, HttpDownloadOutcome::Completed));
+    assert!(matches!(out, HttpDownloadOutcome::Completed(_)));
     assert_eq!(fs::read(&partial).unwrap(), body);
 }
 
@@ -292,7 +340,7 @@ async fn http_416_with_hash_finalizes_complete_partial() {
     .await
     .unwrap();
 
-    assert!(matches!(out, HttpDownloadOutcome::Completed));
+    assert!(matches!(out, HttpDownloadOutcome::Completed(_)));
     assert_eq!(fs::read(&partial).unwrap(), body);
 }
 
@@ -381,7 +429,7 @@ async fn http_full_size_partial_verified_without_network() {
     .await
     .unwrap();
 
-    assert!(matches!(out, HttpDownloadOutcome::Completed));
+    assert!(matches!(out, HttpDownloadOutcome::Completed(_)));
     assert_eq!(fs::read(&partial).unwrap(), body);
 }
 
@@ -408,7 +456,7 @@ async fn http_oversized_partial_restarts_clean() {
     .await
     .unwrap();
 
-    assert!(matches!(out, HttpDownloadOutcome::Completed));
+    assert!(matches!(out, HttpDownloadOutcome::Completed(_)));
     assert_eq!(fs::read(&partial).unwrap(), body);
     let head = server.await.unwrap();
     assert!(

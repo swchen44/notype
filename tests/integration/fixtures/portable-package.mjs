@@ -126,12 +126,13 @@ export async function portableFixture(t) {
     },
   );
   const release = {
-    schema: 1,
+    schema: 2,
     status: "assembled",
     version: "0.0.0",
     application: appPin,
     model: modelPin,
   };
   await writeFile(path.join(facade, "release.json"), json(release));
+  await writeFile(path.join(facade, "package.json"), json({ name: "notype", version: "0.0.0", type: "module", dependencies: { [appPin.name]: appPin.version } }));
   return { root, facade, app, model, release, appPin, modelPin };
 }

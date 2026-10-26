@@ -1,5 +1,50 @@
 {
   "notype": {
+    "modelFolder": {
+      "cancel": "取消",
+      "reload": "重新載入模型資料夾",
+      "otherModels": "其他模型",
+      "storageSource": "儲存來源：{{source}}",
+      "origins": {
+        "selected_root": "模型資料夾",
+        "legacy_cache": "唯讀舊快取"
+      },
+      "modelCount": "可用模型：{{count}} 個",
+      "title": "模型資料夾",
+      "description": "選擇現有資料夾來重用模型。您可以自行搬移整個資料夾，重新安裝後再選擇它。",
+      "choose": "選擇模型資料夾",
+      "rescan": "重新掃描模型",
+      "showLocation": "顯示資料夾",
+      "candidate": "準備使用的資料夾",
+      "apply": "套用資料夾",
+      "validating": "正在檢查模型…",
+      "progress": "已檢查 {{checked}} / {{total}} 個模型",
+      "readonly": "唯讀：可使用模型，但無法下載或刪除。",
+      "busy": "請完成或取消目前工作，等待工作結束後，再重試套用資料夾。",
+      "states": {
+        "ready": "模型已就緒",
+        "no_models": "此資料夾沒有模型",
+        "unavailable": "資料夾無法使用",
+        "invalid": "資料夾或模型未通過驗證"
+      },
+      "artifacts": {
+        "verified": "已驗證",
+        "custom_unverified": "自訂・未驗證",
+        "invalid": "模型無效",
+        "incomplete": "模型不完整",
+        "unavailable": "模型無法使用"
+      },
+      "errors": {
+        "busy": "請完成或取消目前工作，等待工作結束後，再重試套用資料夾。",
+        "invalid": "請選擇可讀取且包含有效模型的本機資料夾。",
+        "stale": "資料夾已變更，請重新選擇後再套用。",
+        "cancelled": "已取消模型掃描。",
+        "unavailable": "無法存取模型資料夾，請再試一次。",
+        "persistence-failed": "無法儲存資料夾，仍使用原本的資料夾。",
+        "readonly": "此資料夾為唯讀，請選擇可寫入的資料夾來下載或刪除模型。",
+        "limit": "此資料夾超過支援的掃描上限。"
+      }
+    },
     "modelExplorer": {
       "advanced": "進階模型資訊",
       "languages": "完整支援語言",

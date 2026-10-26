@@ -18,6 +18,8 @@ pub enum DownloadState {
 
 /// Filesystem routing metadata, without download URLs or settings access.
 pub enum StorageSource {
+    /// A verified selected-root artifact. It has no activation cleanup policy.
+    SelectedRoot { path: PathBuf },
     /// A catalog model. The existing HF cache adapter resolves revisions and
     /// supplies an existing snapshot path; a local mirror file is the fallback.
     HuggingFace {
@@ -72,8 +74,12 @@ pub trait ModelPathAccess {
     /// Resolve for activation, retaining stale HF partial cleanup and notifying
     /// the manager only when an advertised completed path is missing.
     fn get_model_path(&self, model_id: &str) -> Result<PathBuf, Self::Error> {
-        let result = self.storage_snapshot(model_id)?.activation_path();
-        if matches!(result, Err(StorageError::Missing)) {
+        let storage = self.storage_snapshot(model_id)?;
+        let reconcile = !matches!(storage.source, StorageSource::SelectedRoot { .. });
+        let result = storage.activation_path();
+        // Selected-root availability is fenced by the root authority's full
+        // artifact key. An old path query must never reconcile a successor by ID.
+        if reconcile && matches!(result, Err(StorageError::Missing)) {
             self.reconcile_missing(model_id);
         }
         result.map_err(Into::into)
@@ -92,6 +98,15 @@ pub struct ModelStorage {
 }
 
 impl ModelStorage {
+    pub fn selected_root(path: PathBuf) -> Self {
+        Self {
+            models_dir: PathBuf::new(),
+            filename: String::new(),
+            is_directory: false,
+            state: DownloadState::Complete,
+            source: StorageSource::SelectedRoot { path },
+        }
+    }
     /// Captures the manager's current metadata and resolved storage roots.
     /// Construction performs no I/O; filenames come from trusted discovery or
     /// catalog metadata, and an HF cached path must be resolved by the adapter.
@@ -125,6 +140,13 @@ impl ModelStorage {
     }
 
     fn resolve(&self, cleanup_stale_partial: bool) -> Result<PathBuf, StorageError> {
+        if let StorageSource::SelectedRoot { path } = &self.source {
+            return if path.is_file() {
+                Ok(path.clone())
+            } else {
+                Err(StorageError::Missing)
+            };
+        }
         match self.state {
             DownloadState::Unavailable => return Err(StorageError::Unavailable),
             DownloadState::Downloading => return Err(StorageError::Downloading),

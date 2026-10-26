@@ -94,7 +94,7 @@ async function manifestPackage(directory, name, version) {
 async function facadePackage(f, version, application, model = f.modelPin) {
   await writeFile(
     path.join(f.facade, "release.json"),
-    json({ schema: 1, status: "assembled", version, application, model }),
+    json({ schema: 2, status: "assembled", version, application, model }),
   );
   await writeFile(
     path.join(f.facade, "package.json"),
@@ -105,7 +105,6 @@ async function facadePackage(f, version, application, model = f.modelPin) {
       files: ["release.json"],
       dependencies: {
         "notype-win32-x64": application.version,
-        "notype-model": model.version,
       },
     }),
   );
@@ -195,7 +194,7 @@ async function retentionFixture(t) {
   return f;
 }
 
-test("offline npm installs the two new roles while retaining an unavailable model and its lock, then verifies the completed release", async (t) => {
+test("offline npm installs the two new roles while retaining an explicit optional model and its lock, then verifies the completed release", async (t) => {
   const f = await retentionFixture(t);
   const retainedModel = path.join(f.scratch, "node_modules/notype-model");
   assert.deepEqual(await readdir(f.updateCache), []);
