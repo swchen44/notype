@@ -40,8 +40,12 @@ impl notype_core::TextProcessor for ObservedOnly {
         self.0.generate_observed(request, cancel, observer)
     }
 }
-#[tokio::test]
-async fn sealed_openrouter_sends_only_the_reviewed_zero_price_google_route() {
+fn good_reply() -> Value {
+    json!({"model":"google/gemma-4-31b-it","usage":{"prompt_tokens":5,"completion_tokens":2,"total_tokens":7,"cost":0},"choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"OK"}}]})
+}
+async fn owned_openrouter_response(
+    reply: Value,
+) -> (notype_core::SessionEntry, Value, AdverseLatch) {
     use provider_config::*;
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let owned = OwnedLoopback::from_listener(&listener).unwrap();
@@ -74,7 +78,7 @@ async fn sealed_openrouter_sends_only_the_reviewed_zero_price_google_route() {
             bytes.extend_from_slice(&buffer[..n]);
         }
         let body: Value = serde_json::from_slice(&bytes[end..end + length]).unwrap();
-        let response=json!({"model":"google/gemma-4-31b-it","usage":{"prompt_tokens":5,"completion_tokens":2,"total_tokens":7,"cost":0},"choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"OK"}}]}).to_string();
+        let response = reply.to_string();
         stream
             .write_all(
                 format!(
@@ -106,12 +110,13 @@ async fn sealed_openrouter_sends_only_the_reviewed_zero_price_google_route() {
     draft.max_output_tokens = Some(512);
     let saved = store.save(1, draft.clone(), KeyAction::Clear).unwrap();
     store.activate(saved.revision, Some(draft.id)).unwrap();
+    let latch = AdverseLatch::new();
     let processor = experiment_processor(
         store.resolve_active(&NoHome).unwrap(),
         ExperimentPolicy::OwnedLoopback(
             owned,
             ExperimentKind::OpenRouterGemma31bFreeGoogleAiStudio,
-            AdverseLatch::new(),
+            latch.clone(),
         ),
         diagnostics::api::TraceContext::global(None),
     )
@@ -125,17 +130,55 @@ async fn sealed_openrouter_sends_only_the_reviewed_zero_price_google_route() {
         .process(&entry.id, vec![], Arc::new(ObservedOnly(processor)))
         .await
         .unwrap();
+    (result, server.await.unwrap(), latch)
+}
+#[tokio::test]
+async fn sealed_openrouter_sends_only_the_reviewed_zero_price_google_route() {
+    let (result, body, latch) = owned_openrouter_response(good_reply()).await;
     assert_eq!(result.result.as_deref(), Some("OK"));
+    assert!(latch.observed().is_none());
     assert_eq!(result.api_summary.call_count, Some(1));
     assert_eq!(
         result.api_summary.fees.totals.len(),
         0,
         "zero validation must not invent an actual-money receipt"
     );
-    let body = server.await.unwrap();
     assert_eq!(
         body["provider"],
         json!({"only":["google-ai-studio"],"allow_fallbacks":false,"require_parameters":true,"max_price":{"prompt":0,"completion":0,"request":0}})
     );
     assert_eq!(body["reasoning"], json!({"enabled":false}));
+}
+
+#[tokio::test]
+async fn sealed_openrouter_requires_numeric_zero_cost_without_discarding_actual_usage() {
+    for cost in [
+        None,
+        Some(Value::Null),
+        Some(json!("0")),
+        Some(json!(0.001)),
+        Some(json!(-1)),
+    ] {
+        let mut reply = good_reply();
+        if let Some(cost) = cost {
+            reply["usage"]["cost"] = cost;
+        } else {
+            reply["usage"].as_object_mut().unwrap().remove("cost");
+        }
+        let (result, _, latch) = owned_openrouter_response(reply).await;
+        assert_eq!(result.error.as_deref(), Some("llm-invalid-response"));
+        assert!(result.result.is_none());
+        assert_eq!(result.api_summary.input.total, Some(5));
+        assert_eq!(result.api_summary.output.total, Some(2));
+        assert!(result.api_summary.fees.totals.is_empty());
+        assert_eq!(
+            latch.observed().unwrap().category,
+            AdverseCategory::Contract
+        );
+    }
+    let mut reply = good_reply();
+    reply["usage"]["cost"] = json!(0.0);
+    let (result, _, latch) = owned_openrouter_response(reply).await;
+    assert_eq!(result.result.as_deref(), Some("OK"));
+    assert!(latch.observed().is_none());
 }
