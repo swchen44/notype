@@ -26,6 +26,7 @@ enum Source {
 /// before public evidence/key lookup; failure never deletes or reuses it.
 pub(super) struct PreparedRoot(PathBuf);
 impl PreparedRoot {
+    /// Create only a fresh owned child; failed preparation is retained forever.
     pub(super) fn create(root: &Path) -> Result<Self, Failure> {
         super::journal::plain(root)?;
         std::fs::create_dir(root).map_err(|_| Failure::ReportOnly)?;
@@ -41,6 +42,7 @@ impl PreparedRoot {
             .map_err(|_| Failure::Storage)?;
         Ok(Self(root.to_path_buf()))
     }
+    /// Borrow this process's newly created child without another root override.
     pub(super) fn path(&self) -> &Path {
         &self.0
     }
@@ -99,6 +101,8 @@ impl ProbeRunner {
             resource,
         )
     }
+    /// Consume the private fresh-root capability and already resolved fixed
+    /// snapshots; only the gated CLI can reach this constructor.
     pub(super) fn live(
         root: PreparedRoot,
         configuration: LiveConfigurations,
@@ -115,6 +119,8 @@ impl ProbeRunner {
             resource,
         )
     }
+    /// Substitute only the owned listener while retaining production selected
+    /// synthetic credentials/options and the actual observer/store algorithm.
     pub(super) fn smoke(
         root: PreparedRoot,
         endpoint: OwnedLoopback,

@@ -116,6 +116,19 @@ struct ProgressReceipt {
     actual_fee: &'static str,
     d_runtime_allocation_hwm: u64,
 }
+// Automatic reverse stays inside SessionService, so its actual observer begin
+// must see the same freshness check as explicit outer steps. No token can
+// attest to or extend the immutable monotonic evidence window.
+struct LiveResources {
+    quota: Arc<native::QuotaGate>,
+    contracts: Arc<FreshContracts>,
+}
+impl ResourceGate for LiveResources {
+    fn checkpoint(&self) -> Result<(), Failure> {
+        self.contracts.require_fresh()?;
+        self.quota.checkpoint()
+    }
+}
 fn parent(root: &Path) -> Result<(), Failure> {
     journal::plain(root)?;
     let parent = root.parent().ok_or(Failure::Storage)?;
@@ -231,10 +244,11 @@ async fn run() -> Result<Summary, Failure> {
     // One atomic fresh directory permanently consumes this identity before a
     // public GET or selected key lookup; a failed preparation cannot reset it.
     let prepared = PreparedRoot::create(&root)?;
-    let contracts = FreshContracts::acquire().await?;
+    let contracts = Arc::new(FreshContracts::acquire().await?);
     native::receipt(&root.join("contracts.json"), contracts.facts())?;
     resources.checkpoint()?;
     contracts.require_fresh()?;
+    let identity = contracts.identity()?;
     // Lazy production native-home adapter; this line is unreachable before all
     // source/artifact/same-binary check/fresh-evidence/resource gates above.
     let configurations =
@@ -243,9 +257,12 @@ async fn run() -> Result<Summary, Failure> {
     let mut runner = ProbeRunner::live(
         prepared,
         configurations,
-        contracts.identity()?,
+        identity,
         trace.context(),
-        resources.clone(),
+        Arc::new(LiveResources {
+            quota: resources.clone(),
+            contracts: contracts.clone(),
+        }),
     )?;
     let processing = async {
         loop {

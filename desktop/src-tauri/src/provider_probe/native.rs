@@ -165,6 +165,10 @@ pub fn artifact_directory() -> Result<PathBuf, Failure> {
     let home = PathBuf::from(std::ffi::OsString::from_wide(unsafe {
         std::slice::from_raw_parts(allocation.0, length)
     }));
+    if !matches!(home.components().next(),Some(std::path::Component::Prefix(prefix)) if matches!(prefix.kind(),std::path::Prefix::Disk(b'C'|b'c')|std::path::Prefix::VerbatimDisk(b'C'|b'c')))
+    {
+        return Err(Failure::NotReady);
+    }
     let root = home.join("notype-study/build-cache/p25-live-v4-artifact");
     plain(&root)?;
     Ok(root)

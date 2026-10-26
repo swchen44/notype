@@ -198,6 +198,8 @@ impl LiveConfigurations {
         experiment::experiment_processor(configuration, policy, tracing)
             .map_err(|_| Failure::Contract)
     }
+    /// Bind frozen synthetic named/Custom snapshots only to an owned socket;
+    /// this cannot construct or redirect a live public-provider policy.
     pub(super) fn processor_owned(
         &self,
         endpoint: &OwnedLoopback,

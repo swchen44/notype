@@ -242,3 +242,25 @@ and [Astra approval / zero unresolved](https://github.com/swchen44/notype/issues
 These targets are registered in `core-contracts.yml`. Native Tauri compilation,
 actual Windows race/permission/App/Explorer behavior and real model inference
 remain separate P14 acceptance gates; portable checks do not certify them.
+
+## P25-live-v4 standalone helper
+
+Approved [plan](https://github.com/swchen44/notype/issues/25#issuecomment-6405986527)
+and [Astra0](https://github.com/swchen44/notype/issues/25#issuecomment-6406003416).
+Tests use owned HTTP/files/SQLite and fake keys, with no actual OS-home reader,
+provider/account request, App, microphone or paid inference.
+
+```powershell
+cargo test --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test provider-probe-policy
+cargo test --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test provider-probe-runtime
+cargo clippy --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test provider-probe-policy --test provider-probe-runtime -- -D warnings
+```
+
+These are hosted CI commands while the local native-cache lease is unavailable.
+The policy target uses root `tests/unittest/provider_probe_policy.rs`; runtime
+uses root `tests/integration/provider_probe_contracts.rs` and its separate fixture
+modules. It exercises the same smoke path as the future ordinary Windows EXE,
+including real public core accounting/export and independent CSV readback.
+The private Windows workflow adds actual Windows APIs/headless argument checks.
+No source test creates a live activation receipt or authorizes a real key read.
+See [actual evidence/limits](../docs/verification/provider-probe-v4.md).

@@ -55,14 +55,17 @@ impl DiagnosticStorage for Storage {
 /// Owned P20 service; no App/global collector or raw logging adapter is used.
 pub(super) struct Trace(Arc<DiagnosticService>);
 impl Trace {
+    /// Own an initialized memory collector with no App/global settings access.
     pub(super) fn new() -> Self {
         let service = Arc::new(DiagnosticService::new());
         service.initialize(Arc::new(Storage));
         Self(service)
     }
+    /// Share only typed event/clock ports; request strings cannot enter them.
     pub(super) fn context(self: &Arc<Self>) -> TraceContext {
         TraceContext::new(None, Arc::new(MonotonicClock), self.clone())
     }
+    /// Use the actual P20 immutable preview/export seam for a new owned file.
     pub(super) fn export(&self, destination: &Path) -> Result<(), Failure> {
         let ticket = self.0.begin_preview().map_err(|_| Failure::Storage)?;
         let preview = self

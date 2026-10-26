@@ -402,3 +402,66 @@ async fn diagnostics_off_helper_finish_failure_blocks_automatic_reverse_after_re
     finished.send(()).unwrap();
     server.await.unwrap();
 }
+
+#[tokio::test]
+async fn completion_winning_slot7_must_pass_quality_before_retry8_can_be_admitted() {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let endpoint = workflow::experiment::OwnedLoopback::from_listener(&listener).unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let listener = TcpListener::from_std(listener).unwrap();
+    let (entered, timer_entered) = oneshot::channel();
+    let (_release, timer_release) = oneshot::channel();
+    let terminal = Arc::new(AtomicBool::new(false));
+    let timer = Arc::new(Timer {
+        entered: Mutex::new(Some(entered)),
+        release: Mutex::new(Some(timer_release)),
+        terminal: terminal.clone(),
+    });
+    let (finished, wait) = oneshot::channel();
+    let server = tokio::spawn(async move {
+        let mut entered = Some(timer_entered);
+        for slot in 1..=7 {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            request(&mut stream).await;
+            if slot == 7 {
+                entered.take().unwrap().await.unwrap();
+                let body=json!({"model":"deepseek-flash","usage":{"prompt_tokens":5,"completion_tokens":2,"total_tokens":7},"choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"The task is done."}}]}).to_string();
+                stream.write_all(format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).as_bytes()).await.unwrap();
+            } else {
+                stream.write_all(reply(slot).as_bytes()).await.unwrap();
+            }
+        }
+        wait.await.unwrap();
+        assert!(
+            tokio::time::timeout(Duration::from_millis(100), listener.accept())
+                .await
+                .is_err()
+        );
+    });
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path().join("owned");
+    let mut runner = ProbeRunner::for_owned_fixture(
+        &root,
+        endpoint,
+        identity(),
+        diagnostics::api::TraceContext::global(None),
+        timer,
+        Arc::new(OwnedSpace),
+    )
+    .unwrap();
+    for _ in 0..5 {
+        runner.next().await.unwrap().unwrap();
+    }
+    assert!(
+        runner.next().await.is_err(),
+        "completed English result cannot satisfy the fixed Chinese slot7 request"
+    );
+    assert!(
+        terminal.load(Ordering::SeqCst),
+        "timer still joins before quality rejection"
+    );
+    assert!(runner.snapshot().unwrap().halted);
+    assert!(runner.next().await.is_err());
+    finished.send(()).unwrap();
+    server.await.unwrap();
+}

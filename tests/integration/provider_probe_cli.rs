@@ -32,7 +32,25 @@ fn actual_headless_executable_rejects_bad_arguments_before_any_owned_state_write
         use std::os::windows::process::CommandExt;
         command.creation_flags(0x08000000);
     }
-    let output = command.output().unwrap();
+    struct Owned(Option<std::process::Child>);
+    impl Drop for Owned {
+        fn drop(&mut self) {
+            if let Some(child) = self.0.as_mut() {
+                let _ = child.kill();
+                let _ = child.wait();
+            }
+        }
+    }
+    let mut child = Owned(Some(command.spawn().unwrap()));
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while child.0.as_mut().unwrap().try_wait().unwrap().is_none() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "owned helper argument check exceeded deadline"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    let output = child.0.take().unwrap().wait_with_output().unwrap();
     assert_eq!(output.status.code(), Some(1));
     assert!(output.stdout.is_empty());
     assert_eq!(

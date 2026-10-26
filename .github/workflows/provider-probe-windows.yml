@@ -55,7 +55,7 @@ jobs:
           PRIVATE_REPOSITORY: ${{ github.event.repository.private }}
         run: |
           $source = (git rev-parse HEAD).Trim()
-          if ($env:PRIVATE_REPOSITORY -ne 'true' -or $env:REVIEWED_SOURCE -cnotmatch '^[0-9a-f]{40}$' -or $source -cne $env:REVIEWED_SOURCE -or (git status --porcelain)) { throw 'probe-source-gate-failed' }
+          if ($env:PRIVATE_REPOSITORY -ne 'true' -or $env:REVIEWED_SOURCE -cnotmatch '^[0-9a-f]{40}$' -or $source -cne $env:REVIEWED_SOURCE -or $env:GITHUB_SHA -cne $env:REVIEWED_SOURCE -or (git status --porcelain)) { throw 'probe-source-gate-failed' }
           "NOTYPE_PROVIDER_PROBE_SOURCE_COMMIT=$source" >> $env:GITHUB_ENV
       - run: rustup toolchain install 1.99.1 --profile minimal
       - name: Build the ordinary headless executable only
