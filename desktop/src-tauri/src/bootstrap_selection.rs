@@ -25,6 +25,28 @@ impl SelectionStore {
         if !value.is_object() {
             return Err(ConfigError("bootstrap-settings-invalid"));
         }
+        if let Some(marker) = value.get("notype_bootstrap") {
+            let marker = marker
+                .as_object()
+                .ok_or(ConfigError("bootstrap-settings-invalid"))?;
+            if marker.len() != 2 || marker.get("schema").and_then(Value::as_u64) != Some(1) {
+                return Err(ConfigError("bootstrap-settings-invalid"));
+            }
+            validate_bootstrap_id(
+                marker
+                    .get("applied")
+                    .and_then(Value::as_str)
+                    .ok_or(ConfigError("bootstrap-settings-invalid"))?,
+            )?;
+            if value
+                .get("settings")
+                .and_then(|s| s.get("selected_model"))
+                .and_then(Value::as_str)
+                .is_none()
+            {
+                return Err(ConfigError("bootstrap-settings-invalid"));
+            }
+        }
         if let Some(settings) = value.get("settings") {
             if !settings.is_object() {
                 return Err(ConfigError("bootstrap-settings-invalid"));
