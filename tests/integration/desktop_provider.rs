@@ -13,6 +13,8 @@ mod workflow;
 mod gateway_error_context;
 #[path = "../unittest/provider_probe_policy.rs"]
 mod provider_probe_policy;
+#[path = "provider_probe_runtime.rs"]
+mod provider_probe_runtime;
 #[path = "provider_probe_transport.rs"]
 mod provider_probe_transport;
 use notype_core::{RecognitionMode, SessionOptions, SessionService, SessionStatus};
