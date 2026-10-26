@@ -253,7 +253,7 @@ provider/account request, App, microphone or paid inference.
 ```powershell
 cargo test --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test provider-probe-policy
 cargo test --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test provider-probe-runtime
-cargo clippy --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test provider-probe-policy --test provider-probe-runtime -- -D warnings
+cargo clippy --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test provider-probe-policy --test provider-probe-runtime --bin notype-provider-probe -- -D warnings
 ```
 
 These are hosted CI commands while the local native-cache lease is unavailable.
