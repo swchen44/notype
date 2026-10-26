@@ -90,8 +90,16 @@ async function fixture(
           if (cmd === "plugin:event|unlisten") return null;
           if (cmd === "get_model_catalog" && window.catalogFailure)
             throw new Error("PRIVATE_CATALOG_FAILURE");
-          if (cmd === "get_model_catalog")
-            return structuredClone(window.catalog);
+          if (cmd === "get_model_catalog") {
+            const catalog = structuredClone(window.catalog);
+            catalog.artifacts = Object.fromEntries(
+              Object.entries(catalog.artifacts).map(([id, artifact]) => [
+                id,
+                { source: "selected_root", ...artifact },
+              ]),
+            );
+            return catalog;
+          }
           if (cmd === "get_model_root")
             return structuredClone(window.catalog.root);
           if (cmd === "get_app_settings" || cmd === "get_default_settings")
@@ -1058,4 +1066,62 @@ test("custom unverified models stay distinct from invalid incomplete and unavail
       .count(),
     0,
   );
+});
+
+test("folder-local Hugging Face models and read-only legacy cache models show their actual storage origins", async (t) => {
+  const page = await fixture(t, "settings", "en", {
+    root: {
+      generation: 1,
+      revision: 0,
+      folder: "D:\\synthetic-root",
+      status: "ready",
+      writable: true,
+      busy: false,
+      model_count: 2,
+    },
+    models: [
+      model,
+      { ...model, id: "legacy-model", name: "Legacy speech fixture" },
+    ],
+    artifacts: {
+      [model.id]: {
+        status: "verified",
+        source: "selected_root",
+        can_delete: false,
+        can_download: false,
+      },
+      "legacy-model": {
+        status: "verified",
+        source: "legacy_cache",
+        can_delete: false,
+        can_download: false,
+      },
+    },
+  });
+  const folder = page.getByRole("article", { name: model.name, exact: true });
+  const legacy = page.getByRole("article", {
+    name: "Legacy speech fixture",
+    exact: true,
+  });
+  await folder.getByText("Storage: Model folder", { exact: true }).waitFor();
+  await legacy
+    .getByText("Storage: Read-only legacy cache", { exact: true })
+    .waitFor();
+  await page.evaluate(() => {
+    window.handlers.get_model_path = (args) =>
+      args.modelId === "legacy-model"
+        ? "D:\\synthetic-legacy-cache\\model.gguf"
+        : "D:\\synthetic-root\\.hf-cache\\hub\\model.gguf";
+  });
+  await folder.getByText("Advanced model information", { exact: true }).click();
+  await folder
+    .getByText("D:\\synthetic-root\\.hf-cache\\hub\\model.gguf", {
+      exact: true,
+    })
+    .waitFor();
+  await legacy.getByText("Advanced model information", { exact: true }).click();
+  await legacy
+    .getByText("D:\\synthetic-legacy-cache\\model.gguf", { exact: true })
+    .waitFor();
+  assert.equal(await legacy.getByRole("button", { name: /Delete/ }).count(), 0);
 });

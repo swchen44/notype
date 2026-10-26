@@ -4,6 +4,11 @@
       "cancel": "Cancel",
       "reload": "Reload model folder",
       "otherModels": "Other models",
+      "storageSource": "Storage: {{source}}",
+      "origins": {
+        "selected_root": "Model folder",
+        "legacy_cache": "Read-only legacy cache"
+      },
       "modelCount_one": "{{count}} model available",
       "modelCount_other": "{{count}} models available",
       "title": "Model folder",

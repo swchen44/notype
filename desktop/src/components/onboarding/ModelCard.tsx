@@ -178,6 +178,13 @@ const ModelCard: React.FC<ModelCardProps> = ({
         {artifact && (
           <span>{t(`notype.modelFolder.artifacts.${artifact.status}`)}</span>
         )}
+        {artifact?.source && (
+          <span>
+            {t("notype.modelFolder.storageSource", {
+              source: t(`notype.modelFolder.origins.${artifact.source}`),
+            })}
+          </span>
+        )}
         {isLegacySource(model) && <span>{t("modelSelector.legacy")}</span>}
       </div>
       <p className={`text-xs ${compatible ? "text-text/70" : "text-warning"}`}>

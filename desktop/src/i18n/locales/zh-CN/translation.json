@@ -4,6 +4,11 @@
       "cancel": "取消",
       "reload": "重新加载模型文件夹",
       "otherModels": "其他模型",
+      "storageSource": "存储来源：{{source}}",
+      "origins": {
+        "selected_root": "模型文件夹",
+        "legacy_cache": "只读旧缓存"
+      },
       "modelCount": "可用模型：{{count}} 个",
       "title": "模型文件夹",
       "description": "选择现有文件夹来复用模型。您可以自行移动整个文件夹，重新安装后再选择它。",
