@@ -5,6 +5,30 @@
 
 
 export const commands = {
+
+/** Read the current folder and its generation without scanning or changing files. */
+async getModelRoot(): Promise<Result<ModelRootView, string>> {
+  try { return { status: "ok", data: await TAURI_INVOKE("get_model_root") }; }
+  catch (e) { if (e instanceof Error) throw e; return { status: "error", error: String(e) }; }
+},
+/** One coherent catalog/root/selection response; discard an older generation. */
+async getModelCatalog(): Promise<Result<ModelCatalogView, string>> {
+  try { return { status: "ok", data: await TAURI_INVOKE("get_model_catalog") }; }
+  catch (e) { if (e instanceof Error) throw e; return { status: "error", error: String(e) }; }
+},
+async validateModelRoot(folder: string, requestId: string): Promise<Result<ModelRootCandidate, string>> {
+  try { return { status: "ok", data: await TAURI_INVOKE("validate_model_root", { folder, requestId }) }; }
+  catch (e) { if (e instanceof Error) throw e; return { status: "error", error: String(e) }; }
+},
+async applyModelRoot(candidateId: string, revision: number): Promise<Result<ModelRootView, string>> {
+  try { return { status: "ok", data: await TAURI_INVOKE("apply_model_root", { candidateId, revision }) }; }
+  catch (e) { if (e instanceof Error) throw e; return { status: "error", error: String(e) }; }
+},
+async cancelModelRootScan(requestId: string): Promise<Result<null, string>> {
+  try { return { status: "ok", data: await TAURI_INVOKE("cancel_model_root_scan", { requestId }) }; }
+  catch (e) { if (e instanceof Error) throw e; return { status: "error", error: String(e) }; }
+},
+
 async changeBinding(id: string, binding: string) : Promise<Result<BindingResponse, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("change_binding", { id, binding }) };
@@ -724,7 +748,7 @@ async isModelLoading() : Promise<Result<boolean, string>> {
  * Re-scan local sources (custom models dir + shared HF cache) for models added
  * since launch
  */
-async rescanLocalModels() : Promise<Result<null, string>> {
+async rescanLocalModels() : Promise<Result<ModelRootView, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("rescan_local_models") };
 } catch (e) {
@@ -1442,3 +1466,13 @@ export type ModelListResult = {
 };
 
 export type HistoryRequestParametersDto = { requested_thinking: boolean; preference_effort: string | null; effective_thinking: boolean | null; effective_effort: string | null; capability_provenance: string; resolution_reason: string; configured_temperature: string | null; wire_temperature: string | null; temperature_resolution: string; configured_top_p: string | null; wire_top_p: string | null; top_p_resolution: string; documented_top_p: string | null; max_output_tokens: number | null; }
+
+/** P28 Settings contract. Paths are local display only. */
+export type ModelRootStatus = "ready" | "no_models" | "unavailable" | "invalid";
+export type ModelRootView = { generation: number; revision: number; folder: string; status: ModelRootStatus; writable: boolean; busy: boolean; model_count: number };
+export type ModelRootCandidate = { request_id: string; candidate_id: string; root: ModelRootView };
+export type ModelArtifactStatus = "verified" | "custom_unverified" | "invalid" | "incomplete" | "unavailable";
+export type ModelArtifactView = { status: ModelArtifactStatus; can_delete: boolean; can_download: boolean };
+export type ModelCatalogView = { generation: number; root: ModelRootView; current_model: string; models: ModelInfo[]; artifacts: Record<string, ModelArtifactView> };
+export type ModelRootScanProgress = { generation: number; request_id: string; checked: number; total: number };
+export type ModelGenerationEvent = { generation: number; model_id?: string; error?: string };
