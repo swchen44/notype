@@ -190,31 +190,52 @@ test("model-list authentication errors are actionable while manual input stays a
 });
 
 for (const mode of ["invoke-error", "invoke-error-object"]) {
-test(`a rejected model-list invocation can be explicitly retried (${mode})`, async (t) => {
-  const page = await providerConnectionsFixture(t, "en", [savedConnection]);
-  await page
-    .getByRole("button", { name: "Edit Company writing", exact: true })
-    .click();
-  await page.evaluate((mode) => (window.modelMode = mode), mode);
-  await page
-    .getByRole("button", { name: "View model ID list", exact: true })
-    .click();
-  await page.getByRole("alert").waitFor();
-  await page.evaluate(() => (window.modelMode = "ok"));
-  await page
-    .getByRole("button", { name: "View model ID list", exact: true })
-    .click();
-  await page
-    .getByRole("list", { name: "Model ID list", exact: true })
-    .waitFor();
-  assert.doesNotMatch(
-    await page.locator("body").innerText(),
-    /upstream-secret|UNIQUE_MODEL_REJECTION_PRIVATE_SENTINEL/,
-  );
-  assert.equal(await page.evaluate(() => window.calls.filter(call => call.cmd === "list_text_models").length), 2);
-  assert.equal(await page.getByLabel("Model ID (manual entry)", {exact:true}).inputValue(), "manual-model");
-  assert.equal(await page.evaluate(() => window.calls.filter(call => ["save_text_connection", "activate_text_connection"].includes(call.cmd)).length), 0);
-});
+  test(`a rejected model-list invocation can be explicitly retried (${mode})`, async (t) => {
+    const page = await providerConnectionsFixture(t, "en", [savedConnection]);
+    await page
+      .getByRole("button", { name: "Edit Company writing", exact: true })
+      .click();
+    await page.evaluate((mode) => (window.modelMode = mode), mode);
+    await page
+      .getByRole("button", { name: "View model ID list", exact: true })
+      .click();
+    await page.getByRole("alert").waitFor();
+    await page.evaluate(() => (window.modelMode = "ok"));
+    await page
+      .getByRole("button", { name: "View model ID list", exact: true })
+      .click();
+    await page
+      .getByRole("list", { name: "Model ID list", exact: true })
+      .waitFor();
+    assert.doesNotMatch(
+      await page.locator("body").innerText(),
+      /upstream-secret|UNIQUE_MODEL_REJECTION_PRIVATE_SENTINEL/,
+    );
+    assert.equal(
+      await page.evaluate(
+        () =>
+          window.calls.filter((call) => call.cmd === "list_text_models").length,
+      ),
+      2,
+    );
+    assert.equal(
+      await page
+        .getByLabel("Model ID (manual entry)", { exact: true })
+        .inputValue(),
+      "manual-model",
+    );
+    assert.equal(
+      await page.evaluate(
+        () =>
+          window.calls.filter((call) =>
+            ["save_text_connection", "activate_text_connection"].includes(
+              call.cmd,
+            ),
+          ).length,
+      ),
+      0,
+    );
+  });
 }
 
 test("explicit model-list cancellation fences a late reply and permits a new query", async (t) => {

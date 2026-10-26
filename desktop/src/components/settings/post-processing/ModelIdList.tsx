@@ -136,6 +136,7 @@ export function ModelIdList({
       setFailed(true);
       setMessage(t("notype.connections.modelsFailed"));
     } finally {
+      if (request.current === id) request.current = null;
       if (active.current && epoch.current === generation) setLoading(false);
     }
   };
