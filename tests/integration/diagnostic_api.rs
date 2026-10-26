@@ -684,7 +684,7 @@ async fn failed_capture_keeps_saved_translation_target_for_repaired_retry() {
         .finish(generation, "translation original", captured, vec![])
         .await
         .unwrap();
-    assert_eq!(original.original, "translation original");
+    assert_eq!(original.transcript, "translation original");
     assert_eq!(
         original.error.as_deref(),
         Some("configuration-credentials-unavailable")

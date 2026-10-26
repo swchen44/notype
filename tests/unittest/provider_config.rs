@@ -517,3 +517,137 @@ fn failed_processing_snapshot_cannot_mix_globals_changed_during_key_resolution()
     assert_eq!(store.view().unwrap().translation.target_language, "fr-FR");
     assert_eq!(store.view().unwrap().prompts.ask, "newer prompt");
 }
+
+#[test]
+fn saved_and_unsaved_key_actions_agree_without_rebinding_or_persisting_query_credentials() {
+    struct NeverHome;
+    impl credentials::CredentialReader for NeverHome {
+        fn read(&self, _: credentials::PublicKey) -> Result<Option<String>, ConfigError> {
+            panic!("selected App credential must not read home")
+        }
+    }
+    let store = store();
+    let mut draft = store
+        .create(
+            0,
+            "Owned key policy".into(),
+            ConnectionKind::Local,
+            ProviderDialect::Deepseek,
+        )
+        .unwrap()
+        .connections
+        .remove(0)
+        .connection;
+    draft.api_address = "http://127.0.0.1:11434/v1".into();
+    draft.model = "manual-model".into();
+    draft.authentication = Authentication::Bearer;
+    let view = store
+        .save(
+            1,
+            draft.clone(),
+            KeyAction::Replace {
+                value: "  ORIGINAL_SYNTHETIC_KEY  ".into(),
+            },
+        )
+        .unwrap();
+    let view = store
+        .activate(view.revision, Some(draft.id.clone()))
+        .unwrap();
+    for value in [
+        "  ".to_owned(),
+        "bad\0key".into(),
+        "bad\nkey".into(),
+        "x".repeat(8193),
+    ] {
+        assert_eq!(
+            store
+                .save(
+                    view.revision,
+                    draft.clone(),
+                    KeyAction::Replace {
+                        value: value.clone()
+                    }
+                )
+                .err()
+                .unwrap()
+                .0,
+            "configuration-key-invalid"
+        );
+        assert_eq!(
+            store
+                .resolve_models(
+                    view.revision,
+                    draft.clone(),
+                    KeyAction::Replace { value },
+                    &NeverHome
+                )
+                .err()
+                .unwrap()
+                .0,
+            "configuration-key-invalid"
+        );
+        assert_eq!(store.view().unwrap().revision, view.revision);
+    }
+    let transient = store
+        .resolve_models(
+            view.revision,
+            draft.clone(),
+            KeyAction::Replace {
+                value: "  TRANSIENT_SYNTHETIC_KEY  ".into(),
+            },
+            &NeverHome,
+        )
+        .unwrap();
+    assert_eq!(
+        transient
+            .authorization_header()
+            .unwrap()
+            .unwrap()
+            .to_str()
+            .unwrap(),
+        "Bearer TRANSIENT_SYNTHETIC_KEY"
+    );
+    assert_eq!(
+        store
+            .resolve_active(&NeverHome)
+            .unwrap()
+            .authorization_header()
+            .unwrap()
+            .unwrap()
+            .to_str()
+            .unwrap(),
+        "Bearer ORIGINAL_SYNTHETIC_KEY"
+    );
+    let mut changed = draft.clone();
+    changed.api_address = "http://127.0.0.1:11435/v1".into();
+    assert_eq!(
+        store
+            .save(view.revision, changed.clone(), KeyAction::Keep)
+            .err()
+            .unwrap()
+            .0,
+        "configuration-key-binding-required"
+    );
+    assert_eq!(
+        store
+            .resolve_models(view.revision, changed, KeyAction::Keep, &NeverHome)
+            .err()
+            .unwrap()
+            .0,
+        "configuration-key-binding-required"
+    );
+    assert_eq!(
+        store
+            .resolve_models(view.revision, draft.clone(), KeyAction::Clear, &NeverHome)
+            .err()
+            .unwrap()
+            .0,
+        "configuration-credentials-unavailable"
+    );
+    let cleared = store.save(view.revision, draft, KeyAction::Clear).unwrap();
+    assert!(!cleared.connections[0].app_key_present);
+    assert_eq!(
+        store.resolve_active(&NeverHome).err().unwrap().0,
+        "configuration-credentials-unavailable"
+    );
+}
