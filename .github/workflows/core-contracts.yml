@@ -115,8 +115,8 @@ jobs:
           fi
       - name: Exercise all composed UI units and rendered contracts
         run: |
-          npm run test:ui:unit
           npm run test:ui:integration
+          npm run test:ui:unit
       - name: Lint and build composed provider UI
         working-directory: desktop
         run: |
