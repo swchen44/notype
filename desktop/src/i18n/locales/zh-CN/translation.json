@@ -1,5 +1,50 @@
 {
   "notype": {
+    "modelFolder": {
+      "cancel": "取消",
+      "reload": "重新加载模型文件夹",
+      "otherModels": "其他模型",
+      "storageSource": "存储来源：{{source}}",
+      "origins": {
+        "selected_root": "模型文件夹",
+        "legacy_cache": "只读旧缓存"
+      },
+      "modelCount": "可用模型：{{count}} 个",
+      "title": "模型文件夹",
+      "description": "选择现有文件夹来复用模型。您可以自行移动整个文件夹，重新安装后再选择它。",
+      "choose": "选择模型文件夹",
+      "rescan": "重新扫描模型",
+      "showLocation": "显示文件夹",
+      "candidate": "准备使用的文件夹",
+      "apply": "应用文件夹",
+      "validating": "正在检查模型…",
+      "progress": "已检查 {{checked}} / {{total}} 个模型",
+      "readonly": "只读：可以使用模型，但无法下载或删除。",
+      "busy": "请完成或取消当前工作，等待工作结束后，再重试应用文件夹。",
+      "states": {
+        "ready": "模型已就绪",
+        "no_models": "此文件夹没有模型",
+        "unavailable": "文件夹不可用",
+        "invalid": "文件夹或模型未通过验证"
+      },
+      "artifacts": {
+        "verified": "已验证",
+        "custom_unverified": "自定义・未验证",
+        "invalid": "模型无效",
+        "incomplete": "模型不完整",
+        "unavailable": "模型不可用"
+      },
+      "errors": {
+        "busy": "请完成或取消当前工作，等待工作结束后，再重试应用文件夹。",
+        "invalid": "请选择可读取且包含有效模型的本地文件夹。",
+        "stale": "文件夹已更改，请重新选择后再应用。",
+        "cancelled": "已取消模型扫描。",
+        "unavailable": "无法访问模型文件夹，请重试。",
+        "persistence-failed": "无法保存文件夹，仍使用原来的文件夹。",
+        "readonly": "此文件夹为只读，请选择可写入的文件夹来下载或删除模型。",
+        "limit": "此文件夹超过支持的扫描上限。"
+      }
+    },
     "modelExplorer": {
       "advanced": "进阶模型信息",
       "languages": "完整支持语言",

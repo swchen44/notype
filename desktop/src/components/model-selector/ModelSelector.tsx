@@ -28,6 +28,7 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onError }) => {
   const { t, i18n } = useTranslation();
   const {
     models,
+    generation,
     currentModel,
     downloadProgress,
     downloadStats,
@@ -43,37 +44,62 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onError }) => {
   const [pendingModelId, setPendingModelId] = useState<string | null>(null);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const statusRequest = useRef(0);
+  const selectionRequest = useRef(0);
+  useEffect(() => {
+    ++selectionRequest.current;
+    setPendingModelId(null);
+    setModelError(null);
+    setModelStatus("unloaded");
+  }, [generation]);
 
   const displayModelId = pendingModelId || currentModel;
 
   // Check model status when currentModel changes
   useEffect(() => {
+    const request = ++statusRequest.current;
+    let cancelled = false;
+    const owns = () =>
+      !cancelled &&
+      request === statusRequest.current &&
+      generation === useModelStore.getState().generation;
     const checkStatus = async () => {
       if (currentModel) {
         try {
           const statusResult = await commands.getTranscriptionModelStatus();
-          if (statusResult.status === "ok") {
+          if (owns() && statusResult.status === "ok") {
             setModelStatus(
               statusResult.data === currentModel ? "ready" : "unloaded",
             );
           }
         } catch {
+          if (!owns()) return;
           setModelStatus("error");
-          setModelError("Failed to check model status");
+          setModelError(t("notype.modelFolder.errors.unavailable"));
         }
       } else {
         setModelStatus("none");
       }
     };
     checkStatus();
-  }, [currentModel]);
+    return () => {
+      cancelled = true;
+    };
+  }, [currentModel, generation, t]);
 
   useEffect(() => {
     // Listen for model loading lifecycle events
     const modelStateUnlisten = listen<ModelStateEvent>(
       "model-state-changed",
       (event) => {
-        const { event_type, error } = event.payload;
+        if (
+          event.payload.generation !== useModelStore.getState().generation ||
+          (event.payload.model_id &&
+            event.payload.model_id !== useModelStore.getState().currentModel)
+        )
+          return;
+        ++statusRequest.current;
+        const { event_type } = event.payload;
         switch (event_type) {
           case "loading_started":
             setModelStatus("loading");
@@ -86,7 +112,7 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onError }) => {
             break;
           case "loading_failed":
             setModelStatus("error");
-            setModelError(error || "Failed to load model");
+            setModelError(t("notype.modelFolder.errors.unavailable"));
             setPendingModelId(null);
             break;
           case "unloaded":
@@ -94,30 +120,6 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onError }) => {
             setModelError(null);
             break;
         }
-      },
-    );
-
-    // Auto-select model when download completes (fires after extraction too)
-    const downloadCompleteUnlisten = listen<string>(
-      "model-download-complete",
-      (event) => {
-        const modelId = event.payload;
-        setTimeout(async () => {
-          try {
-            const isRecording = await commands.isRecording();
-            if (!isRecording) {
-              setPendingModelId(modelId);
-              setModelError(null);
-              setShowModelDropdown(false);
-              const success = await selectModel(modelId);
-              if (!success) {
-                setPendingModelId(null);
-              }
-            }
-          } catch {
-            // Ignore errors in auto-select
-          }
-        }, 500);
       },
     );
 
@@ -136,20 +138,26 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onError }) => {
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
       modelStateUnlisten.then((fn) => fn());
-      downloadCompleteUnlisten.then((fn) => fn());
     };
-  }, [selectModel]);
+  }, [t]);
 
   const handleModelSelect = async (modelId: string) => {
+    const request = ++selectionRequest.current;
+    const expected = generation;
     setPendingModelId(modelId);
     setModelError(null);
     setShowModelDropdown(false);
     const success = await selectModel(modelId);
+    if (
+      request !== selectionRequest.current ||
+      useModelStore.getState().generation !== expected
+    )
+      return;
     if (!success) {
       setPendingModelId(null);
       setModelStatus("error");
-      setModelError("Failed to switch model");
-      onError?.("Failed to switch model");
+      setModelError(t("notype.modelFolder.errors.unavailable"));
+      onError?.(t("notype.modelFolder.errors.unavailable"));
     }
   };
 

@@ -6,4 +6,6 @@ Only Windows x64 is supported by the first payload. Launch requires a normal Win
 
 The default persistent root matches the existing app: `%APPDATA%/io.github.swchen44.notype`. An absolute local `NOTYPE_DATA_DIR` override is preserved. History, settings, models and WebView user data stay outside versioned npm packages. Updating/removing the program package must not delete those files.
 
-Application/runtime/model package names are provisional private roles. Actual pins, full source/third-party notices, CPU compatibility, local model activation and native launch remain release integration work. The repository's root private Node package is a separate diagnostic prototype.
+Application/runtime/model package names are provisional private roles. Actual pins, full source/third-party notices, CPU compatibility and native launch remain release integration work. The repository's root private Node package is a separate diagnostic prototype.
+
+Schema 2 base installs depend only on the App/runtime payload. Model packages are optional add-ons. Normal startup never copies model weights; the App can select an existing model folder. A missing model reaches recovery, while missing or invalid required App/runtime bytes still refuse launch. --check strictly verifies any explicitly declared model pin.
