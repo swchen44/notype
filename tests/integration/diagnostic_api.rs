@@ -651,6 +651,85 @@ async fn actual_retry_has_same_local_session_and_distinct_accepted_observer_revi
 }
 
 #[tokio::test]
+async fn failed_capture_keeps_saved_translation_target_for_repaired_retry() {
+    let directory = tempfile::tempdir().unwrap();
+    let (endpoint, mut requests, server) = fixture(
+        vec![chat("translated result", "returned-model", 3, 1)],
+        None,
+    )
+    .await;
+    let (store, draft, revision) = configure(directory.path(), &endpoint, false);
+    let view = store
+        .save(revision, draft.clone(), KeyAction::Clear)
+        .unwrap();
+    let mut translation = view.translation;
+    translation.target_language = "ja-JP".into();
+    let view = store.translation(view.revision, translation).unwrap();
+    let captured = store.processing_snapshot(&NeverHome);
+    assert_eq!(
+        captured.preparation_failure,
+        Some(notype_core::PreparationFailure::Credentials)
+    );
+    let workflow = workflow::DesktopWorkflow::new(
+        SessionService::open(directory.path().join("sessions.db")).unwrap(),
+        Arc::new(|| {}),
+    );
+    let generation = workflow
+        .begin(notype_core::RecognitionMode::TraditionalEnglish, None)
+        .unwrap();
+    workflow
+        .capture_processing_snapshot(generation, Scenario::Translation, captured.clone(), vec![])
+        .unwrap();
+    let original = workflow
+        .finish(generation, "translation original", captured, vec![])
+        .await
+        .unwrap();
+    assert_eq!(original.original, "translation original");
+    assert_eq!(
+        original.error.as_deref(),
+        Some("configuration-credentials-unavailable")
+    );
+    assert_eq!(original.translation_target.as_deref(), Some("ja-JP"));
+    assert!(
+        requests.try_recv().is_err(),
+        "failed preparation must not send"
+    );
+    let view = store
+        .save(
+            view.revision,
+            draft,
+            KeyAction::Replace {
+                value: "REPAIRED_OWNED_KEY".into(),
+            },
+        )
+        .unwrap();
+    let mut later_translation = view.translation;
+    later_translation.target_language = "fr-FR".into();
+    store.translation(view.revision, later_translation).unwrap();
+    let repaired = workflow
+        .retry(&original.id, store.processing_snapshot(&NeverHome), vec![])
+        .await
+        .unwrap();
+    assert_eq!(repaired.id, original.id);
+    assert_eq!(repaired.translation_target.as_deref(), Some("ja-JP"));
+    assert_eq!(repaired.result.as_deref(), Some("translated result"));
+    assert_eq!(
+        workflow
+            .sessions()
+            .get(&original.id)
+            .unwrap()
+            .translation_target
+            .as_deref(),
+        Some("ja-JP")
+    );
+    let (_, body) = requests.recv().await.unwrap();
+    let content: Value =
+        serde_json::from_str(body["messages"][2]["content"].as_str().unwrap()).unwrap();
+    assert_eq!(content["translation_target"], "ja-JP");
+    server.await.unwrap();
+}
+
+#[tokio::test]
 async fn actual_error_transport_and_bound_reports_retain_only_status_and_safe_lifecycle() {
     let oversized = "x".repeat(1_048_577);
     for (raw, expected_status, category, body_complete) in [

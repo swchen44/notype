@@ -122,6 +122,8 @@ export async function providerConnectionsFixture(
             return structuredClone(window.configuration);
           }
           if (cmd === "list_text_models") {
+            if (window.modelMode === "invoke-error-object")
+              throw new Error("UNIQUE_MODEL_REJECTION_PRIVATE_SENTINEL");
             if (window.modelMode === "invoke-error")
               throw "Bearer upstream-secret";
             const request = args.request;

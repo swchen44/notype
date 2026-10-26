@@ -244,6 +244,15 @@ pub struct ConnectionStore {
     storage: Arc<dyn ConfigurationStorage>,
 }
 impl ConnectionStore {
+    /// Capture the selected processing configuration for recording. Preparation
+    /// failures remain typed and surface only after the original is persisted.
+    pub fn processing_snapshot(
+        &self,
+        reader: &dyn credentials::CredentialReader,
+    ) -> crate::workflow::TextConfiguration {
+        self.resolve_active(reader)
+            .unwrap_or_else(failed_preparation)
+    }
     /// Resolve only the active owned snapshot, outside the settings writer lock.
     /// No active connection yields disabled configuration and zero key-file reads.
     pub fn resolve_active(

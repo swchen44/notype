@@ -405,3 +405,115 @@ fn unknown_model_capability_remains_saved_but_view_explains_generation_unavailab
         Some("configuration-capability-required")
     );
 }
+
+#[test]
+fn failed_processing_snapshot_retains_global_target_terms_and_prompts() {
+    struct NeverHome;
+    impl credentials::CredentialReader for NeverHome {
+        fn read(&self, _: credentials::PublicKey) -> Result<Option<String>, ConfigError> {
+            panic!("custom selected connection must not read home")
+        }
+    }
+    for (dialect, failure) in [
+        (
+            ProviderDialect::Deepseek,
+            notype_core::PreparationFailure::Credentials,
+        ),
+        (
+            ProviderDialect::Generic,
+            notype_core::PreparationFailure::Capability,
+        ),
+    ] {
+        let store = store();
+        let mut draft = store
+            .create(
+                0,
+                "Owned missing preparation".into(),
+                ConnectionKind::Custom,
+                dialect,
+            )
+            .unwrap()
+            .connections
+            .remove(0)
+            .connection;
+        draft.api_address = "https://owned.invalid/v1".into();
+        draft.model = "manual-model".into();
+        let view = store.save(1, draft.clone(), KeyAction::Clear).unwrap();
+        let view = store.activate(view.revision, Some(draft.id)).unwrap();
+        let mut translation = view.translation;
+        translation.target_language = "ja-JP".into();
+        translation.glossary = vec![workflow::TranslationTerm {
+            source: "term".into(),
+            target: "mapped".into(),
+            target_language: "ja-JP".into(),
+        }];
+        let view = store.translation(view.revision, translation).unwrap();
+        store
+            .prompt(
+                view.revision,
+                notype_core::Scenario::Translation,
+                Some("captured prompt".into()),
+            )
+            .unwrap();
+        let captured = store.processing_snapshot(&NeverHome);
+        assert_eq!(captured.preparation_failure, Some(failure));
+        assert_eq!(captured.translation.target_language, "ja-JP");
+        assert_eq!(captured.translation.glossary[0].target, "mapped");
+        assert_eq!(captured.prompts.translation, "captured prompt");
+    }
+}
+
+#[test]
+fn failed_processing_snapshot_cannot_mix_globals_changed_during_key_resolution() {
+    struct MutatingReader(Arc<ConnectionStore>);
+    impl credentials::CredentialReader for MutatingReader {
+        fn read(&self, _: credentials::PublicKey) -> Result<Option<String>, ConfigError> {
+            let view = self.0.view().unwrap();
+            let mut translation = view.translation;
+            translation.target_language = "fr-FR".into();
+            let view = self.0.translation(view.revision, translation).unwrap();
+            self.0
+                .prompt(
+                    view.revision,
+                    notype_core::Scenario::Ask,
+                    Some("newer prompt".into()),
+                )
+                .unwrap();
+            Ok(None)
+        }
+    }
+    let store = Arc::new(store());
+    let mut draft = store
+        .create(
+            0,
+            "Public".into(),
+            ConnectionKind::Provider,
+            ProviderDialect::Deepseek,
+        )
+        .unwrap()
+        .connections
+        .remove(0)
+        .connection;
+    draft.model = "manual-model".into();
+    let view = store.save(1, draft.clone(), KeyAction::Clear).unwrap();
+    let view = store.activate(view.revision, Some(draft.id)).unwrap();
+    let mut translation = view.translation;
+    translation.target_language = "ja-JP".into();
+    let view = store.translation(view.revision, translation).unwrap();
+    store
+        .prompt(
+            view.revision,
+            notype_core::Scenario::Ask,
+            Some("captured prompt".into()),
+        )
+        .unwrap();
+    let captured = store.processing_snapshot(&MutatingReader(store.clone()));
+    assert_eq!(
+        captured.preparation_failure,
+        Some(notype_core::PreparationFailure::Credentials)
+    );
+    assert_eq!(captured.translation.target_language, "ja-JP");
+    assert_eq!(captured.prompts.ask, "captured prompt");
+    assert_eq!(store.view().unwrap().translation.target_language, "fr-FR");
+    assert_eq!(store.view().unwrap().prompts.ask, "newer prompt");
+}

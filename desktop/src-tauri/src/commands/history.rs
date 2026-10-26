@@ -156,9 +156,7 @@ fn configuration_store(app: &AppHandle) -> Result<Arc<ConnectionStore>, String> 
 }
 pub(crate) fn read_configuration(app: &AppHandle) -> Result<TextConfiguration, String> {
     let configuration = match configuration_store(app) {
-        Ok(store) => store
-            .resolve_active(&CurrentUserReader)
-            .unwrap_or_else(crate::provider_config::failed_preparation),
+        Ok(store) => store.processing_snapshot(&CurrentUserReader),
         Err(_) => crate::provider_config::failed_preparation(crate::provider_config::ConfigError(
             "configuration-storage-failed",
         )),
