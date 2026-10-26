@@ -11,16 +11,18 @@ import { inspectWindowsHost } from "../lib/windows-host.mjs";
 const facadeRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 try {
   const args = process.argv.slice(2);
+  const offlineBundle = args[0] === "--offline-bundle";
+  if (offlineBundle) args.shift();
   if (
     args.length > 1 ||
     (args.length && !["--check", "--start-hidden"].includes(args[0]))
   )
     throw new PackageError(
       "invalid-arguments",
-      "Usage: notype [--check | --start-hidden]",
+      "Usage: notype [--offline-bundle] [--check | --start-hidden]",
     );
   if (args[0] === "--check") {
-    await inspectRelease({ facadeRoot });
+    await inspectRelease({ facadeRoot, offlineBundle });
     process.stdout.write(
       "notype: package integrity verified; host compatibility and application launch were not tested.\n",
     );
@@ -29,6 +31,7 @@ try {
     process.once("SIGINT", () => controller.abort());
     await runApplication({
       facadeRoot,
+      offlineBundle,
       host: inspectWindowsHost,
       signal: controller.signal,
       startHidden: args[0] === "--start-hidden",
