@@ -69,6 +69,36 @@ fn machine_quality_checks_keep_identifiers_decimal_negation_and_unknown_meaning_
 }
 
 #[test]
+fn machine_quality_rejects_wrong_target_script_and_obvious_wrapped_prose() {
+    assert!(
+        !quality(schedule()[2], DICTATION),
+        "English translation cannot remain Chinese"
+    );
+    assert!(
+        !quality(
+            schedule()[1],
+            "Do not delete session_id; timeout 0.5, not 5, retain 42 API requests."
+        ),
+        "Chinese dictation cannot become English"
+    );
+    assert!(
+        !quality(schedule()[3], "Meeting moved to Wednesday at 2; no slides."),
+        "Chinese ask retains its requested script"
+    );
+    assert!(
+        !quality(
+            schedule()[1],
+            &format!("Here is the polished text:\n{DICTATION}")
+        ),
+        "obvious extra prose is rejected"
+    );
+    assert!(quality(
+        schedule()[2],
+        "Do not delete session_id; timeout is 0.5 seconds, not 5; retain 42 API requests."
+    ));
+}
+
+#[test]
 fn actual_sqlite_authorization_seals_gemini_retains_every_reservation_and_reopens_report_only() {
     use journal::*;
     let directory = tempfile::tempdir().unwrap();
