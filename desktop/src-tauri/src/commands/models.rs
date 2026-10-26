@@ -58,6 +58,7 @@ pub fn get_model_root(
 pub fn get_model_catalog(
     model_manager: State<'_, Arc<ModelManager>>,
 ) -> Result<ModelCatalogView, String> {
+    let _activity = model_manager.activity().map_err(safe_error)?;
     Ok(model_manager.catalog_view())
 }
 #[tauri::command]
@@ -137,7 +138,7 @@ pub fn get_model_path(
 ) -> Result<String, String> {
     model_manager
         .get_model_path_for_display(&model_id)
-        .map(|path| path.to_string_lossy().into_owned())
+        .map(|path| crate::managers::model_roots_files::display_path(&path))
         .map_err(|_| "model-path-unavailable".to_string())
 }
 
@@ -263,10 +264,10 @@ fn switch_active_model_for_generation(
     // Check if model exists and is available
     let model_info = model_manager
         .get_model_info(model_id)
-        .ok_or_else(|| format!("Model not found: {}", model_id))?;
+        .ok_or_else(|| "model-artifact-unavailable".to_owned())?;
 
     if !model_info.is_downloaded {
-        return Err(format!("Model not downloaded: {}", model_id));
+        return Err("model-artifact-unavailable".into());
     }
 
     let settings = get_settings(app);
