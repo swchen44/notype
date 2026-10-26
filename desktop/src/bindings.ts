@@ -1472,7 +1472,9 @@ export type ModelRootStatus = "ready" | "no_models" | "unavailable" | "invalid";
 export type ModelRootView = { generation: number; revision: number; folder: string; status: ModelRootStatus; writable: boolean; busy: boolean; model_count: number };
 export type ModelRootCandidate = { request_id: string; candidate_id: string; root: ModelRootView };
 export type ModelArtifactStatus = "verified" | "custom_unverified" | "invalid" | "incomplete" | "unavailable";
-export type ModelArtifactView = { status: ModelArtifactStatus; can_delete: boolean; can_download: boolean };
+export type ModelArtifactView = { source: ModelArtifactSource; status: ModelArtifactStatus; can_delete: boolean; can_download: boolean };
 export type ModelCatalogView = { generation: number; root: ModelRootView; current_model: string; models: ModelInfo[]; artifacts: Record<string, ModelArtifactView> };
 export type ModelRootScanProgress = { generation: number; request_id: string; checked: number; total: number };
 export type ModelGenerationEvent = { generation: number; model_id?: string; error?: string };
+
+export type ModelArtifactSource = "selected_root" | "legacy_cache";

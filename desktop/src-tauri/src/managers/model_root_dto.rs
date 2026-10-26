@@ -44,6 +44,7 @@ pub enum ModelArtifactStatus {
 
 #[derive(Clone, Debug, Serialize, Deserialize, Type)]
 pub struct ModelArtifactView {
+    pub source: ModelArtifactSource,
     pub status: ModelArtifactStatus,
     pub can_delete: bool,
     pub can_download: bool,
@@ -65,4 +66,11 @@ pub struct ModelRootScanProgress {
     pub request_id: String,
     pub checked: u32,
     pub total: u32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum ModelArtifactSource {
+    SelectedRoot,
+    LegacyCache,
 }
