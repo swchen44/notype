@@ -43,10 +43,31 @@ impl notype_core::TextProcessor for ObservedOnly {
 fn good_reply() -> Value {
     json!({"model":"google/gemma-4-31b-it","usage":{"prompt_tokens":5,"completion_tokens":2,"total_tokens":7,"cost":0},"choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"OK"}}]})
 }
+fn openrouter_configuration(owned: &OwnedLoopback) -> TextConfiguration {
+    use provider_config::*;
+    let store = ConnectionStore::open(Arc::new(Memory)).unwrap();
+    let mut draft = store
+        .create(
+            0,
+            "Owned fixture".into(),
+            ConnectionKind::Local,
+            ProviderDialect::Openrouter,
+        )
+        .unwrap()
+        .connections
+        .remove(0)
+        .connection;
+    draft.api_address = owned.endpoint();
+    draft.address_mode = AddressMode::FullChatEndpoint;
+    draft.model = "google/gemma-4-31b-it:free".into();
+    draft.max_output_tokens = Some(512);
+    let saved = store.save(1, draft.clone(), KeyAction::Clear).unwrap();
+    store.activate(saved.revision, Some(draft.id)).unwrap();
+    store.resolve_active(&NoHome).unwrap()
+}
 async fn owned_openrouter_response(
     reply: Value,
 ) -> (notype_core::SessionEntry, Value, AdverseLatch) {
-    use provider_config::*;
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let owned = OwnedLoopback::from_listener(&listener).unwrap();
     listener.set_nonblocking(true).unwrap();
@@ -92,27 +113,9 @@ async fn owned_openrouter_response(
             .unwrap();
         body
     });
-    let store = ConnectionStore::open(Arc::new(Memory)).unwrap();
-    let mut draft = store
-        .create(
-            0,
-            "Owned fixture".into(),
-            ConnectionKind::Local,
-            ProviderDialect::Openrouter,
-        )
-        .unwrap()
-        .connections
-        .remove(0)
-        .connection;
-    draft.api_address = owned.endpoint();
-    draft.address_mode = AddressMode::FullChatEndpoint;
-    draft.model = "google/gemma-4-31b-it:free".into();
-    draft.max_output_tokens = Some(512);
-    let saved = store.save(1, draft.clone(), KeyAction::Clear).unwrap();
-    store.activate(saved.revision, Some(draft.id)).unwrap();
     let latch = AdverseLatch::new();
     let processor = experiment_processor(
-        store.resolve_active(&NoHome).unwrap(),
+        openrouter_configuration(&owned),
         ExperimentPolicy::OwnedLoopback(
             owned,
             ExperimentKind::OpenRouterGemma31bFreeGoogleAiStudio,
@@ -131,6 +134,130 @@ async fn owned_openrouter_response(
         .await
         .unwrap();
     (result, server.await.unwrap(), latch)
+}
+
+#[tokio::test]
+async fn adverse_http_headers_survive_stalled_body_cancellation_and_diagnostics_clear_off() {
+    use diagnostics::{api::*, service::*};
+    struct Storage;
+    impl DiagnosticStorage for Storage {
+        fn load_preference(&self) -> Result<Option<bool>, &'static str> {
+            Ok(Some(true))
+        }
+        fn save_preference(&self, _: bool) -> Result<(), &'static str> {
+            Ok(())
+        }
+        fn write_report(&self, _: &std::path::Path, _: &str) -> Result<(), &'static str> {
+            Ok(())
+        }
+    }
+    struct ObservedHeaders {
+        service: Arc<DiagnosticService>,
+        seen: std::sync::Mutex<Option<oneshot::Sender<u16>>>,
+    }
+    impl ApiObserver for ObservedHeaders {
+        fn begin(
+            &self,
+            scope: Option<ScopeBinding>,
+            revision: Option<u64>,
+        ) -> Option<TraceIdentity> {
+            self.service.begin_api(scope, revision)
+        }
+        fn record(&self, event: ApiEvent) {
+            if event.span == ApiSpan::HeadersReceived {
+                if let Some(sender) = self.seen.lock().unwrap().take() {
+                    sender.send(event.http_status.unwrap()).unwrap();
+                }
+            }
+            self.service.record_api(event);
+        }
+    }
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let owned = OwnedLoopback::from_listener(&listener).unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let listener = TcpListener::from_std(listener).unwrap();
+    let (release, held) = oneshot::channel();
+    let server = tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.unwrap();
+        let mut bytes = vec![];
+        let mut buffer = [0; 8192];
+        while !bytes.windows(4).any(|p| p == b"\r\n\r\n") {
+            let n = stream.read(&mut buffer).await.unwrap();
+            assert!(n > 0);
+            bytes.extend_from_slice(&buffer[..n]);
+        }
+        stream.write_all(b"HTTP/1.1 429 Too Many Requests\r\nContent-Length: 9999\r\nConnection: close\r\n\r\n{\"error\":").await.unwrap();
+        let _ = held.await;
+    });
+    let service = Arc::new(DiagnosticService::new());
+    service.initialize(Arc::new(Storage));
+    let (sender, seen) = oneshot::channel();
+    let trace = TraceContext::new(
+        None,
+        Arc::new(capture_startup::MonotonicClock),
+        Arc::new(ObservedHeaders {
+            service: service.clone(),
+            seen: std::sync::Mutex::new(Some(sender)),
+        }),
+    );
+    let latch = AdverseLatch::new();
+    let processor = experiment_processor(
+        openrouter_configuration(&owned),
+        ExperimentPolicy::OwnedLoopback(
+            owned.clone(),
+            ExperimentKind::OpenRouterGemma31bFreeGoogleAiStudio,
+            latch.clone(),
+        ),
+        trace,
+    )
+    .unwrap();
+    let directory = tempfile::tempdir().unwrap();
+    let sessions = SessionService::open(directory.path().join("sessions.db")).unwrap();
+    let entry = sessions
+        .create("owned cancellation original", SessionOptions::default())
+        .unwrap();
+    let worker = sessions.clone();
+    let id = entry.id.clone();
+    let task = tokio::spawn(async move {
+        worker
+            .process(&id, vec![], Arc::new(ObservedOnly(processor)))
+            .await
+    });
+    assert_eq!(
+        tokio::time::timeout(Duration::from_secs(2), seen)
+            .await
+            .unwrap()
+            .unwrap(),
+        429
+    );
+    let observed = latch.observed();
+    service.clear();
+    service.set_enabled(false);
+    sessions.cancel(&entry.id).unwrap();
+    let result = task.await.unwrap().unwrap();
+    release.send(()).unwrap();
+    server.await.unwrap();
+    assert_eq!(
+        observed,
+        Some(AdverseSignal {
+            category: AdverseCategory::Http,
+            http_status: Some(429)
+        })
+    );
+    assert_eq!(latch.observed(), observed);
+    assert_eq!(result.transcript, "owned cancellation original");
+    assert_eq!(result.api_summary.call_count, Some(1));
+    assert!(result.api_summary.input.total.is_none());
+    assert!(experiment_processor(
+        openrouter_configuration(&owned),
+        ExperimentPolicy::OwnedLoopback(
+            owned,
+            ExperimentKind::OpenRouterGemma31bFreeGoogleAiStudio,
+            latch
+        ),
+        TraceContext::global(None)
+    )
+    .is_err());
 }
 #[tokio::test]
 async fn sealed_openrouter_sends_only_the_reviewed_zero_price_google_route() {
