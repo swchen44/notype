@@ -59,10 +59,8 @@ struct Flight {
     cancellation: CancellationToken,
 }
 struct Cooldown {
-    connection: String,
     binding: String,
     credential: u64,
-    revision: u64,
     ready: Instant,
 }
 /// App-owned bounded admission/cancellation state. Cooldowns are conservative;
@@ -177,7 +175,8 @@ impl ModelDiscovery {
             .authorization_header()
             .map_err(|_| ConfigError("configuration-credentials-unavailable"))?;
         // This private cooldown fingerprint is never a diagnostic identity, export,
-        // cache value or secret getter. It prevents credential-crossing result reuse.
+        // cache value or secret getter. Only the route and this resolved credential
+        // identify admission: unrelated collection edits/records cannot reset it.
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         authorization
             .as_ref()
@@ -192,12 +191,10 @@ impl ModelDiscovery {
                 .lock()
                 .map_err(|_| ConfigError("model-list-unavailable"))?;
             cooldowns.retain(|entry| entry.ready > now);
-            if let Some(entry) = cooldowns.iter().find(|entry| {
-                entry.connection == request.connection.id
-                    && entry.binding == binding
-                    && entry.credential == credential
-                    && entry.revision == request.expected_revision
-            }) {
+            if let Some(entry) = cooldowns
+                .iter()
+                .find(|entry| entry.binding == binding && entry.credential == credential)
+            {
                 result.status = "throttled".into();
                 result.error_code = Some("model-list-cooldown".into());
                 result.retry_after_seconds = Some(
@@ -216,10 +213,8 @@ impl ModelDiscovery {
                 return Ok(result);
             }
             cooldowns.push(Cooldown {
-                connection: request.connection.id.clone(),
                 binding: binding.clone(),
                 credential,
-                revision: request.expected_revision,
                 ready: now + Duration::from_secs(60),
             });
         }
@@ -284,12 +279,10 @@ impl ModelDiscovery {
             {
                 result.retry_after_seconds = Some(seconds);
                 if let Ok(mut cooldowns) = self.cooldowns.lock() {
-                    if let Some(entry) = cooldowns.iter_mut().find(|entry| {
-                        entry.connection == request.connection.id
-                            && entry.binding == binding
-                            && entry.credential == credential
-                            && entry.revision == request.expected_revision
-                    }) {
+                    if let Some(entry) = cooldowns
+                        .iter_mut()
+                        .find(|entry| entry.binding == binding && entry.credential == credential)
+                    {
                         entry.ready = self.clock.now() + Duration::from_secs(seconds.max(60));
                     }
                 }

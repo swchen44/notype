@@ -104,6 +104,14 @@ generation. Use a fresh request ID for each explicit query; one in-flight per
 connection, 60s route/credential throttle, stale revision rejected. No raw provider
 message/description, pagination or arbitrary response fields are returned.
 
+The process-private cooldown identity is the canonical effective models endpoint
+plus resolved authorization identity, shared across records. Collection edits do
+not reset its 60-second or Retry-After bound; the collection revision independently
+fences request admission and late replies. Processing snapshots retain the same
+captured prompts/translation even when selected preparation fails, so repair and
+retry preserve the saved history target. See the
+[review-fix receipt](verification/provider-config-reviewfix.md).
+
 History keeps the existing model/effort association and adds safe request-option
 tuples (requested preference, effective thinking/effort, provenance/resolution,
 configured vs wire sampling/output limit). No connection name/address/key enters

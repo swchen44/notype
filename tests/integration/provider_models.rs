@@ -273,7 +273,7 @@ async fn real_http_status_schema_private_reflection_and_body_limits_are_safe() {
 
 #[tokio::test]
 async fn cancellation_and_collection_edits_fence_late_replies_and_inflight_clicks() {
-    for cancel in [true, false] {
+    for change in ["cancel", "remove", "prompt"] {
         let (release, held) = oneshot::channel();
         let (base, received, server) = fixture(
             wire(200, r#"{"data":[{"id":"late-model"}]}"#, ""),
@@ -303,17 +303,44 @@ async fn cancellation_and_collection_edits_fence_late_replies_and_inflight_click
             duplicate.error_code.as_deref(),
             Some("model-list-in-flight")
         );
-        if cancel {
+        if change == "cancel" {
             service.cancel("held");
-        } else {
+        } else if change == "remove" {
             store.remove(revision, &draft.id).unwrap();
+        } else {
+            store
+                .prompt(
+                    revision,
+                    notype_core::Scenario::Ask,
+                    Some("changed while GET is held".into()),
+                )
+                .unwrap();
         }
         release.send(()).unwrap();
         let result = task.await.unwrap().unwrap();
         server.await.unwrap();
-        assert_eq!(result.status, if cancel { "cancelled" } else { "stale" });
+        assert_eq!(
+            result.status,
+            if change == "cancel" {
+                "cancelled"
+            } else {
+                "stale"
+            }
+        );
         assert!(result.models.is_empty());
         assert_eq!(store.view().unwrap().active_connection_id, None);
+        if change == "prompt" {
+            let blocked = service
+                .query(
+                    store.clone(),
+                    request(&draft, store.view().unwrap().revision, "after-edit"),
+                    &NeverHome,
+                )
+                .await
+                .unwrap();
+            assert_eq!(blocked.status, "throttled");
+            assert_eq!(blocked.error_code.as_deref(), Some("model-list-cooldown"));
+        }
     }
 }
 
