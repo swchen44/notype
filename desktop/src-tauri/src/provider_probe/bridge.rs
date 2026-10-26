@@ -120,7 +120,8 @@ impl Coordinator {
         &self,
         operation: impl FnOnce(&mut Journal) -> Result<(), Failure>,
     ) -> Result<(), Failure> {
-        operation(&mut self.journal.lock().map_err(|_| Failure::Storage)?)
+        let mut journal = self.journal.lock().map_err(|_| Failure::Storage)?;
+        operation(&mut journal)
     }
     /// Persist only the actual current scheduled cancellation request. Core
     /// cancellation follows outside this lock and before the timer settles.
@@ -137,7 +138,6 @@ fn expected(slot: u8, descriptor: &ApiCallDescriptor) -> bool {
     let deepseek = spec.provider == Provider::DeepSeek;
     slot > 0
         && slot <= 12
-        && descriptor.valid()
         && descriptor.profile
             == if deepseek {
                 ApiProviderProfile::DeepSeek
@@ -150,8 +150,8 @@ fn expected(slot: u8, descriptor: &ApiCallDescriptor) -> bool {
         && descriptor.max_output_tokens == Some(512)
         && descriptor.non_streaming
         && descriptor.plain_text_only
-        && descriptor.wire_bytes <= 8192
-        && descriptor.message_count <= 4
+        && (1..=8192).contains(&descriptor.wire_bytes)
+        && (1..=4).contains(&descriptor.message_count)
         && descriptor.purpose
             == if spec.purpose == Purpose::Reverse {
                 ApiPurpose::BackTranslation
