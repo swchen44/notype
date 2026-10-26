@@ -244,14 +244,24 @@ pub struct ConnectionStore {
     storage: Arc<dyn ConfigurationStorage>,
 }
 impl ConnectionStore {
-    /// Capture the selected processing configuration for recording. Preparation
-    /// failures remain typed and surface only after the original is persisted.
+    /// Capture globals and the selected record from one owned settings revision.
+    /// Resolution runs outside the writer lock. Typed preparation failures keep
+    /// these same globals and surface only after the original is persisted.
     pub fn processing_snapshot(
         &self,
         reader: &dyn credentials::CredentialReader,
     ) -> crate::workflow::TextConfiguration {
-        self.resolve_active(reader)
-            .unwrap_or_else(failed_preparation)
+        let state = match self.snapshot() {
+            Ok(state) => state,
+            Err(error) => return failed_preparation(error),
+        };
+        resolve_selected(&state, reader).unwrap_or_else(|error| {
+            crate::workflow::TextConfiguration {
+                prompts: state.prompts,
+                translation: state.translation,
+                ..failed_preparation(error)
+            }
+        })
     }
     /// Resolve only the active owned snapshot, outside the settings writer lock.
     /// No active connection yields disabled configuration and zero key-file reads.
@@ -259,27 +269,7 @@ impl ConnectionStore {
         &self,
         reader: &dyn credentials::CredentialReader,
     ) -> Result<crate::workflow::TextConfiguration, ConfigError> {
-        let state = self.snapshot()?;
-        let Some(id) = state.active_connection_id.as_deref() else {
-            return Ok(crate::workflow::TextConfiguration {
-                prompts: state.prompts,
-                translation: state.translation,
-                ..Default::default()
-            });
-        };
-        let record = state
-            .connections
-            .iter()
-            .find(|record| record.draft.id == id)
-            .ok_or(ConfigError("configuration-store-invalid"))?;
-        resolve_record(
-            &state,
-            record,
-            record.draft.clone(),
-            KeyAction::Keep,
-            reader,
-            true,
-        )
+        resolve_selected(&self.snapshot()?, reader)
     }
     /// Resolve an explicit existing editor snapshot for GET only. This does not
     /// persist its fields/key, activate, require a model or create generation rows.
@@ -423,27 +413,7 @@ impl ConnectionStore {
                 .find(|record| record.draft.id == draft.id)
                 .ok_or(ConfigError("configuration-connection-missing"))?;
             let binding = binding(&draft)?;
-            record.key = match key_action {
-                KeyAction::Clear => None,
-                KeyAction::Keep => {
-                    if record
-                        .key
-                        .as_ref()
-                        .is_some_and(|key| key.binding != binding)
-                    {
-                        return Err(ConfigError("configuration-key-binding-required"));
-                    }
-                    record.key.clone()
-                }
-                KeyAction::Replace { value } => {
-                    let value = value.trim().to_owned();
-                    if value.is_empty() || value.len() > 8192 || value.chars().any(char::is_control)
-                    {
-                        return Err(ConfigError("configuration-key-invalid"));
-                    }
-                    Some(BoundCredential { value, binding })
-                }
-            };
+            record.key = resolve_key_action(record.key.as_ref(), binding, key_action)?;
             record.draft = draft;
             Ok(())
         })
@@ -521,6 +491,55 @@ impl ConnectionStore {
     }
 }
 
+fn resolve_selected(
+    state: &StoredSettings,
+    reader: &dyn credentials::CredentialReader,
+) -> Result<crate::workflow::TextConfiguration, ConfigError> {
+    let Some(id) = state.active_connection_id.as_deref() else {
+        return Ok(crate::workflow::TextConfiguration {
+            prompts: state.prompts.clone(),
+            translation: state.translation.clone(),
+            ..Default::default()
+        });
+    };
+    let record = state
+        .connections
+        .iter()
+        .find(|record| record.draft.id == id)
+        .ok_or(ConfigError("configuration-store-invalid"))?;
+    resolve_record(
+        state,
+        record,
+        record.draft.clone(),
+        KeyAction::Keep,
+        reader,
+        true,
+    )
+}
+
+fn resolve_key_action(
+    current: Option<&BoundCredential>,
+    binding: String,
+    action: KeyAction,
+) -> Result<Option<BoundCredential>, ConfigError> {
+    match action {
+        KeyAction::Clear => Ok(None),
+        KeyAction::Keep => {
+            if current.is_some_and(|key| key.binding != binding) {
+                return Err(ConfigError("configuration-key-binding-required"));
+            }
+            Ok(current.cloned())
+        }
+        KeyAction::Replace { value } => {
+            let value = value.trim().to_owned();
+            if value.is_empty() || value.len() > 8192 || value.chars().any(char::is_control) {
+                return Err(ConfigError("configuration-key-invalid"));
+            }
+            Ok(Some(BoundCredential { value, binding }))
+        }
+    }
+}
+
 fn resolve_record(
     state: &StoredSettings,
     record: &StoredConnection,
@@ -541,26 +560,8 @@ fn resolve_record(
     if generation && resolution.reason == "unresolved" {
         return Err(ConfigError("configuration-capability-required"));
     }
-    let app_key = match key_action {
-        KeyAction::Clear => None,
-        KeyAction::Keep => {
-            if record
-                .key
-                .as_ref()
-                .is_some_and(|key| key.binding != binding)
-            {
-                return Err(ConfigError("configuration-key-binding-required"));
-            }
-            record.key.as_ref().map(|key| key.value.clone())
-        }
-        KeyAction::Replace { value } => {
-            let value = value.trim().to_owned();
-            if value.is_empty() || value.len() > 8192 || value.chars().any(char::is_control) {
-                return Err(ConfigError("configuration-key-invalid"));
-            }
-            Some(value)
-        }
-    };
+    let app_key =
+        resolve_key_action(record.key.as_ref(), binding, key_action)?.map(|key| key.value);
     let (key, source) = if draft.authentication == Authentication::None {
         (None, "none")
     } else if let Some(key) = app_key {

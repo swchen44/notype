@@ -268,6 +268,48 @@ test("explicit model-list cancellation fences a late reply and permits a new que
     .waitFor();
 });
 
+test("a cancelled query finalizer cannot clear its successor's pending request", async (t) => {
+  const page = await providerConnectionsFixture(t, "en", [savedConnection]);
+  await page
+    .getByRole("button", { name: "Edit Company writing", exact: true })
+    .click();
+  await page.evaluate(() => (window.modelMode = "pending"));
+  await page
+    .getByRole("button", { name: "View model ID list", exact: true })
+    .click();
+  await page.waitForFunction(() => typeof window.releaseModels === "function");
+  await page.evaluate(
+    () => (window.previousModelsRelease = window.releaseModels),
+  );
+  await page.getByRole("button", { name: "Cancel query", exact: true }).click();
+  await page
+    .getByRole("button", { name: "View model ID list", exact: true })
+    .click();
+  await page.waitForFunction(
+    () => window.releaseModels !== window.previousModelsRelease,
+  );
+  await page.evaluate(async () => {
+    window.previousModelsRelease();
+    await new Promise((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(resolve)),
+    );
+  });
+  await page
+    .getByRole("button", { name: "Cancel query", exact: true })
+    .waitFor();
+  await page.evaluate(() => window.releaseModels());
+  await page
+    .getByRole("list", { name: "Model ID list", exact: true })
+    .waitFor();
+  assert.equal(
+    await page.evaluate(
+      () =>
+        window.calls.filter((call) => call.cmd === "list_text_models").length,
+    ),
+    2,
+  );
+});
+
 test("new local connections have a blank model and are not implicitly activated", async (t) => {
   const page = await providerConnectionsFixture(t);
   await page
