@@ -42,15 +42,20 @@ fn make_roots(directory: &Path) -> model_roots::RootService {
             directory.join("model_storage_v1.json"),
         )),
         Arc::new(model_roots_files::Filesystem::new(|_| true)),
-        vec![model_roots::ArtifactDescriptor {
-            model_id: "synthetic/stt/Q6.gguf".into(),
-            filename: "Q6.gguf".into(),
-            size: Some(3),
-            sha256: Some("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad".into()),
-            repo: None,
-            revision: None,
-            directory: false,
-        }],
+        ["Q6.gguf", "Other.gguf"]
+            .into_iter()
+            .map(|filename| model_roots::ArtifactDescriptor {
+                model_id: format!("synthetic/stt/{filename}"),
+                filename: filename.into(),
+                size: Some(3),
+                sha256: Some(
+                    "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad".into(),
+                ),
+                repo: None,
+                revision: None,
+                directory: false,
+            })
+            .collect(),
         None,
     )
 }
@@ -322,4 +327,39 @@ fn durable_domains_do_not_admit_capture_or_api_before_native_runtime_is_ready() 
     }
     offline_bootstrap::runtime_ready();
     assert!(offline_bootstrap::admit().is_ok());
+}
+
+#[test]
+fn explicit_user_root_with_another_model_ignores_missing_bundle_selection_without_autochoosing() {
+    let directory = tempfile::tempdir().unwrap();
+    let user_models = directory.path().join("user-models");
+    std::fs::create_dir(&user_models).unwrap();
+    std::fs::write(user_models.join("Other.gguf"), b"abc").unwrap();
+    let roots = make_roots(directory.path());
+    let candidate = roots
+        .validate(&user_models, "user-choice", &|_, _| {})
+        .unwrap();
+    roots
+        .apply(&candidate.id, candidate.revision, || {})
+        .unwrap();
+    let provider = ConnectionStore::open(Arc::new(FileStorage::new(
+        directory.path().join("provider_connections_v2.json"),
+    )))
+    .unwrap();
+    let selection = SelectionStore::new(Arc::new(FileStorage::new(
+        directory.path().join("settings_store.json"),
+    )));
+    offline_bootstrap::initialize(
+        &input(),
+        &directory.path().join("missing-bundle-models"),
+        &roots,
+        &provider,
+        &selection,
+        serde_json::json!({"onboarding_completed":false}),
+    )
+    .unwrap();
+    let settings = selection.read().unwrap().unwrap();
+    assert_eq!(settings["selected_model"], "");
+    assert_eq!(settings["onboarding_completed"], false);
+    assert_eq!(roots.projection().count(), 1);
 }
