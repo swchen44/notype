@@ -465,3 +465,200 @@ async fn completion_winning_slot7_must_pass_quality_before_retry8_can_be_admitte
     finished.send(()).unwrap();
     server.await.unwrap();
 }
+
+fn disabled_quality_trace() -> (
+    Arc<diagnostics::service::DiagnosticService>,
+    diagnostics::api::TraceContext,
+) {
+    use diagnostics::{api::*, service::*};
+    struct Off;
+    impl DiagnosticStorage for Off {
+        fn load_preference(&self) -> Result<Option<bool>, &'static str> {
+            Ok(Some(false))
+        }
+        fn save_preference(&self, _: bool) -> Result<(), &'static str> {
+            Ok(())
+        }
+        fn write_report(&self, _: &std::path::Path, _: &str) -> Result<(), &'static str> {
+            Err("unused")
+        }
+    }
+    struct Observer(Arc<DiagnosticService>);
+    impl ApiObserver for Observer {
+        fn begin(
+            &self,
+            scope: Option<ScopeBinding>,
+            revision: Option<u64>,
+        ) -> Option<TraceIdentity> {
+            self.0.begin_api(scope, revision)
+        }
+        fn record(&self, event: ApiEvent) {
+            self.0.record_api(event);
+        }
+    }
+    let service = Arc::new(DiagnosticService::new());
+    service.initialize(Arc::new(Off));
+    let tracing = TraceContext::new(
+        None,
+        Arc::new(capture_startup::MonotonicClock),
+        Arc::new(Observer(service.clone())),
+    );
+    (service, tracing)
+}
+struct CompletionWins;
+impl CancellationTimer for CompletionWins {
+    fn wait(&self) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>> {
+        Box::pin(std::future::pending())
+    }
+}
+fn quality_reply(slot: u8, bad: u8, text: &str) -> String {
+    if slot != bad && slot <= 8 {
+        return reply(usize::from(slot));
+    }
+    let content = if slot == bad {
+        json!({"text":text,"source_language":"zh-TW"}).to_string()
+    } else {
+        DICTATION.into()
+    };
+    let body=json!({"model":if slot<=8{"deepseek-flash"}else{"google/gemma-4-31b-it"},"usage":{"prompt_tokens":5,"completion_tokens":2,"total_tokens":7,"cost":0},"choices":[{"finish_reason":"stop","message":{"role":"assistant","content":content}}]}).to_string();
+    format!(
+        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+    )
+}
+async fn invalid_forward_stops_reverse(bad: u8) {
+    let bad_text = if bad == 5 {
+        "wrong text"
+    } else {
+        "Delete session_id; keep timeout at 0.5 seconds and retain 42 API requests."
+    };
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let endpoint = workflow::experiment::OwnedLoopback::from_listener(&listener).unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let listener = TcpListener::from_std(listener).unwrap();
+    let (finished, mut settled) = oneshot::channel();
+    let server = tokio::spawn(async move {
+        let mut accepted = 0u8;
+        for slot in 1..=bad {
+            let (mut stream, _) = tokio::time::timeout(Duration::from_secs(20), listener.accept())
+                .await
+                .unwrap()
+                .unwrap();
+            request(&mut stream).await;
+            accepted += 1;
+            stream
+                .write_all(quality_reply(slot, bad, bad_text).as_bytes())
+                .await
+                .unwrap();
+        }
+        loop {
+            tokio::select! {
+                result=listener.accept()=>{
+                    let(mut stream,_)=result.unwrap();request(&mut stream).await;accepted+=1;
+                    stream.write_all(quality_reply(bad+1,bad,bad_text).as_bytes()).await.unwrap();
+                },
+                result=&mut settled=>{result.unwrap();break;},
+                _=tokio::time::sleep(Duration::from_secs(20))=>panic!("owned quality driver did not settle"),
+            }
+        }
+        assert!(
+            tokio::time::timeout(Duration::from_millis(100), listener.accept())
+                .await
+                .is_err()
+        );
+        accepted
+    });
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path().join("owned");
+    let (service, tracing) = disabled_quality_trace();
+    assert!(!service.status().effective_enabled);
+    let mut runner = ProbeRunner::for_owned_fixture(
+        &root,
+        endpoint,
+        identity(),
+        tracing,
+        Arc::new(CompletionWins),
+        Arc::new(OwnedSpace),
+    )
+    .unwrap();
+    let preceding = if bad == 5 { 4 } else { 8 };
+    for _ in 0..preceding {
+        runner.next().await.unwrap().unwrap();
+    }
+    service.clear();
+    assert!(!service.status().effective_enabled);
+    assert!(tokio::time::timeout(Duration::from_secs(40), runner.next())
+        .await
+        .unwrap()
+        .is_err());
+    assert!(runner.next().await.is_err());
+    finished.send(()).unwrap();
+    let accepted = server.await.unwrap();
+    assert_eq!(
+        accepted, bad,
+        "invalid forward must not spend its reverse HTTP request"
+    );
+    let original = probe::policy::schedule()[usize::from(bad - 1)].corpus;
+    let entries = runner.sessions().search("").unwrap();
+    let forward = entries
+        .iter()
+        .find(|entry| {
+            entry.transcript == original && entry.scenario == notype_core::Scenario::Translation
+        })
+        .unwrap();
+    assert_eq!(forward.result.as_deref(), Some(bad_text));
+    assert!(forward.back_translation.is_none());
+    assert_eq!(forward.api_summary.call_count, Some(1));
+    assert_eq!(forward.api_summary.input.total, Some(5));
+    assert_eq!(forward.api_summary.output.total, Some(2));
+    assert!(forward.api_summary.fees.totals.is_empty());
+    assert!(forward.api_summary.fees.known_subtotals.is_empty());
+    assert_eq!(forward.api_summary.fees.reported_calls, 0);
+    let core = rusqlite::Connection::open(root.join("results/sessions.db")).unwrap();
+    assert_eq!(
+        core.query_row("SELECT COUNT(*) FROM api_calls", [], |row| row
+            .get::<_, u64>(0))
+            .unwrap(),
+        u64::from(bad)
+    );
+    let (outcome, receipt): (String, String) = core
+        .query_row(
+            "SELECT outcome,receipt FROM api_calls WHERE session_id=?1",
+            [&forward.id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(outcome, "success");
+    assert!(!receipt.is_empty());
+    let state = runner.snapshot().unwrap();
+    assert!(state.halted);
+    assert_eq!(state.records[usize::from(bad - 1)].state, State::Reconciled);
+    assert_eq!(state.records[usize::from(bad)].state, State::NotRun);
+    assert!(state.records[usize::from(bad)].call.is_empty());
+    assert_eq!(
+        state.reservation_units().unwrap(),
+        if bad == 5 { 522_240 } else { 835_584 }
+    );
+    let retained_id = forward.id.clone();
+    drop(runner);
+    let reopened = SessionService::open(root.join("results/sessions.db")).unwrap();
+    let retained = reopened.get(&retained_id).unwrap();
+    assert_eq!(retained.transcript, original);
+    assert_eq!(retained.result.as_deref(), Some(bad_text));
+    assert_eq!(retained.api_summary.input.total, Some(5));
+    assert!(retained.api_summary.fees.totals.is_empty());
+    assert!(
+        probe::journal::Journal::open_report(&root.join("round"))
+            .unwrap()
+            .snapshot()
+            .halted
+    );
+}
+#[tokio::test]
+async fn bad_deepseek_forward5_is_durable_but_never_admits_reverse6() {
+    invalid_forward_stops_reverse(5).await;
+}
+#[tokio::test]
+async fn bad_openrouter_forward10_is_durable_but_never_admits_reverse11() {
+    invalid_forward_stops_reverse(10).await;
+}
