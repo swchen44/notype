@@ -171,7 +171,7 @@ pub struct StreamRouter {
 }
 
 impl StreamRouter {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             tx: Mutex::new(None),
             open: Arc::new(AtomicBool::new(false)),
@@ -337,6 +337,14 @@ pub struct TranscriptionManager {
 
 impl TranscriptionManager {
     pub fn new(app_handle: &AppHandle, model_manager: Arc<ModelManager>) -> Result<Self> {
+        Self::with_router(app_handle, model_manager, Arc::new(StreamRouter::new()))
+    }
+    /// Compose only after fallible audio preparation, sharing its exact router.
+    pub(crate) fn with_router(
+        app_handle: &AppHandle,
+        model_manager: Arc<ModelManager>,
+        router: Arc<StreamRouter>,
+    ) -> Result<Self> {
         let manager = Self {
             engine: Arc::new(Mutex::new(EngineState::new())),
             model_manager,
@@ -347,7 +355,7 @@ impl TranscriptionManager {
             is_loading: Arc::new(Mutex::new(false)),
             loading_condvar: Arc::new(Condvar::new()),
             reload_model_on_next_use: Arc::new(AtomicBool::new(false)),
-            router: Arc::new(StreamRouter::new()),
+            router,
             stream_active: Arc::new(AtomicBool::new(false)),
             next_stream_worker_id: Arc::new(AtomicU64::new(1)),
             active_stream_worker: Arc::new(AtomicU64::new(0)),
@@ -541,6 +549,7 @@ impl TranscriptionManager {
         model_id: &str,
         device_index: Option<usize>,
     ) -> Result<()> {
+        crate::offline_bootstrap::admit().map_err(anyhow::Error::msg)?;
         let activity = self.model_manager.activity()?;
         let started = Instant::now();
         crate::diagnostics::record(
@@ -853,6 +862,9 @@ impl TranscriptionManager {
 
     /// Correlates only a job actually spawned by this capture; existing work is unassociated.
     pub fn initiate_model_load_for_capture(&self, trace: Option<CaptureTrace>) {
+        if crate::offline_bootstrap::blocked() {
+            return;
+        }
         let mut is_loading = self.is_loading.lock().unwrap();
         if *is_loading {
             if let Some(trace) = &trace {

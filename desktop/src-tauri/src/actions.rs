@@ -93,6 +93,9 @@ impl ShortcutAction for TranscribeAction {
         _shortcut: &str,
         accepted: AcceptedAttempt,
     ) {
+        if crate::offline_bootstrap::blocked() {
+            return;
+        }
         let Ok(activity) = app.state::<Arc<ModelManager>>().activity() else {
             let _ = app.emit("session-error", "model-root-busy");
             return;

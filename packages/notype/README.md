@@ -9,3 +9,5 @@ The default persistent root matches the existing app: `%APPDATA%/io.github.swche
 Application/runtime/model package names are provisional private roles. Actual pins, full source/third-party notices, CPU compatibility and native launch remain release integration work. The repository's root private Node package is a separate diagnostic prototype.
 
 Schema 2 base installs depend only on the App/runtime payload. Model packages are optional add-ons. Normal startup never copies model weights; the App can select an existing model folder. A missing model reaches recovery, while missing or invalid required App/runtime bytes still refuse launch. --check strictly verifies any explicitly declared model pin.
+
+The additional complete offline ZIP includes its own pinned Node runtime and a separately verified model folder. Its fixed Start file invokes `--offline-bundle`; the ordinary npm interface remains unchanged. See the [offline delivery contract](../OFFLINE-BUNDLE.md), [recipient guide](OFFLINE-README-zh-TW.md), and synthetic [administrator template](bootstrap.example.json). Source templates and tiny ZIP fixtures are not a full assembled delivery.

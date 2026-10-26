@@ -75,6 +75,7 @@ pub enum Authentication {
 }
 /// Capability declaration, labelled user-declared rather than provider verified.
 #[derive(Clone, Serialize, Deserialize, Type)]
+#[serde(deny_unknown_fields)]
 pub struct CapabilityDeclaration {
     /// non_reasoning, optional or mandatory; unknown is represented by absence.
     pub kind: String,
@@ -122,6 +123,70 @@ pub struct ConnectionDraft {
     pub top_p: Option<f64>,
     /// Nullable positive output bound.
     pub max_output_tokens: Option<u32>,
+}
+/// Strict administrator input. This type cannot carry an ID or credential.
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ConnectionPreset {
+    pub display_name: String,
+    pub kind: ConnectionKind,
+    pub dialect: ProviderDialect,
+    pub address_mode: AddressMode,
+    pub api_address: String,
+    pub models_endpoint: Option<String>,
+    pub model: String,
+    pub authentication: Authentication,
+    pub timeout_ms: u64,
+    pub thinking_preference: ThinkingPreference,
+    pub effort: Option<String>,
+    pub capability_declaration: Option<CapabilityDeclaration>,
+    pub temperature: Option<f64>,
+    pub top_p: Option<f64>,
+    pub max_output_tokens: Option<u32>,
+}
+impl ConnectionPreset {
+    /// Reuse the editor's canonical route/options and effective-capability rules.
+    pub fn validate(&self) -> Result<(), ConfigError> {
+        self.draft("bootstrap-validation".into()).map(|_| ())
+    }
+    fn draft(&self, id: String) -> Result<ConnectionDraft, ConfigError> {
+        let mut value = serde_json::to_value(self).map_err(|_| ConfigError("bootstrap-invalid"))?;
+        if self.model.trim().is_empty()
+            || self.api_address.trim().is_empty()
+            || contains_expansion(&value)
+        {
+            return Err(ConfigError("bootstrap-invalid"));
+        }
+        value
+            .as_object_mut()
+            .ok_or(ConfigError("bootstrap-invalid"))?
+            .insert("id".into(), serde_json::Value::String(id));
+        let mut draft: ConnectionDraft =
+            serde_json::from_value(value).map_err(|_| ConfigError("bootstrap-invalid"))?;
+        draft.display_name = draft.display_name.trim().into();
+        validate_draft(&draft)?;
+        if draft.models_endpoint.is_some() {
+            canonical_models(&draft)?;
+        }
+        if capabilities::resolve(&draft)?.reason == "unresolved" {
+            return Err(ConfigError("configuration-capability-unresolved"));
+        }
+        Ok(draft)
+    }
+}
+fn contains_expansion(value: &serde_json::Value) -> bool {
+    match value {
+        serde_json::Value::String(value) => value.contains('$') || value.contains('%'),
+        serde_json::Value::Array(values) => values.iter().any(contains_expansion),
+        serde_json::Value::Object(values) => values.values().any(contains_expansion),
+        _ => false,
+    }
+}
+/// Durable first-use outcome; an existing store is never rewritten to mark skip.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BootstrapImport {
+    Applied,
+    SkippedExisting,
 }
 /// Explicit write-only credential action. No getter returns this value.
 #[derive(Deserialize, Type)]
@@ -216,6 +281,8 @@ pub(crate) struct StoredSettings {
     pub(crate) active_connection_id: Option<String>,
     pub(crate) prompts: ScenarioPrompts,
     pub(crate) translation: TranslationSettings,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    bootstrap_applied: Option<String>,
 }
 impl Default for StoredSettings {
     fn default() -> Self {
@@ -226,6 +293,7 @@ impl Default for StoredSettings {
             active_connection_id: None,
             prompts: ScenarioPrompts::default(),
             translation: TranslationSettings::default(),
+            bootstrap_applied: None,
         }
     }
 }
@@ -244,6 +312,41 @@ pub struct ConnectionStore {
     storage: Arc<dyn ConfigurationStorage>,
 }
 impl ConnectionStore {
+    /// Presence/customization is checked without resolving or cloning credentials.
+    pub fn bootstrap_pending(&self) -> Result<bool, ConfigError> {
+        self.state
+            .lock()
+            .map(|state| bootstrap_empty(&state))
+            .map_err(|_| ConfigError("configuration-storage-failed"))
+    }
+    /// Atomically import exactly one no-key active preset into genuinely fresh state.
+    pub fn bootstrap_if_empty(
+        &self,
+        preset: ConnectionPreset,
+        bootstrap_id: &str,
+    ) -> Result<BootstrapImport, ConfigError> {
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| ConfigError("configuration-storage-failed"))?;
+        if !bootstrap_empty(&state) {
+            return Ok(BootstrapImport::SkippedExisting);
+        }
+        validate_bootstrap_id(bootstrap_id)?;
+        let draft = preset.draft(new_id())?;
+        let id = draft.id.clone();
+        let mut next = state.clone();
+        next.connections.push(StoredConnection { draft, key: None });
+        next.active_connection_id = Some(id);
+        next.bootstrap_applied = Some(bootstrap_id.into());
+        next.revision = 1;
+        validate_store(&next)?;
+        let bytes =
+            serde_json::to_vec(&next).map_err(|_| ConfigError("configuration-storage-failed"))?;
+        self.storage.commit(&bytes)?;
+        *state = next;
+        Ok(BootstrapImport::Applied)
+    }
     /// Capture globals and the selected record from one owned settings revision.
     /// Resolution runs outside the writer lock. Typed preparation failures keep
     /// these same globals and surface only after the original is persisted.
@@ -667,7 +770,32 @@ fn new_id() -> String {
         NEXT.fetch_add(1, Ordering::Relaxed)
     )
 }
+/// Bounded opaque identifier, safe to retain inside domain files only.
+pub fn validate_bootstrap_id(value: &str) -> Result<(), ConfigError> {
+    if value.is_empty()
+        || value.len() > 128
+        || !value
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_' || b == b'.')
+    {
+        return Err(ConfigError("bootstrap-invalid"));
+    }
+    Ok(())
+}
+fn bootstrap_empty(state: &StoredSettings) -> bool {
+    state.revision == 0
+        && state.connections.is_empty()
+        && state.active_connection_id.is_none()
+        && state.bootstrap_applied.is_none()
+        && serde_json::to_value(&state.prompts).ok()
+            == serde_json::to_value(ScenarioPrompts::default()).ok()
+        && serde_json::to_value(&state.translation).ok()
+            == serde_json::to_value(TranslationSettings::default()).ok()
+}
 fn validate_store(state: &StoredSettings) -> Result<(), ConfigError> {
+    if let Some(id) = &state.bootstrap_applied {
+        validate_bootstrap_id(id)?;
+    }
     if state.schema_version != 2
         || state.connections.len() > 20
         || state.revision > 9_007_199_254_740_991

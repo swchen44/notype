@@ -4,20 +4,21 @@ export async function historyApiFixture(
   t,
   component = "HistorySettings",
   language = "en",
+  recovering = false,
 ) {
   const page = await uiFixture(t, {
     cacheName:
       component === "HistorySettings"
         ? "history-api-history"
         : "history-api-options",
-    entry: `export {default as React} from 'react'; export {createRoot} from 'react-dom/client'; export {HistorySettings} from '/src/components/settings/history/HistorySettings.tsx'; export {PostProcessingSettings} from '/src/components/settings/post-processing/PostProcessingSettings.tsx'; export {default as i18n} from '/src/i18n/index.ts'; import '/src/App.css';`,
+    entry: `export {default as React} from 'react'; export {createRoot} from 'react-dom/client'; export {HistorySettings} from '/src/components/settings/history/HistorySettings.tsx'; export {BootstrapRecovery} from '/src/components/BootstrapRecovery.tsx'; export {PostProcessingSettings} from '/src/components/settings/post-processing/PostProcessingSettings.tsx'; export {default as i18n} from '/src/i18n/index.ts'; import '/src/App.css';`,
   });
   page.setDefaultTimeout(3000);
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
   t.after(() => assertNoErrors(errors));
   await page.evaluate(
-    async ({ component, language }) => {
+    async ({ component, language, recovering }) => {
       window.calls = [];
       window.entries = [];
       window.mode = "ok";
@@ -53,9 +54,10 @@ export async function historyApiFixture(
           if (cmd === "plugin:event|unlisten") return null;
           if (cmd === "get_history_entries")
             return args.query ? [] : window.entries;
+          if (cmd === "copy_history_text") return null;
           if (cmd === "get_workflow_readiness")
             return {
-              text_configured: true,
+              text_configured: !recovering,
               delivery_available: false,
               legacy_import_error: null,
             };
@@ -85,15 +87,31 @@ export async function historyApiFixture(
           throw new Error(`Unexpected fixture IPC: ${cmd}`);
         },
       };
-      const { React, createRoot, i18n, ...components } = await import(
-        "/__ui_fixture.tsx"
-      );
+      const { React, createRoot, i18n, BootstrapRecovery, ...components } =
+        await import("/__ui_fixture.tsx");
       await i18n.changeLanguage(language);
       window.uiRoot = createRoot(document.getElementById("root"));
       window.render = () =>
-        window.uiRoot.render(React.createElement(components[component]));
+        window.uiRoot.render(
+          React.createElement(
+            React.Fragment,
+            null,
+            recovering
+              ? React.createElement(BootstrapRecovery, {
+                  status: {
+                    state: "incomplete",
+                    code: "bootstrap-settings-invalid",
+                    can_retry: true,
+                  },
+                  busy: false,
+                  retry: async () => {},
+                })
+              : null,
+            React.createElement(components[component]),
+          ),
+        );
     },
-    { component, language },
+    { component, language, recovering },
   );
   return page;
 }

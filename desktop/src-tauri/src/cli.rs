@@ -4,6 +4,9 @@ use std::path::PathBuf;
 #[derive(Parser, Debug, Clone, Default)]
 #[command(name = "notype", about = "notype - portable voice input")]
 pub struct CliArgs {
+    /// Validated nonsecret offline-bundle root supplied by the local facade.
+    #[arg(long, hide = true)]
+    pub offline_bundle_root: Option<PathBuf>,
     /// Start with the main window hidden
     #[arg(long)]
     pub start_hidden: bool,

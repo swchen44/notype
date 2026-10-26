@@ -24,6 +24,24 @@ fn portable_startup_failure(code: &str) -> ! {
 
 fn main() {
     let cli_args = CliArgs::parse();
+    // Bundle inputs have one explicit, independently validated CLI boundary.
+    // Inherited bootstrap/model overrides can never select a preset or root.
+    for (name, _) in std::env::vars_os()
+        .filter(|(name, _)| {
+            let name = name.to_string_lossy().to_ascii_uppercase();
+            [
+                "NOTYPE_BOOTSTRAP",
+                "NOTYPE_BUNDLE",
+                "NOTYPE_OFFLINE",
+                "NOTYPE_MODEL",
+            ]
+            .iter()
+            .any(|prefix| name.starts_with(prefix))
+        })
+        .collect::<Vec<_>>()
+    {
+        std::env::remove_var(name);
+    }
 
     #[cfg(all(target_os = "windows", not(debug_assertions)))]
     {

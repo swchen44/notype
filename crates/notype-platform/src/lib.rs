@@ -235,6 +235,107 @@ pub struct PackagedRuntime {
     pub user_data_directory: PathBuf,
 }
 
+/// Immutable placement captured before any portable/plugin/manager writes.
+#[derive(Clone, Debug)]
+pub struct OfflinePlacement {
+    bundle_root: PathBuf,
+    data_directory: PathBuf,
+}
+impl OfflinePlacement {
+    pub fn bundle_root(&self) -> &Path {
+        &self.bundle_root
+    }
+    pub fn data_directory(&self) -> &Path {
+        &self.data_directory
+    }
+}
+/// Read-only native boundary. All inputs are supplied by native composition;
+/// tests inject the resolved Known Folder rather than reading a real profile.
+pub fn preflight_offline_placement(
+    executable: &Path,
+    bundle_root: &Path,
+    data_override: Option<&Path>,
+    known_folder: Option<&Path>,
+) -> Result<OfflinePlacement, PreflightError> {
+    let data_directory = match data_override {
+        Some(path) => path.to_path_buf(),
+        None => known_folder
+            .ok_or(PreflightError("data-directory-unavailable"))?
+            .join("io.github.swchen44.notype"),
+    };
+    local_plain_path(bundle_root)?;
+    local_plain_path(executable)?;
+    local_plain_path(&data_directory)?;
+    regular(
+        bundle_root,
+        "app/node_modules/notype-win32-x64/app/notype.exe",
+    )?;
+    let canonical_bundle =
+        fs::canonicalize(bundle_root).map_err(|_| PreflightError("runtime-package-missing"))?;
+    let expected =
+        fs::canonicalize(bundle_root.join("app/node_modules/notype-win32-x64/app/notype.exe"))
+            .map_err(|_| PreflightError("runtime-package-missing"))?;
+    let executable =
+        fs::canonicalize(executable).map_err(|_| PreflightError("runtime-package-missing"))?;
+    if expected != executable {
+        return Err(PreflightError("runtime-file-unsafe"));
+    }
+    validate_external_data_directory(&canonical_bundle, &data_directory)?;
+    let resolved_data = resolve_future_directory(&data_directory)?;
+    Ok(OfflinePlacement {
+        bundle_root: display_local_path(&canonical_bundle),
+        data_directory: display_local_path(&resolved_data),
+    })
+}
+fn display_local_path(path: &Path) -> PathBuf {
+    #[cfg(windows)]
+    {
+        let text = path.to_string_lossy();
+        return PathBuf::from(text.strip_prefix(r"\\?\").unwrap_or(&text));
+    }
+    #[cfg(not(windows))]
+    {
+        path.to_path_buf()
+    }
+}
+fn local_plain_path(path: &Path) -> Result<(), PreflightError> {
+    if !path.is_absolute()
+        || path.components().any(|part| {
+            matches!(
+                part,
+                std::path::Component::ParentDir | std::path::Component::CurDir
+            )
+        })
+    {
+        return Err(PreflightError("invalid-data-directory"));
+    }
+    #[cfg(windows)]
+    {
+        let text = path.to_string_lossy();
+        let bytes = text.as_bytes();
+        if bytes.len() < 3
+            || !bytes[0].is_ascii_alphabetic()
+            || bytes[1] != b':'
+            || !matches!(bytes[2], b'/' | b'\\')
+            || text[2..].contains(':')
+            || text.chars().any(char::is_control)
+        {
+            return Err(PreflightError("invalid-data-directory"));
+        }
+    }
+    for ancestor in path.ancestors() {
+        match fs::symlink_metadata(ancestor) {
+            Ok(metadata) if reparse(&metadata) => {
+                return Err(PreflightError("runtime-file-unsafe"))
+            }
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(_) => return Err(PreflightError("invalid-data-directory")),
+        }
+    }
+    Ok(())
+}
+
 /// Native release entry-point guard. This returns a plan without initializing
 /// any persistent data or app services. The executable always lives in app/.
 pub fn prepare_packaged_process(
@@ -276,30 +377,7 @@ pub fn validate_external_data_directory(root: &Path, data: &Path) -> Result<(), 
     if !data.is_absolute() || data.to_string_lossy().starts_with("\\\\") {
         return Err(PreflightError("invalid-data-directory"));
     }
-    let mut ancestor = data;
-    let mut missing = Vec::new();
-    let resolved = loop {
-        match fs::canonicalize(ancestor) {
-            Ok(mut path) => {
-                for part in missing.iter().rev() {
-                    path.push(part);
-                }
-                break path;
-            }
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                missing.push(
-                    ancestor
-                        .file_name()
-                        .ok_or(PreflightError("invalid-data-directory"))?
-                        .to_os_string(),
-                );
-                ancestor = ancestor
-                    .parent()
-                    .ok_or(PreflightError("invalid-data-directory"))?;
-            }
-            Err(_) => return Err(PreflightError("invalid-data-directory")),
-        }
-    };
+    let resolved = resolve_future_directory(data)?;
     let package = fs::canonicalize(root).map_err(|_| PreflightError("runtime-package-missing"))?;
     let mut package_roots = vec![package.clone()];
     let mut containers = vec![package
@@ -332,4 +410,31 @@ pub fn validate_external_data_directory(root: &Path, data: &Path) -> Result<(), 
         }
     }
     Ok(())
+}
+fn resolve_future_directory(data: &Path) -> Result<PathBuf, PreflightError> {
+    let mut ancestor = data;
+    let mut missing = Vec::new();
+    let resolved = loop {
+        match fs::canonicalize(ancestor) {
+            Ok(mut path) => {
+                for part in missing.iter().rev() {
+                    path.push(part);
+                }
+                break path;
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                missing.push(
+                    ancestor
+                        .file_name()
+                        .ok_or(PreflightError("invalid-data-directory"))?
+                        .to_os_string(),
+                );
+                ancestor = ancestor
+                    .parent()
+                    .ok_or(PreflightError("invalid-data-directory"))?;
+            }
+            Err(_) => return Err(PreflightError("invalid-data-directory")),
+        }
+    };
+    Ok(resolved)
 }

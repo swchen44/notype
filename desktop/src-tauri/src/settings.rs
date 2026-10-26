@@ -1070,6 +1070,13 @@ pub fn load_or_create_app_settings(app: &AppHandle) -> AppSettings {
 }
 
 pub fn get_settings(app: &AppHandle) -> AppSettings {
+    if crate::offline_bootstrap::blocked() {
+        return crate::offline_bootstrap_native::selection_store(app)
+            .ok()
+            .and_then(|store| store.read().ok().flatten())
+            .and_then(|value| serde_json::from_value(value).ok())
+            .unwrap_or_else(get_default_settings);
+    }
     let store = app
         .store(crate::portable::store_path(SETTINGS_STORE_PATH))
         .expect("Failed to initialize store");
@@ -1296,6 +1303,9 @@ pub fn update_checks_effectively_enabled(settings: &AppSettings) -> bool {
 }
 
 pub fn write_settings(app: &AppHandle, mut settings: AppSettings) {
+    if crate::offline_bootstrap::blocked() {
+        return;
+    }
     settings.auto_submit = false;
     settings.update_checks_enabled = false;
     let store = app
