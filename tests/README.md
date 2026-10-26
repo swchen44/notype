@@ -28,6 +28,16 @@ user settings/home.env/keys/weights or establishes native App/clean-host/company
 API/physical capture acceptance. Actual commands/counts/source pins belong in the
 verification receipt after execution.
 
+The [approved Simplified Chinese recovery correction](https://github.com/swchen44/notype/issues/29#issuecomment-6411382409)
+([Astra0](https://github.com/swchen44/notype/issues/29#issuecomment-6411399601))
+adds direct zh-CN resource lookup assertions to
+`tests/unittest/model-presentation.ui.mjs` and a zh-CN case to the existing
+rendered recovery test. They check all four labels without fallback, the status
+panel, disabled retry progress and explicit IPC acknowledgment. Run the unit with
+`node --test tests/unittest/model-presentation.ui.mjs`; the rendered command is
+listed above. See the [runtime RED/GREEN receipt](../docs/verification/bootstrap-zhcn.md)
+for exact source pins and counts. These checks establish UI source behavior only.
+
 The approved [P29 review fixes](https://github.com/swchen44/notype/issues/29#issuecomment-6408412474)
 ([Astra0](https://github.com/swchen44/notype/issues/29#issuecomment-6408691967)) add
 the actual read-only native placement policy with owned-tree/sentinel inventories,
