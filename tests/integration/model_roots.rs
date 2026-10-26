@@ -578,6 +578,81 @@ fn explicit_hf_write_preparation_preserves_unknown_bytes_and_owns_directory_life
     assert_eq!(std::fs::read(blob).unwrap(), b"unowned");
 }
 
+#[test]
+fn rejecting_a_transfer_path_cannot_delete_or_modify_foreign_bytes() {
+    let fixture = Fixture::new();
+    let service = fixture.service("config.json");
+    let owner = service.admit_mutation("fixture/speech/Q6.gguf").unwrap();
+    let outside = fixture.path.join("foreign.partial");
+    std::fs::write(&outside, b"foreign sentinel").unwrap();
+    assert!(service
+        .verify_download(&outside, Some("bad"), &owner)
+        .is_err());
+    assert_eq!(std::fs::read(&outside).unwrap(), b"foreign sentinel");
+    let owned = owner.root.root.join("download.partial");
+    std::fs::write(&owned, b"wrong hash").unwrap();
+    assert_eq!(
+        service
+            .verify_download(&owned, Some("bad"), &owner)
+            .err()
+            .unwrap()
+            .0,
+        "model-artifact-invalid"
+    );
+    assert!(!owned.exists());
+}
+
+#[test]
+fn a_late_missing_result_cannot_clear_the_same_model_in_a_successor_root() {
+    let fixture = Fixture::new();
+    let service = fixture.service("config.json");
+    let mut previous = None;
+    for name in ["first", "successor"] {
+        let folder = fixture.path.join(name);
+        std::fs::create_dir(&folder).unwrap();
+        std::fs::write(folder.join("Q6.gguf"), b"abc").unwrap();
+        let candidate = service.validate(&folder, name, &|_, _| {}).unwrap();
+        service
+            .apply(&candidate.id, candidate.revision, || {})
+            .unwrap();
+        if let Some(key) = previous.as_ref() {
+            service.mark_unavailable(key);
+        }
+        let record = service.artifacts()["fixture/speech/Q6.gguf"].clone();
+        assert_eq!(record.status, ArtifactStatus::Verified);
+        previous = Some(record.key);
+    }
+}
+
+#[test]
+fn actual_atomic_preference_rename_failure_preserves_destination_and_removes_only_own_stage() {
+    let fixture = Fixture::new();
+    std::fs::create_dir(fixture.path.join("config.json")).unwrap();
+    std::fs::write(fixture.path.join("config.json/sentinel"), b"retain").unwrap();
+    let service = fixture.service("config.json");
+    let folder = fixture.path.join("selected");
+    std::fs::create_dir(&folder).unwrap();
+    let before = service.snapshot();
+    let candidate = service.validate(&folder, "choose", &|_, _| {}).unwrap();
+    assert_eq!(
+        service
+            .apply(&candidate.id, candidate.revision, || panic!("published"))
+            .unwrap_err()
+            .0,
+        "model-root-persistence-failed"
+    );
+    assert_eq!(service.snapshot().generation, before.generation);
+    assert_eq!(
+        std::fs::read(fixture.path.join("config.json/sentinel")).unwrap(),
+        b"retain"
+    );
+    assert!(!std::fs::read_dir(&fixture.path).unwrap().any(|entry| entry
+        .unwrap()
+        .file_name()
+        .to_string_lossy()
+        .starts_with(".notype-model-root-")));
+}
+
 #[cfg(unix)]
 #[test]
 fn hf_single_relative_blob_link_is_accepted_and_an_escape_is_rejected_without_touching_target() {

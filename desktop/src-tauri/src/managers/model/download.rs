@@ -67,11 +67,9 @@ impl ModelManager {
         let roots = roots.clone();
         tokio::task::spawn_blocking(move || {
             let _worker = worker;
-            let result = roots.verify_download(&path, expected.as_deref(), &_worker);
-            if result.is_err() {
-                let _ = fs::remove_file(&path);
-            }
-            result.map_err(anyhow::Error::new)
+            roots
+                .verify_download(&path, expected.as_deref(), &_worker)
+                .map_err(anyhow::Error::new)
         })
         .await
         .map_err(|e| anyhow::anyhow!("SHA256 task panicked: {}", e))??;

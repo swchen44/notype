@@ -333,7 +333,14 @@ impl Filesystem {
         let _one_hash_worker = self.hashing.lock().unwrap_or_else(|e| e.into_inner());
         let mut file = open_plain(path, false, true)?;
         let before = identity(&file)?;
-        if hash(&mut file, &AtomicBool::new(false))? != expected || identity(&file)? != before {
+        if hash(&mut file, &AtomicBool::new(false))? != expected {
+            // Delete only this operation's unchanged partial. An invalid path,
+            // I/O failure or substituted file is retained without cleanup.
+            drop(file);
+            let _ = self.delete_exact(path, &before);
+            return Err(RootError("model-artifact-invalid"));
+        }
+        if identity(&file)? != before {
             return Err(RootError("model-artifact-invalid"));
         }
         Ok(())
@@ -850,17 +857,20 @@ impl Filesystem {
         })
     }
     pub fn delete_owned(&self, record: &ArtifactRecord) -> RootResult<()> {
+        self.delete_exact(&record.path, &record.key.fingerprint)
+    }
+    fn delete_exact(&self, path: &Path, fingerprint: &Fingerprint) -> RootResult<()> {
         #[cfg(windows)]
         {
-            windows_io::delete_exact(&record.path, &record.key.fingerprint)
+            windows_io::delete_exact(path, fingerprint)
         }
         #[cfg(not(windows))]
         {
-            let file = open_plain(&record.path, false, true)?;
-            if identity(&file)? != record.key.fingerprint {
+            let file = open_plain(path, false, true)?;
+            if identity(&file)? != *fingerprint {
                 return Err(RootError("model-root-stale"));
             }
-            fs::remove_file(&record.path).map_err(|_| RootError("model-root-readonly"))
+            fs::remove_file(path).map_err(|_| RootError("model-root-readonly"))
         }
     }
 }
