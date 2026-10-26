@@ -72,11 +72,14 @@ test("real npm tarballs contain only the private package role allowlists and no 
         ? [
             "package.json",
             "README.md",
+            "OFFLINE-README-zh-TW.md",
+            "bootstrap.example.json",
             "release.json",
             "bin/notype.mjs",
             "lib/launcher.mjs",
             "lib/manifest.mjs",
             "lib/model.mjs",
+            "lib/offline-bundle.mjs",
             "lib/windows-host.mjs",
           ]
         : ["package.json", "README.md", "payload.json"];

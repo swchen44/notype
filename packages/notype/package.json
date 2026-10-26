@@ -18,6 +18,8 @@
     "lib/model.mjs",
     "lib/windows-host.mjs",
     "release.json",
+    "OFFLINE-README-zh-TW.md",
+    "bootstrap.example.json",
     "README.md"
   ]
 }
