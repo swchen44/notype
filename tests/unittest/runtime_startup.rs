@@ -69,7 +69,7 @@ fn repeated_audio_failure_never_starts_watcher_then_success_shares_router_and_pu
     let result = factory.initialize(
         || ready.load(Ordering::SeqCst),
         || Arc::new(()),
-        |router| Ok::<_, &str>(router),
+        Ok::<_, &str>,
         |router| {
             workers.start(started.clone(), live.clone());
             Ok(router)
