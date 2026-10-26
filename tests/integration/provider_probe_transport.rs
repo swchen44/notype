@@ -72,6 +72,12 @@ async fn owned_openrouter_status(
     status: u16,
     reply: Value,
 ) -> (notype_core::SessionEntry, Value, AdverseLatch) {
+    owned_openrouter_raw(status, reply.to_string()).await
+}
+async fn owned_openrouter_raw(
+    status: u16,
+    reply: String,
+) -> (notype_core::SessionEntry, Value, AdverseLatch) {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let owned = OwnedLoopback::from_listener(&listener).unwrap();
     listener.set_nonblocking(true).unwrap();
@@ -103,7 +109,7 @@ async fn owned_openrouter_status(
             bytes.extend_from_slice(&buffer[..n]);
         }
         let body: Value = serde_json::from_slice(&bytes[end..end + length]).unwrap();
-        let response = reply.to_string();
+        let response = reply;
         stream
             .write_all(
                 format!(
@@ -138,6 +144,20 @@ async fn owned_openrouter_status(
         .await
         .unwrap();
     (result, server.await.unwrap(), latch)
+}
+
+#[tokio::test]
+async fn positive_cost_that_underflows_float_cannot_be_accepted_as_reported_numeric_zero() {
+    let body = good_reply()
+        .to_string()
+        .replace("\"cost\":0", "\"cost\":1e-999");
+    assert!(body.contains("1e-999"));
+    let (entry, _, latch) = owned_openrouter_raw(200, body).await;
+    assert_eq!(entry.error.as_deref(), Some("llm-invalid-response"));
+    assert_eq!(entry.api_summary.input.total, Some(5));
+    assert_eq!(entry.api_summary.output.total, Some(2));
+    assert!(latch.observed().is_some());
+    assert!(entry.api_summary.fees.totals.is_empty());
 }
 
 #[tokio::test]
