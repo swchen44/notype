@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { open } from "@tauri-apps/plugin-dialog";
-import { openPath } from "@tauri-apps/plugin-opener";
 import { commands, type ModelRootCandidate } from "@/bindings";
 import { useModelStore, modelRootError } from "@/stores/modelStore";
 
@@ -24,6 +23,7 @@ export function ModelFolderControl({ preview = false }: { preview?: boolean }) {
   const [error, setError] = useState<string | null>(null);
   const active = useRef<string | null>(null);
   const mounted = useRef(true);
+  const locationRequest = useRef(0);
   const revision = root?.revision;
 
   useEffect(() => {
@@ -147,11 +147,18 @@ export function ModelFolderControl({ preview = false }: { preview?: boolean }) {
   async function showLocation() {
     if (preview || !root) return;
     const expected = generation;
+    const request = ++locationRequest.current;
+    const ownsLocation = () =>
+      mounted.current &&
+      locationRequest.current === request &&
+      useModelStore.getState().generation === expected;
+    setError(null);
     try {
-      await openPath(root.folder);
+      const result = await commands.showModelRoot(expected);
+      if (ownsLocation() && result.status === "error")
+        setError(modelRootError(result.error));
     } catch {
-      if (mounted.current && useModelStore.getState().generation === expected)
-        setError("unavailable");
+      if (ownsLocation()) setError("unavailable");
     }
   }
   const status = (view: typeof root) =>

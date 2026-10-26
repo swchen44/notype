@@ -1177,3 +1177,66 @@ for (const component of ["settings", "onboarding"])
       [],
     );
   });
+
+test("Show folder uses the generation-bound native action, safely retries and rejects stale failures", async (t) => {
+  const page = await fixture(t, "settings");
+  await page.evaluate(() => {
+    window.handlers.show_model_root = () => {
+      throw new Error("PRIVATE_FOLDER_OPENER_FAILURE");
+    };
+  });
+  await page.getByRole("button", { name: "Show folder", exact: true }).click();
+  await page
+    .getByRole("alert")
+    .getByText("Unable to access the model folder. Please try again.", {
+      exact: true,
+    })
+    .waitFor();
+  assert.doesNotMatch(
+    await page.locator("body").innerText(),
+    /PRIVATE_FOLDER_OPENER_FAILURE/,
+  );
+  assert.deepEqual(
+    await page.evaluate(() =>
+      window.calls
+        .filter((c) => c.cmd === "show_model_root")
+        .map((c) => c.args),
+    ),
+    [{ expectedGeneration: 1 }],
+  );
+  await page.evaluate(() => {
+    window.handlers.show_model_root = () => null;
+  });
+  await page.getByRole("button", { name: "Show folder", exact: true }).click();
+  await page.getByRole("alert").waitFor({ state: "detached" });
+  await page.evaluate(() => {
+    window.handlers.show_model_root = () =>
+      new Promise((resolve, reject) => (window.rejectOldShow = reject));
+  });
+  await page.getByRole("button", { name: "Show folder", exact: true }).click();
+  await page.waitForFunction(() => typeof window.rejectOldShow === "function");
+  await page.evaluate(() => {
+    window.catalog = {
+      ...window.catalog,
+      generation: 2,
+      root: {
+        ...window.catalog.root,
+        generation: 2,
+        revision: 1,
+        folder: "D:\\synthetic-show-successor",
+      },
+    };
+    window.emitModelEvent("model-root-changed", { generation: 2 });
+  });
+  await page
+    .getByText("D:\\synthetic-show-successor", { exact: true })
+    .waitFor();
+  await page.evaluate(() => window.rejectOldShow("model-root-unavailable"));
+  assert.equal(await page.getByRole("alert").count(), 0);
+  assert.deepEqual(
+    await page.evaluate(() =>
+      window.calls.filter((c) => c.cmd === "plugin:opener|open_path"),
+    ),
+    [],
+  );
+});
