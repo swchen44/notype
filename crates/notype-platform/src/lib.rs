@@ -235,6 +235,46 @@ pub struct PackagedRuntime {
     pub user_data_directory: PathBuf,
 }
 
+/// Immutable placement captured before any portable/plugin/manager writes.
+#[derive(Clone, Debug)]
+pub struct OfflinePlacement {
+    bundle_root: PathBuf,
+    data_directory: PathBuf,
+}
+impl OfflinePlacement {
+    pub fn bundle_root(&self) -> &Path {
+        &self.bundle_root
+    }
+    pub fn data_directory(&self) -> &Path {
+        &self.data_directory
+    }
+}
+/// Read-only native boundary. All inputs are supplied by native composition;
+/// tests inject the resolved Known Folder rather than reading a real profile.
+pub fn preflight_offline_placement(
+    executable: &Path,
+    bundle_root: &Path,
+    data_override: Option<&Path>,
+    known_folder: Option<&Path>,
+) -> Result<OfflinePlacement, PreflightError> {
+    let data_directory = match data_override {
+        Some(path) => path.to_path_buf(),
+        None => known_folder
+            .ok_or(PreflightError("data-directory-unavailable"))?
+            .join("io.github.swchen44.notype"),
+    };
+    // Capture the reviewed application-only boundary for the initial behavioral RED.
+    let application = executable
+        .parent()
+        .and_then(Path::parent)
+        .ok_or(PreflightError("runtime-package-missing"))?;
+    validate_external_data_directory(application, &data_directory)?;
+    Ok(OfflinePlacement {
+        bundle_root: bundle_root.into(),
+        data_directory,
+    })
+}
+
 /// Native release entry-point guard. This returns a plan without initializing
 /// any persistent data or app services. The executable always lives in app/.
 pub fn prepare_packaged_process(

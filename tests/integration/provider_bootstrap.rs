@@ -316,6 +316,7 @@ fn durable_domains_do_not_admit_capture_or_api_before_native_runtime_is_ready() 
     assert!(offline_bootstrap::domains_ready());
     assert!(offline_bootstrap::admit().is_err());
     assert!(offline_bootstrap::recovery_command("get_history_entries"));
+    assert!(offline_bootstrap::recovery_command("copy_history_text"));
     assert!(offline_bootstrap::recovery_command(
         "get_text_configuration"
     ));

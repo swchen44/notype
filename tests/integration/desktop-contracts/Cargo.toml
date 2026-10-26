@@ -12,6 +12,14 @@ path = "../../unittest/provider_bootstrap.rs"
 name = "offline-bootstrap-store"
 path = "../provider_bootstrap.rs"
 
+[[test]]
+name = "runtime-startup"
+path = "../../unittest/runtime_startup.rs"
+
+[[test]]
+name = "bootstrap-preflight"
+path = "../bootstrap_preflight.rs"
+
 [workspace]
 
 [[bin]]

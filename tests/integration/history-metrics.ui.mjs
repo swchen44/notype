@@ -2,6 +2,42 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { historyApiFixture, historyEntry } from "./fixtures/history-api.mjs";
 
+test("incomplete setup keeps original and result history copy on the safe existing command", async (t) => {
+  const page = await historyApiFixture(t, "HistorySettings", "en", true);
+  await page.evaluate((entry) => {
+    window.entries = [entry];
+    window.render();
+  }, historyEntry);
+  await page.getByText("Setup incomplete", { exact: true }).waitFor();
+  await page
+    .getByRole("button", { name: "Copy original", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Copy result", exact: true }).click();
+  assert.deepEqual(
+    await page.evaluate(() =>
+      window.calls
+        .filter((call) => call.cmd === "copy_history_text")
+        .map((call) => call.args),
+    ),
+    [
+      { id: historyEntry.id, version: "original" },
+      { id: historyEntry.id, version: "result" },
+    ],
+  );
+  assert.equal(
+    await page.evaluate(() =>
+      window.calls.some((call) =>
+        [
+          "list_text_models",
+          "retry_history_entry_processing",
+          "initialize_shortcuts",
+        ].includes(call.cmd),
+      ),
+    ),
+    false,
+  );
+});
+
 test("history renders backend counts, observed duration, exact partial fees and associated models", async (t) => {
   const page = await historyApiFixture(t);
   await page.evaluate((entry) => {
