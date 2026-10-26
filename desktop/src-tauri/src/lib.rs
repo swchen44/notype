@@ -346,14 +346,14 @@ fn initialize_core_logic(app_handle: &AppHandle) -> Result<(), Box<dyn std::erro
     // explicitly, so always-on microphone startup can wire live-preview frames
     // even before Tauri state is populated.
     let model_manager = app_handle.state::<Arc<ModelManager>>().inner().clone();
-    let transcription_manager = Arc::new(
-        TranscriptionManager::new(app_handle, model_manager.clone())
-            .expect("Failed to initialize transcription manager"),
-    );
-    let recording_manager = Arc::new(
-        AudioRecordingManager::new(app_handle, transcription_manager.stream_router())
-            .expect("Failed to initialize recording manager"),
-    );
+    let transcription_manager = Arc::new(TranscriptionManager::new(
+        app_handle,
+        model_manager.clone(),
+    )?);
+    let recording_manager = Arc::new(AudioRecordingManager::new(
+        app_handle,
+        transcription_manager.stream_router(),
+    )?);
     // History was opened independently, including during incomplete setup.
     managers::transcription::init_transcribe_backend();
     managers::transcription::apply_accelerator_settings(app_handle);
@@ -1064,6 +1064,8 @@ pub fn run(cli_args: CliArgs) {
                 return Ok(());
             }
 
+            initialize_history_logic(app.handle())?;
+
             // Create main window programmatically so we can set data_directory
             // for portable mode (redirects WebView2 cache to portable Data dir)
             let mut win_builder =
@@ -1153,7 +1155,9 @@ pub fn run(cli_args: CliArgs) {
                 if core_result.is_ok() { diagnostics::Outcome::Ok } else { diagnostics::Outcome::Failed },
                 Some(diagnostic_startup_started.elapsed().as_millis().min(u64::MAX as u128) as u64),
             );
-            core_result?;
+            if core_result.is_err() {
+                offline_bootstrap::finish(Err(provider_config::ConfigError("bootstrap-runtime-unavailable")));
+            }
 
             // Initialize the local script dictionary away from the first Stop.
             // The headless CLI branch returns earlier and retains cold timings.

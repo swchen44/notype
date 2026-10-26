@@ -218,8 +218,11 @@ pub fn get_bootstrap_status() -> BootstrapStatus {
 pub fn retry_offline_bootstrap(app: AppHandle) -> Result<BootstrapStatus, String> {
     let status = retry(&app);
     if status.state == "ready" {
-        crate::initialize_core_logic(&app)
-            .map_err(|_| "bootstrap-runtime-unavailable".to_owned())?;
+        if crate::initialize_core_logic(&app).is_err() {
+            return Ok(offline_bootstrap::finish(Err(ConfigError(
+                "bootstrap-runtime-unavailable",
+            ))));
+        }
     }
     Ok(offline_bootstrap::status())
 }
