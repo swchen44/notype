@@ -25,4 +25,5 @@ use tokio::{
 use workflow::TextConfiguration;
 mod provider_probe_evidence;
 mod provider_probe_runtime;
+mod provider_probe_smoke;
 mod provider_probe_transport;

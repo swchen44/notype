@@ -395,15 +395,31 @@ impl notype_core::csv::CsvSpaceProbe for QuotaGate {
             .map_err(|_| notype_core::csv::CsvExportError::SpaceUnavailable)
     }
 }
-/// Write a bounded safe receipt exclusively. Atomic replacement is used only
-/// for this helper's own prior receipt; report mode calls no write method.
+/// Write a new bounded typed receipt exclusively. Existing receipts remain
+/// retained; report mode calls no write method.
 pub fn receipt<T: Serialize>(path: &Path, value: &T) -> Result<(), Failure> {
-    plain(path)?;
     let bytes = serde_json::to_vec_pretty(value).map_err(|_| Failure::Storage)?;
+    write(path, &bytes)
+}
+/// Atomically commit new already-sanitized P20 text, preserving any prior file.
+/// Only the owned report adapter calls this; raw logging is never connected.
+pub fn text(path: &Path, text: &str) -> Result<(), Failure> {
+    write(path, text.as_bytes())
+}
+fn write(path: &Path, bytes: &[u8]) -> Result<(), Failure> {
+    plain(path)?;
     if bytes.len() > 65_536 {
         return Err(Failure::Storage);
     }
-    let partial = path.with_extension("json.partial");
+    if path.exists() {
+        return Err(Failure::ReportOnly);
+    }
+    let partial = path.with_extension(format!(
+        "{}.partial",
+        path.extension()
+            .and_then(|value| value.to_str())
+            .ok_or(Failure::Storage)?
+    ));
     plain(&partial)?;
     use std::io::Write;
     let mut file = fs::OpenOptions::new()
@@ -411,7 +427,7 @@ pub fn receipt<T: Serialize>(path: &Path, value: &T) -> Result<(), Failure> {
         .create_new(true)
         .open(&partial)
         .map_err(|_| Failure::Storage)?;
-    file.write_all(&bytes)
+    file.write_all(bytes)
         .and_then(|_| file.sync_all())
         .map_err(|_| Failure::Storage)?;
     drop(file);

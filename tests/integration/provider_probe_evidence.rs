@@ -2,6 +2,17 @@
 use super::probe::evidence::validate_page;
 use serde_json::json;
 
+#[cfg(windows)]
+#[test]
+fn actual_windows_available_space_and_sha256_work_on_owned_fixture() {
+    let directory = tempfile::tempdir().unwrap();
+    assert!(super::probe::native::available(directory.path()).unwrap() > 0);
+    assert_eq!(
+        super::probe::native::sha256(b"abc").unwrap(),
+        "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+    );
+}
+
 fn pricing(input: &str, output: &str) -> String {
     format!(
         r#"<p>Old comparison: deepseek-flash $0.3 $1.2</p><table>

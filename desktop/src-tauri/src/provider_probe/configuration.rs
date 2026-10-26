@@ -152,6 +152,15 @@ impl LiveConfigurations {
         if view.connections[0].app_key_present {
             return Err(Failure::Contract);
         }
+        store
+            .activate(view.revision, Some(custom.id.clone()))
+            .map_err(|_| Failure::Storage)?;
+        if !matches!(
+            store.resolve_active(reader),
+            Err(config::ConfigError("configuration-credentials-unavailable"))
+        ) {
+            return Err(Failure::Contract);
+        }
         Ok(Self {
             deepseek,
             openrouter,
@@ -168,12 +177,12 @@ impl LiveConfigurations {
             return Err(Failure::Contract);
         }
         if slot.number == 1 {
-            return experiment_custom_deepseek(
-                self.deepseek.clone(),
-                self.custom.clone(),
-                latch,
+            return experiment::experiment_processor(
+                custom_snapshot(self.deepseek.clone(), self.custom.clone())?,
+                ExperimentPolicy::DeepSeekFlash(latch),
                 tracing,
-            );
+            )
+            .map_err(|_| Failure::Contract);
         }
         let (configuration, policy) = if slot.provider == Provider::DeepSeek {
             (
@@ -189,13 +198,41 @@ impl LiveConfigurations {
         experiment::experiment_processor(configuration, policy, tracing)
             .map_err(|_| Failure::Contract)
     }
+    pub(super) fn processor_owned(
+        &self,
+        endpoint: &OwnedLoopback,
+        slot: Slot,
+        latch: AdverseLatch,
+        tracing: TraceContext,
+    ) -> Result<ExperimentProcessor, Failure> {
+        let (mut configuration, kind) = match slot.provider {
+            Provider::DeepSeek => (
+                if slot.number == 1 {
+                    custom_snapshot(self.deepseek.clone(), self.custom.clone())?
+                } else {
+                    self.deepseek.clone()
+                },
+                ExperimentKind::DeepSeekFlash,
+            ),
+            Provider::OpenRouter => (
+                self.openrouter.clone(),
+                ExperimentKind::OpenRouterGemma31bFreeGoogleAiStudio,
+            ),
+            Provider::GeminiSealed => return Err(Failure::Contract),
+        };
+        configuration.endpoint = endpoint.endpoint();
+        experiment::experiment_processor(
+            configuration,
+            ExperimentPolicy::OwnedLoopback(endpoint.clone(), kind, latch),
+            tracing,
+        )
+        .map_err(|_| Failure::Contract)
+    }
 }
-fn experiment_custom_deepseek(
+fn custom_snapshot(
     mut named: TextConfiguration,
     custom: config::ConnectionDraft,
-    latch: AdverseLatch,
-    tracing: TraceContext,
-) -> Result<ExperimentProcessor, Failure> {
+) -> Result<TextConfiguration, Failure> {
     use config::*;
     let endpoint = canonical_chat(&custom).map_err(|_| Failure::Contract)?;
     let resolution = capabilities::resolve(&custom).map_err(|_| Failure::Contract)?;
@@ -230,6 +267,5 @@ fn experiment_custom_deepseek(
     named.connection_id = Some(custom.id);
     named.credential_source = Some("explicit_ephemeral_from_named".into());
     named.prompts.ask = "Reply with exactly OK and no other text.".into();
-    experiment::experiment_processor(named, ExperimentPolicy::DeepSeekFlash(latch), tracing)
-        .map_err(|_| Failure::Contract)
+    Ok(named)
 }

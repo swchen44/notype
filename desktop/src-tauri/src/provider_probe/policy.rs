@@ -21,21 +21,33 @@ pub const ASK: &str = "幫我寫一句通知：下週會議改到星期三下午
 /// Public provider identity; Gemini exists solely as a sealed schedule label.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Provider {
+    /// Fixed official Flash block with conservative monetary reservation.
     DeepSeek,
+    /// Fixed free Gemma block through the sole permitted route.
     OpenRouter,
+    /// Label only; no live factory or credential path exists.
     GeminiSealed,
 }
 /// Purpose of a fixed authorized slot, independent of a later setting.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Purpose {
+    /// Exact OK Custom connection check, one real observed call.
     Connection,
+    /// Chinese cleanup preserving identifiers/numbers/negation.
     Dictation,
+    /// Fixed English translation without automatic review.
     Translation,
+    /// Fixed Chinese notification drafting scene.
     Ask,
+    /// Forward translation requiring the scheduled actual reverse.
     ForwardReview,
+    /// Automatic reverse using actual forward output on the same history.
     Reverse,
+    /// Slot7 request with a joined owned cancellation timer.
     Cancellation,
+    /// Slot8 explicit retry on the same history, never a transport retry.
     Retry,
+    /// Permanently ineligible comparison entry.
     Sealed,
 }
 /// Immutable nonsecret slot contract. It never stores a key or actual fee.

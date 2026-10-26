@@ -1,6 +1,5 @@
 //! Actual sealed transport, authorization journal and production core stores.
 use super::probe;
-use super::provider_config;
 use super::*;
 use probe::{
     journal::{Identity, State},
@@ -15,6 +14,14 @@ struct OwnedSpace;
 impl probe::bridge::ResourceGate for OwnedSpace {
     fn checkpoint(&self) -> Result<(), probe::journal::Failure> {
         Ok(())
+    }
+}
+impl notype_core::csv::CsvSpaceProbe for OwnedSpace {
+    fn available_bytes(
+        &self,
+        _: &std::path::Path,
+    ) -> Result<u64, notype_core::csv::CsvExportError> {
+        Ok(64 * 1024 * 1024)
     }
 }
 fn identity() -> Identity {
@@ -184,4 +191,73 @@ async fn completion_winning_slot7_fully_joins_its_pending_timer_before_same_hist
         histories[4].history.back_translation.as_deref(),
         Some(REVIEW)
     );
+    let destination = root.join("results/history.csv");
+    let proof = runner.export(&destination, &OwnedSpace).unwrap();
+    assert_eq!(proof.histories, 6);
+    assert_eq!(proof.observed_calls, 8);
+    assert!(proof.actual_fees_unknown);
+    let bytes = std::fs::read(destination).unwrap();
+    let text = String::from_utf8(bytes.clone()).unwrap();
+    assert!(!text.contains("Bearer "));
+    let corrupted = text.replacen(
+        "\"unknown\",\"[]\",\"[]\",\"0\"",
+        "\"complete\",\"[]\",\"[]\",\"0\"",
+        1,
+    );
+    assert_ne!(corrupted.as_bytes(), bytes);
+    assert!(probe::export::verify(
+        corrupted.as_bytes(),
+        &runner.sessions().search("").unwrap(),
+        &state
+    )
+    .is_err());
+}
+
+#[tokio::test]
+async fn actual_csv_replace_failure_halts_next_request_and_preserves_core_journal() {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let endpoint = workflow::experiment::OwnedLoopback::from_listener(&listener).unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let listener = TcpListener::from_std(listener).unwrap();
+    let (finished, wait) = oneshot::channel();
+    let server = tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.unwrap();
+        request(&mut stream).await;
+        stream.write_all(reply(1).as_bytes()).await.unwrap();
+        wait.await.unwrap();
+        assert!(
+            tokio::time::timeout(Duration::from_millis(100), listener.accept())
+                .await
+                .is_err()
+        );
+    });
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path().join("owned");
+    let mut runner = ProbeRunner::for_owned_fixture(
+        &root,
+        endpoint,
+        identity(),
+        diagnostics::api::TraceContext::global(None),
+        Arc::new(probe::runner::RuntimeCancellationTimer),
+        Arc::new(OwnedSpace),
+    )
+    .unwrap();
+    let first = runner.next().await.unwrap().unwrap();
+    let destination = root.join("results/history.csv");
+    std::fs::create_dir(&destination).unwrap();
+    assert!(runner.export(&destination, &OwnedSpace).is_err());
+    assert!(runner.snapshot().unwrap().halted);
+    assert!(runner.next().await.is_err());
+    assert!(destination.is_dir());
+    assert_eq!(
+        runner
+            .sessions()
+            .get(&first.history.id)
+            .unwrap()
+            .result
+            .as_deref(),
+        Some("OK")
+    );
+    finished.send(()).unwrap();
+    server.await.unwrap();
 }

@@ -12,14 +12,23 @@ use std::{
 /// Fixed safe failure vocabulary; never format rejected input or an OS error.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Failure {
+    /// Prerequisite unavailable; no selected credential or inference is allowed.
     NotReady,
+    /// Retained/partial round may be inspected but never resumed or replaced.
     ReportOnly,
+    /// Another process owns the same round lock.
     AlreadyOwned,
+    /// Durable write/read/reconciliation failed; preserve retained evidence.
     Storage,
+    /// Immutable slot, purpose or revision order was not satisfied.
     Schedule,
+    /// A prior monotonic failure blocks all further admission.
     Halted,
+    /// Fixed public contract, wire or receipt failed validation.
     Contract,
+    /// Fixed-corpus machine check failed; human meaning remains unverified.
     Quality,
+    /// Actual quota/space observation failed or crossed a retained allowance.
     Resource,
 }
 impl Failure {
@@ -41,18 +50,27 @@ impl Failure {
 /// Durable irreversible lifecycle; reservations never return to unused state.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub enum State {
+    /// Never admitted; no reservation or bill is implied.
     NotRun,
+    /// Actual queued core call linked before reservation.
     Linked,
+    /// Reservation committed before durable core send admission.
     PossiblySent,
+    /// Terminal callback observed; independent core flush is still required.
     Finished,
+    /// Independent persisted core receipt/outcome and checked journal agree.
     Reconciled,
+    /// Permanent free-tier-unverified skip; never resolves Gemini credentials.
     SealedGemini,
 }
 /// Terminal local outcome. Expected cancellation is legal only in slot7.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Outcome {
+    /// Production call succeeded through the sealed receipt gate.
     Success,
+    /// Slot7 explicitly requested local cancellation without adverse evidence.
     ExpectedCancellation,
+    /// Actual failure; reservations and unknown fees remain retained.
     Failed,
 }
 /// Safe immutable linkage to the actual core ledger; no raw response or secret.
@@ -303,11 +321,27 @@ impl Journal {
     /// Create once or reopen a valid retained report. Partial/foreign/corrupt
     /// entries fail closed and are retained; there is no reset/recovery API.
     pub fn open(directory: &Path, identity: Identity) -> Result<Self, Failure> {
+        Self::open_inner(directory, Some(identity))
+    }
+    /// Read retained state exclusively without creating any missing directory,
+    /// marker, database or recovery identity. Every mutation remains denied.
+    pub fn open_report(directory: &Path) -> Result<Self, Failure> {
+        Self::open_inner(directory, None)
+    }
+    fn open_inner(directory: &Path, identity: Option<Identity>) -> Result<Self, Failure> {
         plain(directory)?;
-        let fresh = match fs::create_dir(directory) {
-            Ok(()) => true,
-            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => false,
-            Err(_) => return Err(Failure::Storage),
+        let fresh = match identity {
+            None => {
+                if !directory.is_dir() {
+                    return Err(Failure::ReportOnly);
+                }
+                false
+            }
+            Some(_) => match fs::create_dir(directory) {
+                Ok(()) => true,
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => false,
+                Err(_) => return Err(Failure::Storage),
+            },
         };
         let marker = directory.join("round.lock");
         let database = directory.join("round.sqlite");
@@ -377,7 +411,7 @@ impl Journal {
             let state = Snapshot {
                 round: ROUND_ID.into(),
                 revision: 0,
-                identity,
+                identity: identity.ok_or(Failure::Storage)?,
                 armed: false,
                 halted: false,
                 records: schedule()

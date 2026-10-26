@@ -140,6 +140,27 @@ fn actual_sqlite_authorization_seals_gemini_retains_every_reservation_and_reopen
 }
 
 #[test]
+fn explicit_report_does_not_create_missing_state_and_cannot_rearm_retained_round() {
+    use journal::*;
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("absent");
+    assert!(matches!(
+        Journal::open_report(&path),
+        Err(Failure::ReportOnly)
+    ));
+    assert!(!path.exists());
+    let mut created = Journal::open(&path, identity()).unwrap();
+    created.arm().unwrap();
+    drop(created);
+    let before = std::fs::read(path.join("round.sqlite")).unwrap();
+    let mut report = Journal::open_report(&path).unwrap();
+    assert_eq!(report.arm(), Err(Failure::ReportOnly));
+    assert_eq!(report.halt(), Err(Failure::ReportOnly));
+    drop(report);
+    assert_eq!(std::fs::read(path.join("round.sqlite")).unwrap(), before);
+}
+
+#[test]
 fn actual_sqlite_commit_failure_blocks_further_admission_without_reset_or_refund() {
     use journal::*;
     let directory = tempfile::tempdir().unwrap();

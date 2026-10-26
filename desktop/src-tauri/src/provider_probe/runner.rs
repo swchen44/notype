@@ -11,11 +11,39 @@ use crate::{
     workflow::experiment::{AdverseLatch, OwnedLoopback},
 };
 use notype_core::{SessionEntry, SessionOptions, SessionService};
-use std::{path::Path, sync::Arc, time::Duration};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::Duration,
+};
 
 enum Source {
     Owned(OwnedLoopback),
+    OwnedCredentials(OwnedLoopback, Box<LiveConfigurations>),
     Live(Box<LiveConfigurations>),
+}
+/// Private one-shot preparation capability. Creation retains an unarmed marker
+/// before public evidence/key lookup; failure never deletes or reuses it.
+pub(super) struct PreparedRoot(PathBuf);
+impl PreparedRoot {
+    pub(super) fn create(root: &Path) -> Result<Self, Failure> {
+        super::journal::plain(root)?;
+        std::fs::create_dir(root).map_err(|_| Failure::ReportOnly)?;
+        use std::io::Write;
+        let mut marker = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(root.join("preparation.lock"))
+            .map_err(|_| Failure::Storage)?;
+        marker
+            .write_all(b"notype-owned-P25-live-v4-preparation\n")
+            .and_then(|_| marker.sync_all())
+            .map_err(|_| Failure::Storage)?;
+        Ok(Self(root.to_path_buf()))
+    }
+    pub(super) fn path(&self) -> &Path {
+        &self.0
+    }
 }
 /// Owned cancellation-delay port used by real smoke and synthetic race cases.
 /// It cannot alter a live policy or authorize a request/reservation.
@@ -72,15 +100,32 @@ impl ProbeRunner {
         )
     }
     pub(super) fn live(
-        root: &Path,
+        root: PreparedRoot,
         configuration: LiveConfigurations,
         identity: Identity,
         tracing: TraceContext,
         resource: Arc<dyn ResourceGate>,
     ) -> Result<Self, Failure> {
-        Self::fresh(
+        Self::prepared(
             root,
             Source::Live(Box::new(configuration)),
+            identity,
+            tracing,
+            Arc::new(RuntimeCancellationTimer),
+            resource,
+        )
+    }
+    pub(super) fn smoke(
+        root: PreparedRoot,
+        endpoint: OwnedLoopback,
+        configuration: LiveConfigurations,
+        identity: Identity,
+        tracing: TraceContext,
+        resource: Arc<dyn ResourceGate>,
+    ) -> Result<Self, Failure> {
+        Self::prepared(
+            root,
+            Source::OwnedCredentials(endpoint, Box::new(configuration)),
             identity,
             tracing,
             Arc::new(RuntimeCancellationTimer),
@@ -97,6 +142,26 @@ impl ProbeRunner {
     ) -> Result<Self, Failure> {
         super::journal::plain(root)?;
         std::fs::create_dir(root).map_err(|_| Failure::ReportOnly)?;
+        Self::open_created(root, source, identity, tracing, timer, resource)
+    }
+    fn prepared(
+        root: PreparedRoot,
+        source: Source,
+        identity: Identity,
+        tracing: TraceContext,
+        timer: Arc<dyn CancellationTimer>,
+        resource: Arc<dyn ResourceGate>,
+    ) -> Result<Self, Failure> {
+        Self::open_created(root.path(), source, identity, tracing, timer, resource)
+    }
+    fn open_created(
+        root: &Path,
+        source: Source,
+        identity: Identity,
+        tracing: TraceContext,
+        timer: Arc<dyn CancellationTimer>,
+        resource: Arc<dyn ResourceGate>,
+    ) -> Result<Self, Failure> {
         let results = root.join("results");
         std::fs::create_dir(&results).map_err(|_| Failure::Storage)?;
         let core_path = results.join("sessions.db");
@@ -127,6 +192,26 @@ impl ProbeRunner {
     /// Persist an irreversible local stop, retaining reservations and evidence.
     pub fn halt(&self) -> Result<(), Failure> {
         self.coordinator.halt()
+    }
+    /// Use the production atomic export, then independent bounded readback.
+    /// A failed write/parse/reconciliation irreversibly stops later requests.
+    pub fn export(
+        &self,
+        destination: &Path,
+        space: &dyn notype_core::csv::CsvSpaceProbe,
+    ) -> Result<super::export::CsvProof, Failure> {
+        let result = (|| {
+            self.sessions
+                .export_csv(destination, space, &Default::default())
+                .map_err(|_| Failure::Storage)?;
+            let entries = self.sessions.search("").map_err(|_| Failure::Storage)?;
+            let bytes = super::native::read(destination, 8 * 1024 * 1024)?;
+            super::export::verify(&bytes, &entries, &self.snapshot()?)
+        })();
+        if result.is_err() {
+            self.halt()?;
+        }
+        result
     }
     /// Execute only the next fixed step, including actual automatic reverse.
     /// Failure halts; no implicit POST retry, replacement slot or delivery exists.
@@ -180,6 +265,12 @@ impl ProbeRunner {
             Source::Live(configuration) => {
                 configuration.processor(slot, self.latch.clone(), self.tracing.clone())
             }
+            Source::OwnedCredentials(endpoint, configuration) => configuration.processor_owned(
+                endpoint,
+                slot,
+                self.latch.clone(),
+                self.tracing.clone(),
+            ),
         }?;
         let processor =
             BudgetProcessor::new(processor, self.coordinator.clone(), id.clone(), slot.number);
