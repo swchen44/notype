@@ -6,6 +6,16 @@
 
 export const commands = {
 
+async showModelRoot(expectedGeneration: number): Promise<Result<null, string>> {
+  try { return { status: "ok", data: await TAURI_INVOKE("show_model_root", { expectedGeneration }) }; }
+  catch (e) { if (e instanceof Error) throw e; return { status: "error", error: String(e) }; }
+},
+async showModelLocation(modelId: string, expectedGeneration: number): Promise<Result<null, string>> {
+  try { return { status: "ok", data: await TAURI_INVOKE("show_model_location", { modelId, expectedGeneration }) }; }
+  catch (e) { if (e instanceof Error) throw e; return { status: "error", error: String(e) }; }
+},
+
+
 /** Read the current folder and its generation without scanning or changing files. */
 async getModelRoot(): Promise<Result<ModelRootView, string>> {
   try { return { status: "ok", data: await TAURI_INVOKE("get_model_root") }; }
