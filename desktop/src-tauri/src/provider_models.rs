@@ -308,7 +308,11 @@ impl ModelDiscovery {
             } {
                 if bytes.len().saturating_add(chunk.len()) > 2_097_152 {
                     trace.body(bytes.len().saturating_add(chunk.len()) as u64, false, true);
-                    return Err(ConfigError("model-list-response-limit"));
+                    return Err(ConfigError(
+                        status_error.map_or("model-list-response-limit", |error| {
+                            error.history_code(false)
+                        }),
+                    ));
                 }
                 bytes.extend_from_slice(&chunk);
                 if let Some(event) = trace.metadata() {
@@ -420,11 +424,7 @@ pub fn project_models(
         .as_array()
         .ok_or(ConfigError("model-list-schema-unavailable"))?;
     if data.len() > 2000 {
-        return Err(ConfigError(
-            status_error.map_or("model-list-response-limit", |error| {
-                error.history_code(false)
-            }),
-        ));
+        return Err(ConfigError("model-list-response-limit"));
     }
     let mut ids = BTreeSet::new();
     for row in data {

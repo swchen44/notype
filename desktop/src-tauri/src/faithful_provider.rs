@@ -833,7 +833,13 @@ impl ChatProcessor {
             }
             let operation = async {
                 if let Some(guard) = &mut guard {
-                    guard.mark_sent()?;
+                    if let Err(error) = guard.mark_sent() {
+                        trace.observe(
+                            diagnostic::ApiSpan::PreSendRejected,
+                            diagnostic::ApiResult::Failed,
+                        );
+                        return Err(error);
+                    }
                 }
                 if let Some(event) = trace.metadata() {
                     event.possibly_sent = true;

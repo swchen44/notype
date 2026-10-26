@@ -12,7 +12,7 @@ macro_rules! labels {
         impl $name { #[doc = "Fixed report label."] pub fn label(self) -> &'static str { match self { $(Self::$variant => $label),+ } } }
     };
 }
-labels!(ApiSpan { Prepared => "prepared", Admitted => "admitted", SendStarted => "send_started", HeadersReceived => "headers_received", BodyRead => "body_read", ResponseClassified => "response_classified", Finished => "finished" });
+labels!(ApiSpan { Prepared => "prepared", Admitted => "admitted", AdmissionFailed => "admission_failed", PreSendRejected => "pre_send_rejected", SendStarted => "send_started", HeadersReceived => "headers_received", BodyRead => "body_read", ResponseClassified => "response_classified", Finished => "finished" });
 labels!(ApiResult { Started => "started", Success => "success", Failed => "failed", Timeout => "timeout", Cancelled => "cancelled", Interrupted => "interrupted" });
 labels!(ApiErrorCategory { None => "none", Configuration => "configuration", InvalidPrompt => "invalid_prompt", HistoryStorage => "history_storage", Auth => "auth", Permission => "permission", Balance => "balance", RateLimit => "rate_limit", Context => "context", Validation => "validation", Unavailable => "unavailable", Transport => "transport", Protocol => "protocol", Oversize => "oversize", Timeout => "timeout", Cancelled => "cancelled", Unknown => "unknown" });
 labels!(ApiPurpose { Generation => "generation", BackTranslation => "back_translation", ModelList => "model_list" });
