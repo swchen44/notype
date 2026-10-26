@@ -1125,3 +1125,55 @@ test("folder-local Hugging Face models and read-only legacy cache models show th
     .waitFor();
   assert.equal(await legacy.getByRole("button", { name: /Delete/ }).count(), 0);
 });
+
+for (const component of ["settings", "onboarding"])
+  test(`a retained legacy directory remains visible and unavailable in ${component} without repair or deletion`, async (t) => {
+    const retained = {
+      ...model,
+      id: "retained-directory",
+      name: "Retained directory fixture",
+      filename: "legacy-speech",
+      source: {
+        Url: { url: "https://synthetic.invalid/archive", sha256: null },
+      },
+      is_directory: true,
+      is_downloaded: false,
+    };
+    const page = await fixture(t, component, "en", {
+      models: [retained],
+      artifacts: {
+        [retained.id]: {
+          status: "unavailable",
+          source: "selected_root",
+          can_download: false,
+          can_delete: false,
+        },
+      },
+    });
+    const card = page.getByRole("article", {
+      name: retained.name,
+      exact: true,
+    });
+    await card.getByText("Model unavailable", { exact: true }).waitFor();
+    assert.equal(
+      await card
+        .getByRole("button", { name: "Use model", exact: true })
+        .count(),
+      0,
+    );
+    assert.equal(
+      await card
+        .getByRole("button", { name: "Download model", exact: true })
+        .count(),
+      0,
+    );
+    assert.equal(await card.getByRole("button", { name: /Delete/ }).count(), 0);
+    assert.deepEqual(
+      await page.evaluate(() =>
+        window.calls.filter((c) =>
+          /download_model|delete_model|set_active_model/.test(c.cmd),
+        ),
+      ),
+      [],
+    );
+  });

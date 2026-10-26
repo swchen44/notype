@@ -47,8 +47,8 @@ const Onboarding: React.FC<OnboardingProps> = ({
   const isBusy = selectedModelId !== null;
 
   // Curate the download list: legacy (.bin/ONNX) downloads are deprecated and
-  // never shown here (they still appear in the compatible section if already on
-  // disk). The catalog arrives rank-sorted, so the first two recommended models
+  // never offered for download. Retained unsupported artifacts remain visible
+  // below. The catalog arrives rank-sorted, so the first two recommended models
   // are the featured picks — currently Parakeet Unified (English) and Nemotron
   // Streaming (multilingual). Everything else hides behind "Show all".
   const { downloadable, topPicks, otherRecommended, rest } = useMemo(() => {
@@ -221,6 +221,31 @@ const Onboarding: React.FC<OnboardingProps> = ({
                     artifact={artifacts[model.id]}
                     status={getExistingModelStatus(model.id)}
                     disabled={isBusy}
+                    onSelect={handleSelectExistingModel}
+                    showRecommended={false}
+                  />
+                ))}
+            </div>
+          )}
+
+          {models.some(
+            (model) => isLegacySource(model) && !model.is_downloaded,
+          ) && (
+            <div className="space-y-3 text-left">
+              <h2 className="text-sm font-medium text-text/60">
+                {t("notype.modelFolder.otherModels")}
+              </h2>
+              {models
+                .filter(
+                  (model) => isLegacySource(model) && !model.is_downloaded,
+                )
+                .map((model) => (
+                  <ModelCard
+                    key={model.id}
+                    model={model}
+                    artifact={artifacts[model.id]}
+                    status="downloadable"
+                    disabled
                     onSelect={handleSelectExistingModel}
                     showRecommended={false}
                   />
