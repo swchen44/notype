@@ -126,4 +126,3 @@ are now approved plans, not completed build/delivery. They depend on #28/#29 and
 fresh budget/resource gates before any native work. Latest preceding read-only
 space observation was approximately C 6.85 GB / D 4.14 GB; old shortage text is
 superseded, and no cleanup occurred.
-
