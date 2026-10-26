@@ -100,14 +100,15 @@ pub async fn validate_model_root(
 pub fn apply_model_root(
     app: AppHandle,
     model_manager: State<'_, Arc<ModelManager>>,
-    transcription_manager: State<'_, Arc<TranscriptionManager>>,
     candidate_id: String,
     revision: u64,
 ) -> Result<ModelRootView, String> {
     model_manager
         .roots
         .apply(&candidate_id, revision, || {
-            transcription_manager.invalidate_idle_root()
+            if let Some(transcription_manager) = app.try_state::<Arc<TranscriptionManager>>() {
+                transcription_manager.invalidate_idle_root()
+            }
         })
         .map_err(|e| e.0.to_owned())?;
     let view = model_manager.root_view();
@@ -249,6 +250,7 @@ fn switch_active_model_for_generation(
     model_id: &str,
     generation: Option<u64>,
 ) -> Result<(), String> {
+    crate::offline_bootstrap::admit()?;
     let model_manager = app.state::<Arc<ModelManager>>();
     let transcription_manager = app.state::<Arc<TranscriptionManager>>();
     let activity = model_manager.activity().map_err(safe_error)?;

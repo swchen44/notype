@@ -604,6 +604,9 @@ fn last_transcript_text(entry: &SessionEntry) -> &str {
 /// Confirm the native return path before hiding the main window.
 /// Settings alone do not prove that the OS accepted the tray icon.
 pub fn ensure_tray_visible(app: &AppHandle) -> Result<(), String> {
+    if crate::offline_bootstrap::blocked() {
+        return Err("bootstrap-incomplete".into());
+    }
     let no_tray = app
         .try_state::<crate::cli::CliArgs>()
         .is_some_and(|args| args.no_tray);

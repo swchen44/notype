@@ -541,6 +541,7 @@ impl TranscriptionManager {
         model_id: &str,
         device_index: Option<usize>,
     ) -> Result<()> {
+        crate::offline_bootstrap::admit().map_err(anyhow::Error::msg)?;
         let activity = self.model_manager.activity()?;
         let started = Instant::now();
         crate::diagnostics::record(
@@ -853,6 +854,9 @@ impl TranscriptionManager {
 
     /// Correlates only a job actually spawned by this capture; existing work is unassociated.
     pub fn initiate_model_load_for_capture(&self, trace: Option<CaptureTrace>) {
+        if crate::offline_bootstrap::blocked() {
+            return;
+        }
         let mut is_loading = self.is_loading.lock().unwrap();
         if *is_loading {
             if let Some(trace) = &trace {

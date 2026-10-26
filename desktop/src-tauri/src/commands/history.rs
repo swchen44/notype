@@ -135,7 +135,7 @@ pub struct WorkflowReadiness {
 }
 
 static CONFIGURATION_STORE: Mutex<Option<Arc<ConnectionStore>>> = Mutex::new(None);
-fn configuration_store(app: &AppHandle) -> Result<Arc<ConnectionStore>, String> {
+pub(crate) fn configuration_store(app: &AppHandle) -> Result<Arc<ConnectionStore>, String> {
     let mut current = CONFIGURATION_STORE
         .lock()
         .map_err(|_| "configuration-storage-failed".to_owned())?;
@@ -155,6 +155,7 @@ fn configuration_store(app: &AppHandle) -> Result<Arc<ConnectionStore>, String> 
     Ok(store)
 }
 pub(crate) fn read_configuration(app: &AppHandle) -> Result<TextConfiguration, String> {
+    crate::offline_bootstrap::admit()?;
     let configuration = match configuration_store(app) {
         Ok(store) => store.processing_snapshot(&CurrentUserReader),
         Err(_) => crate::provider_config::failed_preparation(crate::provider_config::ConfigError(
@@ -233,6 +234,7 @@ pub async fn list_text_models(
     app: AppHandle,
     request: ModelListRequest,
 ) -> Result<ModelListResult, String> {
+    crate::offline_bootstrap::admit()?;
     model_discovery()
         .query(configuration_store(&app)?, request, &CurrentUserReader)
         .await
@@ -375,6 +377,13 @@ pub fn get_workflow_readiness(
     app: AppHandle,
     notice: State<'_, LegacyImportNotice>,
 ) -> WorkflowReadiness {
+    if crate::offline_bootstrap::blocked() {
+        return WorkflowReadiness {
+            text_configured: false,
+            delivery_available: false,
+            legacy_import_error: notice.0.clone(),
+        };
+    }
     WorkflowReadiness {
         text_configured: read_configuration(&app)
             .is_ok_and(|configuration| configuration.is_ready()),
@@ -400,6 +409,7 @@ pub(crate) fn begin_scenario_recording(
     target: Option<String>,
     context: notype_core::SourceContext,
 ) -> Result<u64, String> {
+    crate::offline_bootstrap::admit()?;
     let preferences = settings::get_settings(app);
     let profile = crate::workflow::recognition::RecognitionProfile::new(
         preferences.recognition_mode.into(),
@@ -493,6 +503,7 @@ pub async fn retry_history_entry_processing(
     workflow: State<'_, Arc<DesktopWorkflow>>,
     id: String,
 ) -> Result<SessionDto, String> {
+    crate::offline_bootstrap::admit()?;
     let configuration = read_configuration(&app).unwrap_or_default();
     let glossary = settings::get_settings(&app).custom_words;
     workflow
@@ -593,6 +604,7 @@ pub fn debug_begin_session(
     fixture_owner: Option<crate::native_input::DebugFixtureOwner>,
     require_input_target: Option<bool>,
 ) -> Result<u64, String> {
+    crate::offline_bootstrap::admit()?;
     let capture = if capture_input == Some(true) {
         app.state::<crate::native_input::NativeInput>()
             .capture_owned_fixture(

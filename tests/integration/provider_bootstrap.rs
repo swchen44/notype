@@ -152,3 +152,94 @@ fn malformed_same_store_bootstrap_marker_fails_closed_and_keeps_actual_bytes() {
     assert!(selection.pending().is_err());
     assert_eq!(std::fs::read(path).unwrap(), bytes);
 }
+
+fn connection() -> provider_config::ConnectionPreset {
+    serde_json::from_value(serde_json::json!({
+        "display_name":"Synthetic connection","kind":"custom","dialect":"generic",
+        "address_mode":"base_url","api_address":"https://synthetic.reserved.invalid/v1",
+        "models_endpoint":null,"model":"synthetic-model","authentication":"bearer",
+        "timeout_ms":30000,"thinking_preference":"off","effort":null,
+        "capability_declaration":{"kind":"non_reasoning","minimum_effort":null,
+          "supported_efforts":[],"temperature_supported":true,"top_p_supported":true},
+        "temperature":null,"top_p":null,"max_output_tokens":null
+    }))
+    .unwrap()
+}
+
+#[test]
+fn actual_provider_commit_failure_and_restart_preserve_freshness_then_existing_key_bytes_win() {
+    let directory = tempfile::tempdir().unwrap();
+    let config = directory.path().join("config");
+    std::fs::create_dir(&config).unwrap();
+    let path = config.join("provider_connections_v2.json");
+    let store = ConnectionStore::open(Arc::new(FileStorage::new(path.clone()))).unwrap();
+    std::fs::rename(&config, directory.path().join("held")).unwrap();
+    assert!(store
+        .bootstrap_if_empty(connection(), "synthetic-v1")
+        .is_err());
+    assert_eq!(store.view().unwrap().revision, 0);
+    std::fs::rename(directory.path().join("held"), &config).unwrap();
+    let reopened = ConnectionStore::open(Arc::new(FileStorage::new(path.clone()))).unwrap();
+    assert_eq!(
+        reopened
+            .bootstrap_if_empty(connection(), "synthetic-v1")
+            .unwrap(),
+        provider_config::BootstrapImport::Applied
+    );
+    let draft = reopened.view().unwrap().connections.remove(0).connection;
+    reopened
+        .save(
+            1,
+            draft,
+            provider_config::KeyAction::Replace {
+                value: "SYNTHETIC-PRIVATE-KEY".into(),
+            },
+        )
+        .unwrap();
+    let before = std::fs::read(&path).unwrap();
+    let mut ignored = connection();
+    ignored.api_address = "invalid unused preset".into();
+    assert_eq!(
+        reopened
+            .bootstrap_if_empty(ignored, "synthetic-v2")
+            .unwrap(),
+        provider_config::BootstrapImport::SkippedExisting
+    );
+    assert_eq!(std::fs::read(&path).unwrap(), before);
+    let safe = serde_json::to_string(&reopened.view().unwrap()).unwrap();
+    assert!(!safe.contains("SYNTHETIC-PRIVATE-KEY"));
+}
+
+#[test]
+fn concurrent_imports_publish_one_identity_and_one_revision() {
+    let directory = tempfile::tempdir().unwrap();
+    let store = Arc::new(
+        ConnectionStore::open(Arc::new(FileStorage::new(
+            directory.path().join("provider_connections_v2.json"),
+        )))
+        .unwrap(),
+    );
+    let handles = (0..8)
+        .map(|_| {
+            let store = store.clone();
+            std::thread::spawn(move || {
+                store
+                    .bootstrap_if_empty(connection(), "synthetic-v1")
+                    .unwrap()
+            })
+        })
+        .collect::<Vec<_>>();
+    let outcomes = handles
+        .into_iter()
+        .map(|h| h.join().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        outcomes
+            .iter()
+            .filter(|o| **o == provider_config::BootstrapImport::Applied)
+            .count(),
+        1
+    );
+    assert_eq!(store.view().unwrap().revision, 1);
+    assert_eq!(store.view().unwrap().connections.len(), 1);
+}

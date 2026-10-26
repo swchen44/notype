@@ -14,6 +14,10 @@ on:
       - desktop/src-tauri/src/commands/history_metrics.rs
       - tests/integration/provider_config.rs
       - tests/integration/provider_models.rs
+      - tests/integration/provider_bootstrap.rs
+      - tests/integration/bootstrap-recovery.ui.mjs
+      - tests/integration/offline-bundle.test.mjs
+      - tests/integration/fixtures/offline-bundle.mjs
       - tests/integration/diagnostic_api.rs
       - tests/integration/desktop_provider.rs
       - tests/integration/desktop_diagnostics.rs

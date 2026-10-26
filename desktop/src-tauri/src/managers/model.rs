@@ -1311,6 +1311,7 @@ impl ModelManager {
         self.roots.snapshot().root.clone()
     }
     pub fn reserve_activity(&self) -> Result<ActivityLease> {
+        crate::offline_bootstrap::admit().map_err(anyhow::Error::msg)?;
         Ok(self.roots.reserve()?)
     }
     pub fn activity(&self) -> Result<RootActivity> {

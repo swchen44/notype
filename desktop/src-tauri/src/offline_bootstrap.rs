@@ -5,7 +5,13 @@ use crate::provider_config::{
     validate_bootstrap_id, ConfigError, ConnectionPreset, ConnectionStore,
 };
 use serde::{Deserialize, Serialize};
-use std::{path::Path, sync::Mutex};
+use std::{
+    path::Path,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Mutex,
+    },
+};
 
 #[derive(Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -79,17 +85,34 @@ impl BootstrapStatus {
     }
 }
 static STATUS: Mutex<Option<BootstrapStatus>> = Mutex::new(None);
+static RUNTIME_READY: AtomicBool = AtomicBool::new(false);
 pub fn status() -> BootstrapStatus {
-    STATUS
+    let status = STATUS
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .clone()
-        .unwrap_or_else(BootstrapStatus::ready)
+        .unwrap_or_else(BootstrapStatus::ready);
+    if status.state == "ready" && !RUNTIME_READY.load(Ordering::Acquire) {
+        BootstrapStatus::pending()
+    } else {
+        status
+    }
+}
+pub fn domains_ready() -> bool {
+    STATUS
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .as_ref()
+        .is_none_or(|s| s.state == "ready")
+}
+pub fn runtime_ready() {
+    RUNTIME_READY.store(true, Ordering::Release);
 }
 pub fn blocked() -> bool {
     status().state != "ready"
 }
 pub fn begin() {
+    RUNTIME_READY.store(false, Ordering::Release);
     *STATUS.lock().unwrap_or_else(|e| e.into_inner()) = Some(BootstrapStatus::pending());
 }
 pub fn finish(result: Result<(), ConfigError>) -> BootstrapStatus {
@@ -130,6 +153,7 @@ pub fn recovery_command(command: &str) -> bool {
             | "show_main_window_command"
             | "cancel_operation"
             | "get_model_path"
+            | "show_model_root"
             | "is_portable"
             | "is_update_checks_locked"
             | "plugin:dialog|open"

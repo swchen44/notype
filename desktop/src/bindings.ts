@@ -5,6 +5,13 @@
 
 
 export const commands = {
+async getBootstrapStatus(): Promise<BootstrapStatus> {
+  return await TAURI_INVOKE("get_bootstrap_status");
+},
+async retryOfflineBootstrap(): Promise<Result<BootstrapStatus, string>> {
+  try { return {status:"ok",data:await TAURI_INVOKE("retry_offline_bootstrap")}; }
+  catch(e) { return {status:"error",error:e instanceof Error ? e.message : String(e)}; }
+},
 
 async showModelRoot(expectedGeneration: number): Promise<Result<null, string>> {
   try { return { status: "ok", data: await TAURI_INVOKE("show_model_root", { expectedGeneration }) }; }
@@ -1353,6 +1360,9 @@ type __EventObj__<T> = {
 		? (payload?: T) => ReturnType<typeof TAURI_API_EVENT.emit>
 		: (payload: T) => ReturnType<typeof TAURI_API_EVENT.emit>;
 };
+
+/** Finite startup state; never includes bootstrap input or local paths. */
+export type BootstrapStatus = { state: string; code: string | null; can_retry: boolean };
 
 export type Result<T, E> =
 	| { status: "ok"; data: T }
