@@ -320,30 +320,117 @@ pub struct ArtifactUse {
 pub struct RootUse {
     _handles: Vec<File>,
 }
+#[derive(Debug)]
+pub struct VerifiedDownload {
+    pub path: PathBuf,
+    fingerprint: Fingerprint,
+    _file: File,
+}
 type Prober = dyn Fn(&Path) -> bool + Send + Sync;
 pub struct Filesystem {
     hashing: Mutex<()>,
     custom: Arc<Prober>,
 }
 impl Filesystem {
-    pub fn verify_download(&self, path: &Path, expected: Option<&str>) -> RootResult<()> {
-        let Some(expected) = expected else {
-            return Ok(());
+    pub fn file_identity(&self, file: &File) -> RootResult<Fingerprint> {
+        identity(file)
+    }
+    pub fn observe_download(&self, path: &Path) -> RootResult<Fingerprint> {
+        identity(&open_plain(path, false, true)?)
+    }
+    pub fn partial_size(&self, path: &Path, expected: &Fingerprint) -> RootResult<u64> {
+        let current = self.observe_download(path)?;
+        if !same_directory(&current, expected) {
+            return Err(RootError("model-root-stale"));
+        }
+        Ok(current.size)
+    }
+    pub fn open_partial(&self, path: &Path, owned: Option<&Fingerprint>) -> RootResult<File> {
+        plain_ancestors(path)?;
+        let mut options = OpenOptions::new();
+        options.read(true).write(true).create_new(true);
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::OpenOptionsExt;
+            options.share_mode(1).custom_flags(0x0020_0000);
+        }
+        let file = match options.open(path) {
+            Ok(file) => file,
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                let expected = owned.ok_or(RootError("model-root-readonly"))?;
+                plain_ancestors(path)?;
+                let mut options = OpenOptions::new();
+                options.read(true).write(true);
+                #[cfg(windows)]
+                {
+                    use std::os::windows::fs::OpenOptionsExt;
+                    options.share_mode(1).custom_flags(0x0020_0000);
+                }
+                let file = options
+                    .open(path)
+                    .map_err(|_| RootError("model-root-readonly"))?;
+                if !same_directory(&identity(&file)?, expected) {
+                    return Err(RootError("model-root-stale"));
+                }
+                file
+            }
+            Err(_) => return Err(RootError("model-root-readonly")),
         };
+        plain_ancestors(path)?;
+        Ok(file)
+    }
+    pub fn remove_partial(&self, path: &Path, expected: &Fingerprint) -> RootResult<()> {
+        match fs::symlink_metadata(path) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            _ => {}
+        }
+        let file = open_plain(path, false, true)?;
+        let current = identity(&file)?;
+        if !same_directory(&current, expected) {
+            return Err(RootError("model-root-stale"));
+        }
+        drop(file);
+        self.delete_exact(path, &current)
+    }
+    pub fn publish_download(
+        &self,
+        verified: VerifiedDownload,
+        destination: &Path,
+    ) -> RootResult<Fingerprint> {
+        plain_ancestors(destination)?;
+        fs::hard_link(&verified.path, destination)
+            .map_err(|_| RootError("model-artifact-invalid"))?;
+        Ok(verified.fingerprint.clone())
+    }
+    pub fn verify_download(
+        &self,
+        path: &Path,
+        expected: Option<&str>,
+        owned: &Fingerprint,
+    ) -> RootResult<VerifiedDownload> {
         let _one_hash_worker = self.hashing.lock().unwrap_or_else(|e| e.into_inner());
         let mut file = open_plain(path, false, true)?;
         let before = identity(&file)?;
-        if hash(&mut file, &AtomicBool::new(false))? != expected {
-            // Delete only this operation's unchanged partial. An invalid path,
-            // I/O failure or substituted file is retained without cleanup.
-            drop(file);
-            let _ = self.delete_exact(path, &before);
-            return Err(RootError("model-artifact-invalid"));
+        if !same_directory(&before, owned) {
+            return Err(RootError("model-root-stale"));
+        }
+        if let Some(expected) = expected {
+            if hash(&mut file, &AtomicBool::new(false))? != expected {
+                // Delete only this operation's unchanged partial. An invalid path,
+                // I/O failure or substituted file is retained without cleanup.
+                drop(file);
+                let _ = self.delete_exact(path, &before);
+                return Err(RootError("model-artifact-invalid"));
+            }
         }
         if identity(&file)? != before {
             return Err(RootError("model-artifact-invalid"));
         }
-        Ok(())
+        Ok(VerifiedDownload {
+            path: path.to_owned(),
+            fingerprint: before,
+            _file: file,
+        })
     }
     pub fn new(prober: impl Fn(&Path) -> bool + Send + Sync + 'static) -> Self {
         Self {
@@ -522,8 +609,16 @@ impl Filesystem {
             let mut hf_binding = None;
             let mut path = None;
             let mut status = ArtifactStatus::Unavailable;
-            if partial.exists() || extracting.exists() {
-                status = ArtifactStatus::Incomplete;
+            let markers: Vec<_> = [&partial, &extracting]
+                .into_iter()
+                .filter_map(|path| fs::symlink_metadata(path).ok())
+                .collect();
+            if !markers.is_empty() {
+                status = if markers.iter().any(reparse) {
+                    ArtifactStatus::Invalid
+                } else {
+                    ArtifactStatus::Incomplete
+                };
             } else if fs::symlink_metadata(&direct).is_ok() {
                 path = Some(direct.clone());
             } else if let Some(found) =
@@ -584,7 +679,7 @@ impl Filesystem {
                         fingerprint,
                     },
                     filename: descriptor.filename.clone(),
-                    present: path.is_some() || status == ArtifactStatus::Incomplete,
+                    present: path.is_some() || !markers.is_empty(),
                     path: path.unwrap_or(direct),
                     status,
                     legacy,
@@ -620,7 +715,7 @@ impl Filesystem {
                 return Err(RootError("model-root-stale"));
             }
             let id = filename.trim_end_matches(".gguf").to_owned();
-            let incomplete = root.root.join(format!("{filename}.partial")).exists();
+            let marker = fs::symlink_metadata(root.root.join(format!("{filename}.partial"))).ok();
             projection.artifacts.insert(
                 id.clone(),
                 ArtifactRecord {
@@ -632,7 +727,9 @@ impl Filesystem {
                     },
                     filename,
                     path,
-                    status: if incomplete {
+                    status: if marker.as_ref().is_some_and(reparse) {
+                        ArtifactStatus::Invalid
+                    } else if marker.is_some() {
                         ArtifactStatus::Incomplete
                     } else {
                         ArtifactStatus::CustomUnverified
@@ -826,14 +923,9 @@ impl Filesystem {
                 return Err(RootError("model-artifact-invalid"));
             }
         }
-        if root
-            .root
-            .join(format!("{}.partial", record.filename))
-            .exists()
-            || root
-                .root
-                .join(format!("{}.extracting", record.filename))
-                .exists()
+        if fs::symlink_metadata(root.root.join(format!("{}.partial", record.filename))).is_ok()
+            || fs::symlink_metadata(root.root.join(format!("{}.extracting", record.filename)))
+                .is_ok()
         {
             return Err(RootError("model-artifact-unavailable"));
         }

@@ -39,6 +39,7 @@ on:
       - desktop/src-tauri/src/managers/model_root*.rs
       - desktop/src-tauri/src/managers/model_engine_state.rs
       - desktop/src-tauri/src/managers/model_transfer_worker.rs
+      - desktop/src-tauri/src/managers/model_runtime_metadata.rs
       - desktop/src-tauri/src/managers/transcription.rs
       - desktop/src-tauri/src/managers/audio.rs
       - desktop/src-tauri/src/actions.rs

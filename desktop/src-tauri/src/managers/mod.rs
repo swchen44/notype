@@ -12,4 +12,5 @@ pub mod model_roots_files;
 
 pub mod model_engine_state;
 
+pub mod model_runtime_metadata;
 pub mod model_transfer_worker;

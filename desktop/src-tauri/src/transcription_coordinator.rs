@@ -545,12 +545,8 @@ pub fn is_transcribe_binding(id: &str) -> bool {
 }
 
 impl TranscriptionCoordinator {
-    pub fn new(app: AppHandle) -> Self {
+    pub fn new(app: AppHandle, roots: Arc<RootService>) -> Self {
         let (tx, rx) = mpsc::channel();
-        let roots = app
-            .state::<Arc<crate::managers::model::ModelManager>>()
-            .roots
-            .clone();
 
         thread::spawn(move || {
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {

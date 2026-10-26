@@ -8,8 +8,7 @@ use anyhow::Result;
 use futures_util::StreamExt;
 use hf_hub::api::tokio::CancellationToken;
 use log::info;
-use std::fs;
-use std::io::Write;
+use std::io::{Seek, SeekFrom, Write};
 use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -34,7 +33,7 @@ fn content_range_start(value: &str) -> Option<u64> {
 /// being an outcome (partial kept, no error surfaced) rather than a failure.
 #[derive(Debug)]
 pub(super) enum HttpDownloadOutcome {
-    Completed,
+    Completed(crate::managers::model_roots_files::VerifiedDownload),
     Cancelled,
 }
 
@@ -49,23 +48,22 @@ enum HttpDownloadEvent<'a> {
 
 impl ModelManager {
     /// Emit verification events around a blocking sha256 check of `path`.
-    /// On mismatch `verify_sha256` deletes the file, so the next attempt (or
-    /// next source) starts clean. A `None` hash skips checking (custom models).
+    /// Keeps the verified file pinned through publication. Mismatch cleanup
+    /// can delete only the unchanged partial reserved by this operation.
     async fn verify_file_with_events(
-        model_id: &str,
+        _model_id: &str,
         path: &Path,
         expected_sha256: Option<&str>,
         emit: &(dyn Fn(HttpDownloadEvent<'_>) + Send + Sync),
         activity: &RootActivity,
         roots: &Arc<RootService>,
-    ) -> Result<()> {
+    ) -> Result<crate::managers::model_roots_files::VerifiedDownload> {
         emit(HttpDownloadEvent::VerificationStarted);
         let path = path.to_path_buf();
         let expected = expected_sha256.map(str::to_string);
-        let _id = model_id.to_string();
         let worker = activity.clone();
         let roots = roots.clone();
-        tokio::task::spawn_blocking(move || {
+        let verified = tokio::task::spawn_blocking(move || {
             let _worker = worker;
             roots
                 .verify_download(&path, expected.as_deref(), &_worker)
@@ -74,7 +72,7 @@ impl ModelManager {
         .await
         .map_err(|e| anyhow::anyhow!("SHA256 task panicked: {}", e))??;
         emit(HttpDownloadEvent::VerificationCompleted);
-        Ok(())
+        Ok(verified)
     }
 
     /// [`Self::download_http_resumable_with_events`] wired to the Tauri event
@@ -160,18 +158,18 @@ impl ModelManager {
         activity: &RootActivity,
         roots: &Arc<RootService>,
     ) -> Result<HttpDownloadOutcome> {
-        let mut resume_from = partial_path.metadata().map(|m| m.len()).unwrap_or(0);
+        let mut resume_from = roots.partial_size(partial_path, activity)?;
 
         if let Some(expected) = expected_size {
             if resume_from > expected {
-                let _ = fs::remove_file(partial_path);
+                roots.remove_partial(partial_path, activity)?;
                 resume_from = 0;
             } else if resume_from == expected && expected > 0 {
                 info!(
                     "Partial download of {} is already full-size; verifying",
                     model_id
                 );
-                Self::verify_file_with_events(
+                let verified = Self::verify_file_with_events(
                     model_id,
                     partial_path,
                     expected_sha256,
@@ -180,7 +178,7 @@ impl ModelManager {
                     roots,
                 )
                 .await?;
-                return Ok(HttpDownloadOutcome::Completed);
+                return Ok(HttpDownloadOutcome::Completed(verified));
             }
         }
 
@@ -218,12 +216,12 @@ impl ModelManager {
         // just a broken server, which the generic status check below rejects.
         if resume_from > 0 && response.status() == reqwest::StatusCode::RANGE_NOT_SATISFIABLE {
             if expected_size.is_some() || expected_sha256.is_none() {
-                let _ = fs::remove_file(partial_path);
+                roots.remove_partial(partial_path, activity)?;
                 return Err(anyhow::anyhow!(
                     "server object ends before the expected size (HTTP 416)"
                 ));
             }
-            Self::verify_file_with_events(
+            let verified = Self::verify_file_with_events(
                 model_id,
                 partial_path,
                 expected_sha256,
@@ -232,12 +230,12 @@ impl ModelManager {
                 roots,
             )
             .await?;
-            return Ok(HttpDownloadOutcome::Completed);
+            return Ok(HttpDownloadOutcome::Completed(verified));
         }
         // A 200 to a Range request means the server ignored it and is sending
         // the whole file; appending it to the partial would corrupt the model.
         if resume_from > 0 && response.status() == reqwest::StatusCode::OK {
-            let _ = fs::remove_file(partial_path);
+            roots.remove_partial(partial_path, activity)?;
             resume_from = 0;
         }
         if !response.status().is_success() {
@@ -255,7 +253,7 @@ impl ModelManager {
                 .and_then(|v| v.to_str().ok())
                 .and_then(content_range_start);
             if starts_at != Some(resume_from) {
-                let _ = fs::remove_file(partial_path);
+                roots.remove_partial(partial_path, activity)?;
                 return Err(anyhow::anyhow!(
                     "server returned Content-Range starting at {:?}, expected {}",
                     starts_at,
@@ -279,14 +277,11 @@ impl ModelManager {
             expected_size.or_else(|| response.content_length().map(|l| resume_from + l));
         let total_size = known_total.unwrap_or(0);
         let mut downloaded = resume_from;
-        let mut file = if resume_from > 0 {
-            std::fs::OpenOptions::new()
-                .append(true)
-                .open(partial_path)?
-        } else {
-            std::fs::File::create(partial_path)?
-        };
-
+        let mut file = roots.open_partial(partial_path, activity)?;
+        if resume_from == 0 {
+            file.set_len(0)?;
+        }
+        file.seek(SeekFrom::Start(resume_from))?;
         let emit_progress = |downloaded: u64| {
             emit(HttpDownloadEvent::Progress(&DownloadProgress {
                 generation: activity.root.generation,
@@ -329,7 +324,7 @@ impl ModelManager {
             if let Some(cap) = known_total {
                 if downloaded + chunk.len() as u64 > cap {
                     drop(file);
-                    let _ = fs::remove_file(partial_path);
+                    roots.remove_partial(partial_path, activity)?;
                     return Err(anyhow::anyhow!(
                         "server sent more than the expected {} bytes",
                         cap
@@ -350,7 +345,7 @@ impl ModelManager {
         if let Some(expected) = known_total {
             let actual = partial_path.metadata()?.len();
             if actual != expected {
-                let _ = fs::remove_file(partial_path);
+                roots.remove_partial(partial_path, activity)?;
                 return Err(anyhow::anyhow!(
                     "download incomplete: expected {} bytes, got {}",
                     expected,
@@ -361,7 +356,7 @@ impl ModelManager {
 
         // The catalog hash is the trust anchor: for a mirror (an untrusted
         // host) this verification is what makes the fallback safe at all.
-        Self::verify_file_with_events(
+        let verified = Self::verify_file_with_events(
             model_id,
             partial_path,
             expected_sha256,
@@ -370,7 +365,7 @@ impl ModelManager {
             roots,
         )
         .await?;
-        Ok(HttpDownloadOutcome::Completed)
+        Ok(HttpDownloadOutcome::Completed(verified))
     }
 }
 

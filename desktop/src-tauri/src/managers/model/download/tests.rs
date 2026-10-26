@@ -33,11 +33,23 @@ fn transfer_owner(path: &Path) -> (Arc<RootService>, RootActivity, std::path::Pa
     ));
     let owner = roots.admit_mutation("fixture").unwrap();
     let path = owner.root.root.join(path.file_name().unwrap());
+    // Pre-existing test bytes are owned fixture input. Recreate them through
+    // the same exclusive reservation used by the production transfer.
+    if let Ok(bytes) = std::fs::read(&path) {
+        std::fs::remove_file(&path).unwrap();
+        roots
+            .open_partial(&path, &owner)
+            .unwrap()
+            .write_all(&bytes)
+            .unwrap();
+    }
     (roots, owner, path)
 }
 async fn verify_owned(path: &Path, hash: Option<&str>) -> Result<()> {
     let (roots, owner, path) = transfer_owner(path);
-    ModelManager::verify_file_with_events("fixture", &path, hash, &|_| {}, &owner, &roots).await
+    ModelManager::verify_file_with_events("fixture", &path, hash, &|_| {}, &owner, &roots)
+        .await
+        .map(|_| ())
 }
 
 // ── SHA256 verification tests ─────────────────────────────────────────────
@@ -208,7 +220,7 @@ async fn http_fresh_download_completes_and_verifies() {
     .await
     .unwrap();
 
-    assert!(matches!(out, HttpDownloadOutcome::Completed));
+    assert!(matches!(out, HttpDownloadOutcome::Completed(_)));
     assert_eq!(fs::read(&partial).unwrap(), body);
     let head = server.await.unwrap();
     assert!(
@@ -243,7 +255,7 @@ async fn http_resume_appends_with_valid_content_range() {
     .await
     .unwrap();
 
-    assert!(matches!(out, HttpDownloadOutcome::Completed));
+    assert!(matches!(out, HttpDownloadOutcome::Completed(_)));
     assert_eq!(fs::read(&partial).unwrap(), full);
     let head = server.await.unwrap();
     assert!(head.contains("range: bytes=5-"), "got request: {head}");
@@ -304,7 +316,7 @@ async fn http_range_ignored_200_restarts_from_zero() {
     .await
     .unwrap();
 
-    assert!(matches!(out, HttpDownloadOutcome::Completed));
+    assert!(matches!(out, HttpDownloadOutcome::Completed(_)));
     assert_eq!(fs::read(&partial).unwrap(), body);
 }
 
@@ -328,7 +340,7 @@ async fn http_416_with_hash_finalizes_complete_partial() {
     .await
     .unwrap();
 
-    assert!(matches!(out, HttpDownloadOutcome::Completed));
+    assert!(matches!(out, HttpDownloadOutcome::Completed(_)));
     assert_eq!(fs::read(&partial).unwrap(), body);
 }
 
@@ -417,7 +429,7 @@ async fn http_full_size_partial_verified_without_network() {
     .await
     .unwrap();
 
-    assert!(matches!(out, HttpDownloadOutcome::Completed));
+    assert!(matches!(out, HttpDownloadOutcome::Completed(_)));
     assert_eq!(fs::read(&partial).unwrap(), body);
 }
 
@@ -444,7 +456,7 @@ async fn http_oversized_partial_restarts_clean() {
     .await
     .unwrap();
 
-    assert!(matches!(out, HttpDownloadOutcome::Completed));
+    assert!(matches!(out, HttpDownloadOutcome::Completed(_)));
     assert_eq!(fs::read(&partial).unwrap(), body);
     let head = server.await.unwrap();
     assert!(

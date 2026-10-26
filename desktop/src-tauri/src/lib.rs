@@ -376,6 +376,10 @@ fn initialize_core_logic(app_handle: &AppHandle) -> Result<(), Box<dyn std::erro
     // Add managers to Tauri's managed state
     app_handle.manage(recording_manager.clone());
     app_handle.manage(model_manager.clone());
+    app_handle.manage(TranscriptionCoordinator::new(
+        app_handle.clone(),
+        model_manager.roots.clone(),
+    ));
     model_manager.start_initial_scan();
     app_handle.manage(transcription_manager.clone());
     app_handle.manage(workflow);
@@ -1146,8 +1150,6 @@ pub fn run(cli_args: CliArgs) {
             log::info!("notype-startup logger-ready");
             log::logger().flush();
             let app_handle = app.handle().clone();
-            app.manage(TranscriptionCoordinator::new(app_handle.clone()));
-
             let core_result = initialize_core_logic(&app_handle);
             diagnostics::record(
                 diagnostics::Phase::Startup,

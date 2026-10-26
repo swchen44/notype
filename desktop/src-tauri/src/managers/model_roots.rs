@@ -50,6 +50,7 @@ pub struct RootActivity {
     pub root: Arc<RootSnapshot>,
     pub directory: Option<Arc<RootUse>>,
     mutation: Option<Arc<MutationOwner>>,
+    partials: Arc<Mutex<BTreeMap<PathBuf, Fingerprint>>>,
     pub lease: ActivityLease,
 }
 struct MutationOwner {
@@ -315,6 +316,7 @@ impl RootService {
             lease,
             directory: None,
             mutation: None,
+            partials: Arc::new(Mutex::new(BTreeMap::new())),
         })
     }
     /// Queue admission can reserve without disk I/O. Child workers clone this
@@ -648,18 +650,73 @@ impl RootService {
             .check_root_identity(&activity.root, &self.projection())?;
         Ok(activity.root.root.clone())
     }
+    pub fn open_partial(&self, path: &Path, activity: &RootActivity) -> RootResult<std::fs::File> {
+        if path.parent() != Some(activity.root.root.as_path())
+            || self.snapshot().generation != activity.root.generation
+        {
+            return Err(RootError("model-root-stale"));
+        }
+        let mut owned = activity.partials.lock().unwrap_or_else(|e| e.into_inner());
+        let file = self.files.open_partial(path, owned.get(path))?;
+        owned.insert(path.to_owned(), self.files.file_identity(&file)?);
+        Ok(file)
+    }
+    pub fn remove_partial(&self, path: &Path, activity: &RootActivity) -> RootResult<()> {
+        let owned = activity.partials.lock().unwrap_or_else(|e| e.into_inner());
+        let expected = owned.get(path).ok_or(RootError("model-root-readonly"))?;
+        self.files.remove_partial(path, expected)
+    }
+    pub fn partial_size(&self, path: &Path, activity: &RootActivity) -> RootResult<u64> {
+        if std::fs::symlink_metadata(path).is_err() {
+            return Ok(0);
+        }
+        let owned = activity.partials.lock().unwrap_or_else(|e| e.into_inner());
+        self.files.partial_size(
+            path,
+            owned.get(path).ok_or(RootError("model-root-readonly"))?,
+        )
+    }
+    pub fn observe_download(
+        &self,
+        path: &Path,
+        activity: &RootActivity,
+    ) -> RootResult<Fingerprint> {
+        if !path.starts_with(&activity.root.root) {
+            return Err(RootError("model-root-invalid"));
+        }
+        self.files.observe_download(path)
+    }
+    pub fn publish_download(
+        &self,
+        verified: super::model_roots_files::VerifiedDownload,
+        destination: &Path,
+        activity: &RootActivity,
+    ) -> RootResult<Fingerprint> {
+        if destination.parent() != Some(activity.root.root.as_path())
+            || verified.path.parent() != Some(activity.root.root.as_path())
+            || self.snapshot().generation != activity.root.generation
+        {
+            return Err(RootError("model-root-invalid"));
+        }
+        let path = verified.path.clone();
+        let fingerprint = self.files.publish_download(verified, destination)?;
+        self.remove_partial(&path, activity)?;
+        Ok(fingerprint)
+    }
     pub fn verify_download(
         &self,
         path: &Path,
         expected: Option<&str>,
         activity: &RootActivity,
-    ) -> RootResult<()> {
+    ) -> RootResult<super::model_roots_files::VerifiedDownload> {
         if !path.starts_with(&activity.root.root)
             || self.snapshot().generation != activity.root.generation
         {
             return Err(RootError("model-root-stale"));
         }
-        self.files.verify_download(path, expected)
+        let owned = activity.partials.lock().unwrap_or_else(|e| e.into_inner());
+        let fingerprint = owned.get(path).ok_or(RootError("model-root-readonly"))?;
+        self.files.verify_download(path, expected, fingerprint)
     }
     pub fn admit_write(&self) -> RootResult<RootActivity> {
         let mut activity = self.admit()?;
@@ -736,14 +793,14 @@ impl RootService {
         let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         (state.root.clone(), state.projection.clone())
     }
-    pub fn mark_owned(&self, id: &str) {
+    pub fn mark_owned(&self, id: &str, fingerprint: &Fingerprint) {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(record) = state
-            .projection
-            .artifacts
-            .get(id)
-            .filter(|r| r.status == ArtifactStatus::Verified && !r.legacy && !r.custom)
-        {
+        if let Some(record) = state.projection.artifacts.get(id).filter(|r| {
+            r.status == ArtifactStatus::Verified
+                && !r.legacy
+                && !r.custom
+                && r.key.fingerprint == *fingerprint
+        }) {
             let key = record.key.clone();
             state.owned.insert(key);
             let mut projection = (*state.projection).clone();

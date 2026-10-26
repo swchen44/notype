@@ -13,6 +13,9 @@ mod model_roots;
 #[allow(dead_code)]
 #[path = "../../desktop/src-tauri/src/managers/model_roots_files.rs"]
 mod model_roots_files;
+#[allow(dead_code)]
+#[path = "../../desktop/src-tauri/src/managers/model_runtime_metadata.rs"]
+mod model_runtime_metadata;
 use model_capabilities::{CapabilityProber, Compatibility, GgufHeaderProber};
 use model_roots::{ArtifactDescriptor, ArtifactStatus, RootService};
 use model_roots_files::{FileStorage, Filesystem};
@@ -590,7 +593,12 @@ fn rejecting_a_transfer_path_cannot_delete_or_modify_foreign_bytes() {
         .is_err());
     assert_eq!(std::fs::read(&outside).unwrap(), b"foreign sentinel");
     let owned = owner.root.root.join("download.partial");
-    std::fs::write(&owned, b"wrong hash").unwrap();
+    use std::io::Write;
+    service
+        .open_partial(&owned, &owner)
+        .unwrap()
+        .write_all(b"wrong hash")
+        .unwrap();
     assert_eq!(
         service
             .verify_download(&owned, Some("bad"), &owner)
@@ -660,7 +668,12 @@ fn replacing_owned_download_with_identical_external_bytes_does_not_inherit_delet
     let path = service.snapshot().root.join("Q6.gguf");
     std::fs::write(&path, b"abc").unwrap();
     service.rescan("download", &|_, _| {}).unwrap();
-    service.mark_owned("fixture/speech/Q6.gguf");
+    service.mark_owned(
+        "fixture/speech/Q6.gguf",
+        &service.artifacts()["fixture/speech/Q6.gguf"]
+            .key
+            .fingerprint,
+    );
     assert!(service.artifacts()["fixture/speech/Q6.gguf"].owned);
     std::fs::rename(&path, path.with_extension("original")).unwrap();
     std::fs::write(&path, b"abc").unwrap();
@@ -674,6 +687,138 @@ fn replacing_owned_download_with_identical_external_bytes_does_not_inherit_delet
         )
         .is_err());
     assert_eq!(std::fs::read(path).unwrap(), b"abc");
+}
+
+#[test]
+fn checked_partial_handle_verifies_and_publishes_without_overwriting_a_destination() {
+    use std::io::Write;
+    let fixture = Fixture::new();
+    let service = fixture.service("config.json");
+    let owner = service.admit_mutation("fixture/speech/Q6.gguf").unwrap();
+    let partial = owner.root.root.join("Q6.gguf.partial");
+    let destination = owner.root.root.join("Q6.gguf");
+    service
+        .open_partial(&partial, &owner)
+        .unwrap()
+        .write_all(b"abc")
+        .unwrap();
+    let verified = service
+        .verify_download(
+            &partial,
+            Some("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"),
+            &owner,
+        )
+        .unwrap();
+    std::fs::write(&destination, b"retain foreign destination").unwrap();
+    assert!(service
+        .publish_download(verified, &destination, &owner)
+        .is_err());
+    assert_eq!(
+        std::fs::read(&destination).unwrap(),
+        b"retain foreign destination"
+    );
+    std::fs::remove_file(&destination).unwrap();
+    let verified = service
+        .verify_download(
+            &partial,
+            Some("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"),
+            &owner,
+        )
+        .unwrap();
+    let fingerprint = service
+        .publish_download(verified, &destination, &owner)
+        .unwrap();
+    assert!(!partial.exists());
+    service.rescan("complete", &|_, _| {}).unwrap();
+    service.mark_owned("fixture/speech/Q6.gguf", &fingerprint);
+    let record = service.artifacts()["fixture/speech/Q6.gguf"].clone();
+    assert_eq!(record.status, ArtifactStatus::Verified);
+    assert!(record.owned);
+    assert_eq!(std::fs::read(destination).unwrap(), b"abc");
+}
+
+#[test]
+fn an_unowned_partial_cannot_be_opened_for_resume_or_removed() {
+    let fixture = Fixture::new();
+    let service = fixture.service("config.json");
+    let owner = service.admit_mutation("fixture/speech/Q6.gguf").unwrap();
+    let partial = owner.root.root.join("Q6.gguf.partial");
+    std::fs::write(&partial, b"unowned sentinel").unwrap();
+    assert!(service.open_partial(&partial, &owner).is_err());
+    assert!(service.remove_partial(&partial, &owner).is_err());
+    assert_eq!(std::fs::read(partial).unwrap(), b"unowned sentinel");
+}
+
+#[test]
+fn runtime_capabilities_do_not_follow_the_same_model_id_into_a_different_artifact() {
+    use model_runtime_metadata::{Capabilities, RuntimeMetadata};
+    let fixture = Fixture::new();
+    let service = fixture.service("config.json");
+    let metadata = RuntimeMetadata::default();
+    let mut predecessor = None;
+    for (index, name) in ["first", "next"].into_iter().enumerate() {
+        let folder = fixture.path.join(name);
+        std::fs::create_dir(&folder).unwrap();
+        let mut bytes = gguf_header("whisper");
+        bytes.push(index as u8);
+        std::fs::write(folder.join("same.gguf"), bytes).unwrap();
+        let candidate = service.validate(&folder, name, &|_, _| {}).unwrap();
+        service
+            .apply(&candidate.id, candidate.revision, || {})
+            .unwrap();
+        let key = service.artifacts()["same"].key.clone();
+        assert!(metadata.get(&key).is_none());
+        if let Some(old) = predecessor.as_ref() {
+            assert!(!metadata.publish(
+                &service,
+                old,
+                Capabilities {
+                    streaming: false,
+                    translation: false,
+                    language_detection: false,
+                    languages: vec!["stale".into()],
+                }
+            ));
+        }
+        assert!(metadata.publish(
+            &service,
+            &key,
+            Capabilities {
+                streaming: index == 0,
+                translation: false,
+                language_detection: false,
+                languages: vec![name.into()],
+            }
+        ));
+        assert_eq!(metadata.get(&key).unwrap().languages, vec![name]);
+        predecessor = Some(key);
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn dangling_partial_link_never_creates_an_external_target_or_applies_as_a_valid_candidate() {
+    let fixture = Fixture::new();
+    let service = fixture.service("config.json");
+    let owner = service.admit_mutation("fixture/speech/Q6.gguf").unwrap();
+    let partial = owner.root.root.join("Q6.gguf.partial");
+    let outside = fixture.path.join("never-created");
+    std::os::unix::fs::symlink(&outside, &partial).unwrap();
+    assert!(service.open_partial(&partial, &owner).is_err());
+    assert!(!outside.exists());
+    drop(owner);
+    let folder = fixture.path.join("selected");
+    std::fs::create_dir(&folder).unwrap();
+    std::os::unix::fs::symlink(&outside, folder.join("Q6.gguf.partial")).unwrap();
+    let candidate = service.validate(&folder, "dangling", &|_, _| {}).unwrap();
+    assert_eq!(
+        candidate.projection.status,
+        model_roots::RootStatus::Invalid
+    );
+    assert!(service
+        .apply(&candidate.id, candidate.revision, || panic!("published"))
+        .is_err());
+    assert!(!outside.exists());
 }
 
 #[cfg(unix)]

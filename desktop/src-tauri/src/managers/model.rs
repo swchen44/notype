@@ -11,7 +11,6 @@ use super::model_roots_files::{display_path, ArtifactUse, FileStorage, Filesyste
 use super::model_storage::{DownloadState, ModelPathAccess, ModelStorage, StorageSource};
 use crate::settings::{get_settings, write_settings};
 use anyhow::Result;
-use flate2::read::GzDecoder;
 use hf_hub::api::tokio::{ApiBuilder, CancellationToken, Progress};
 use hf_hub::{Cache, Repo, RepoType};
 use log::{debug, error, info, warn};
@@ -20,12 +19,12 @@ use specta::Type;
 use std::collections::BTreeMap;
 use std::collections::{HashMap, HashSet};
 use std::fs;
+#[cfg(test)]
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use tar::Archive;
 use tauri::{AppHandle, Emitter, Manager};
 
 mod download;
@@ -516,8 +515,8 @@ pub struct ModelManager {
     app_handle: AppHandle,
     pub roots: Arc<RootService>,
     available_models: Mutex<HashMap<String, ModelInfo>>,
+    runtime_metadata: super::model_runtime_metadata::RuntimeMetadata,
     cancel_flags: Arc<Mutex<HashMap<String, CancellationToken>>>,
-    extracting_models: Arc<Mutex<HashSet<String>>>,
     /// Single-flight guard for [`Self::rescan_local_models`] so concurrent
     /// refresh requests coalesce instead of scanning the disk in parallel.
     is_rescanning: Arc<AtomicBool>,
@@ -1171,8 +1170,9 @@ impl ModelManager {
             app_handle: app_handle.clone(),
             roots,
             available_models: Mutex::new(available_models),
+            runtime_metadata: Default::default(),
             cancel_flags: Arc::new(Mutex::new(HashMap::new())),
-            extracting_models: Arc::new(Mutex::new(HashSet::new())),
+
             is_rescanning: Arc::new(AtomicBool::new(false)),
         };
 
@@ -1278,6 +1278,20 @@ impl ModelManager {
                     .get(&model.id)
                     .is_some_and(|r| r.status.loadable());
                 model.is_downloading = downloading.contains_key(&model.id);
+                if let Some(caps) = projection
+                    .artifacts
+                    .get(&model.id)
+                    .filter(|record| record.status.loadable())
+                    .and_then(|record| self.runtime_metadata.get(&record.key))
+                {
+                    model.supports_streaming = caps.streaming;
+                    model.supports_translation = caps.translation;
+                    model.supports_language_detection = caps.language_detection;
+                    if !caps.languages.is_empty() {
+                        model.supports_language_selection = caps.languages.len() > 1;
+                        model.supported_languages = caps.languages;
+                    }
+                }
                 model.partial_size = 0;
                 model
             })
@@ -1472,29 +1486,17 @@ impl ModelManager {
         supports_language_detection: bool,
         supported_languages: Vec<String>,
     ) {
-        let model_id = key.model_id.as_str();
-        let supported_languages = canonicalize_supported_languages(supported_languages);
-        let info = self.get_model_info(model_id);
-        self.roots.with_current(key, || {
-            let mut models = self
-                .available_models
-                .lock()
-                .unwrap_or_else(|e| e.into_inner());
-            if let Some(info) = info {
-                models.entry(model_id.to_owned()).or_insert(info);
-            }
-            if let Some(model) = models.get_mut(model_id) {
-                model.supports_streaming = supports_streaming;
-                model.supports_translation = supports_translation;
-                model.supports_language_detection = supports_language_detection;
-                if !supported_languages.is_empty() {
-                    model.supports_language_selection = supported_languages.len() > 1;
-                    model.supported_languages = supported_languages;
-                }
-            }
-        });
+        self.runtime_metadata.publish(
+            &self.roots,
+            key,
+            super::model_runtime_metadata::Capabilities {
+                streaming: supports_streaming,
+                translation: supports_translation,
+                language_detection: supports_language_detection,
+                languages: canonicalize_supported_languages(supported_languages),
+            },
+        );
     }
-
     /// Migrate GigaAM from the old single-file format (giga-am-v3.int8.onnx)
     /// to the new directory format (giga-am-v3-int8/model.int8.onnx + vocab.txt).
     /// This was required by the transcribe-rs 0.3.x upgrade.
@@ -1930,6 +1932,7 @@ impl ModelManager {
         // the known-compatible request pattern.
         const ATTEMPT_STREAMS: [usize; 4] = [4, 1, 1, 1];
         let mut attempt: usize = 1;
+        let mut downloaded_identity = None;
         let hf_error = loop {
             let stream_count = ATTEMPT_STREAMS[attempt - 1];
             info!(
@@ -2009,7 +2012,10 @@ impl ModelManager {
             let _ = watchdog.await;
 
             match result {
-                Ok(_) => break None,
+                Ok(path) => {
+                    downloaded_identity = Some(self.roots.observe_download(&path, &activity)?);
+                    break None;
+                }
                 Err(hf_hub::api::tokio::ApiError::Cancelled) if cancel_token.is_cancelled() => {
                     // User cancelled. hf-hub leaves the partially downloaded
                     // `.sync.part` in the shared cache, so a later attempt resumes
@@ -2096,11 +2102,12 @@ impl ModelManager {
                     )
                     .await
                 {
-                    Ok(true) => {
+                    Ok(Some(fingerprint)) => {
+                        downloaded_identity = Some(fingerprint);
                         completed = true;
                         break;
                     }
-                    Ok(false) => {
+                    Ok(None) => {
                         info!("Mirror download cancelled for: {}", model_id);
                         return Ok(());
                     }
@@ -2128,7 +2135,9 @@ impl ModelManager {
         {
             return Err(anyhow::anyhow!("model-artifact-invalid"));
         }
-        self.roots.mark_owned(&model_id);
+        if let Some(fingerprint) = downloaded_identity {
+            self.roots.mark_owned(&model_id, &fingerprint);
+        }
         self.cancel_flags.lock().unwrap().remove(&model_id);
         let _ = self.emit_model_event("model-download-complete", &model_id);
         info!("HF model {} downloaded", model_id);
@@ -2137,7 +2146,7 @@ impl ModelManager {
 
     /// Direct-HTTP download of a catalog model's file from a mirror into the
     /// models dir (HF-model resolution accepts that location too). Returns
-    /// `Ok(true)` on completion, `Ok(false)` if cancelled (partial kept).
+    /// the published file identity on completion, None if cancelled (partial kept).
     async fn download_from_mirror(
         &self,
         model_id: &str,
@@ -2145,13 +2154,13 @@ impl ModelManager {
         mirror: &crate::catalog::MirrorFile,
         cancel_token: CancellationToken,
         activity: &RootActivity,
-    ) -> Result<bool> {
+    ) -> Result<Option<super::model_roots::Fingerprint>> {
         fs::create_dir_all(&self.root_path())?;
         let model_path = self.root_path().join(filename);
         let partial_path = self.root_path().join(format!("{}.partial", filename));
 
         if model_path.exists() {
-            return Ok(true);
+            return Err(anyhow::anyhow!("model-artifact-invalid"));
         }
 
         match self
@@ -2166,11 +2175,13 @@ impl ModelManager {
             )
             .await?
         {
-            HttpDownloadOutcome::Cancelled => Ok(false),
-            HttpDownloadOutcome::Completed => {
-                fs::rename(&partial_path, &model_path)?;
+            HttpDownloadOutcome::Cancelled => Ok(None),
+            HttpDownloadOutcome::Completed(verified) => {
+                let fingerprint = self
+                    .roots
+                    .publish_download(verified, &model_path, activity)?;
                 info!("Mirror model download completed and verified");
-                Ok(true)
+                Ok(Some(fingerprint))
             }
         }
     }
@@ -2309,7 +2320,7 @@ impl ModelManager {
 
         // URL sources carry no authoritative size, so the helper falls back to
         // the server's content-length for progress and completeness checks.
-        match self
+        let verified = match self
             .download_http_resumable(
                 model_id,
                 &url,
@@ -2327,102 +2338,14 @@ impl ModelManager {
                 // Guard handles is_downloading + cancel_flags cleanup on drop.
                 return Ok(());
             }
-            HttpDownloadOutcome::Completed => {}
-        }
+            HttpDownloadOutcome::Completed(verified) => verified,
+        };
 
-        // Handle directory-based models (extract tar.gz) vs file-based models
-        if model_info.is_directory {
-            // Track that this model is being extracted
-            {
-                let mut extracting = self.extracting_models.lock().unwrap();
-                extracting.insert(model_id.to_string());
-            }
-
-            // Emit extraction started event
-            let _ = self.emit_model_event("model-extraction-started", model_id);
-            info!("Extracting archive for directory-based model: {}", model_id);
-
-            // Use a temporary extraction directory to ensure atomic operations
-            let temp_extract_dir = self
-                .root_path()
-                .join(format!("{}.extracting", &model_info.filename));
-            let final_model_dir = self.root_path().join(&model_info.filename);
-
-            // Clean up any previous incomplete extraction
-            if temp_extract_dir.exists() {
-                let _ = fs::remove_dir_all(&temp_extract_dir);
-            }
-
-            // Create temporary extraction directory
-            fs::create_dir_all(&temp_extract_dir)?;
-
-            // Open the downloaded tar.gz file
-            let tar_gz = File::open(&partial_path)?;
-            let tar = GzDecoder::new(tar_gz);
-            let mut archive = Archive::new(tar);
-
-            // Extract to the temporary directory first
-            archive.unpack(&temp_extract_dir).map_err(|e| {
-                let error_msg = format!("Failed to extract archive: {}", e);
-                // Clean up failed extraction
-                let _ = fs::remove_dir_all(&temp_extract_dir);
-                // Delete the corrupt partial file so the next download attempt starts fresh
-                // instead of resuming from a broken archive (issue #858).
-                let _ = fs::remove_file(&partial_path);
-                // Remove from extracting set
-                {
-                    let mut extracting = self.extracting_models.lock().unwrap();
-                    extracting.remove(model_id);
-                }
-                let _ = self.app_handle.emit(
-                    "model-extraction-failed",
-                    &serde_json::json!({
-                        "model_id": model_id,
-                        "error": error_msg
-                    }),
-                );
-                anyhow::anyhow!(error_msg)
-            })?;
-
-            // Find the actual extracted directory (archive might have a nested structure)
-            let extracted_dirs: Vec<_> = fs::read_dir(&temp_extract_dir)?
-                .filter_map(|entry| entry.ok())
-                .filter(|entry| entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false))
-                .collect();
-
-            if extracted_dirs.len() == 1 {
-                // Single directory extracted, move it to the final location
-                let source_dir = extracted_dirs[0].path();
-                if final_model_dir.exists() {
-                    fs::remove_dir_all(&final_model_dir)?;
-                }
-                fs::rename(&source_dir, &final_model_dir)?;
-                // Clean up temp directory
-                let _ = fs::remove_dir_all(&temp_extract_dir);
-            } else {
-                // Multiple items or no directories, rename the temp directory itself
-                if final_model_dir.exists() {
-                    fs::remove_dir_all(&final_model_dir)?;
-                }
-                fs::rename(&temp_extract_dir, &final_model_dir)?;
-            }
-
-            info!("Successfully extracted archive for model: {}", model_id);
-            // Remove from extracting set
-            {
-                let mut extracting = self.extracting_models.lock().unwrap();
-                extracting.remove(model_id);
-            }
-            // Emit extraction completed event
-            let _ = self.emit_model_event("model-extraction-completed", model_id);
-
-            // Remove the downloaded tar.gz file
-            let _ = fs::remove_file(&partial_path);
-        } else {
-            // Move partial file to final location for file-based models
-            fs::rename(&partial_path, &model_path)?;
-        }
-
+        let fingerprint = self
+            .roots
+            .publish_download(verified, &model_path, &activity)?;
+        self.update_download_status()?;
+        self.roots.mark_owned(model_id, &fingerprint);
         // Disarm the guard — success path does its own cleanup because it
         // additionally sets is_downloaded = true.
         cleanup.disarmed = true;
