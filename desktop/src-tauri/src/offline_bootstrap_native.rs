@@ -14,8 +14,25 @@ use std::{
 use tauri::{AppHandle, Manager};
 
 pub struct NativeBootstrap {
-    root: Option<PathBuf>,
+    placement: Option<notype_platform::OfflinePlacement>,
     operation: Mutex<()>,
+}
+/// Capture/validate before portable initialization or logger/plugin construction.
+pub fn preflight(root: &Path) -> Result<notype_platform::OfflinePlacement, &'static str> {
+    let executable = std::env::current_exe().map_err(|_| "runtime-executable-unavailable")?;
+    let configured = std::env::var_os("NOTYPE_DATA_DIR").map(PathBuf::from);
+    let known_folder = if configured.is_none() {
+        notype_platform::host_report().roaming_app_data
+    } else {
+        None
+    };
+    notype_platform::preflight_offline_placement(
+        &executable,
+        root,
+        configured.as_deref(),
+        known_folder.as_deref(),
+    )
+    .map_err(|error| error.code())
 }
 #[derive(Deserialize)]
 struct Pin {
@@ -142,14 +159,17 @@ pub fn selection_store(app: &AppHandle) -> Result<SelectionStore, ConfigError> {
     )))
 }
 /// Must be called before WebView, headless managers, settings reads or workers.
-pub fn prepare(app: &AppHandle, root: Option<PathBuf>) -> Result<(), Box<dyn std::error::Error>> {
-    if root.is_some() {
+pub fn prepare(
+    app: &AppHandle,
+    placement: Option<notype_platform::OfflinePlacement>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if placement.is_some() {
         offline_bootstrap::begin();
     }
     let manager = Arc::new(ModelManager::new(app)?);
     app.manage(manager);
     app.manage(NativeBootstrap {
-        root,
+        placement,
         operation: Mutex::new(()),
     });
     retry(app);
@@ -163,16 +183,32 @@ pub fn retry(app: &AppHandle) -> BootstrapStatus {
     let Ok(_operation) = native.operation.try_lock() else {
         return offline_bootstrap::status();
     };
-    let Some(root) = native.root.as_ref() else {
+    let Some(placement) = native.placement.as_ref() else {
         return offline_bootstrap::finish(Ok(()));
     };
     offline_bootstrap::begin();
     let result = (|| {
+        let root = placement.bundle_root();
         let input = input(root)?;
         let data = crate::portable::app_data_dir(app)
             .map_err(|_| ConfigError("bootstrap-settings-invalid"))?;
         notype_platform::validate_external_data_directory(root, &data)
             .map_err(|_| ConfigError("bootstrap-package-invalid"))?;
+        let executable =
+            std::env::current_exe().map_err(|_| ConfigError("bootstrap-package-invalid"))?;
+        let rechecked = notype_platform::preflight_offline_placement(
+            &executable,
+            root,
+            Some(placement.data_directory()),
+            None,
+        )
+        .map_err(|_| ConfigError("bootstrap-package-invalid"))?;
+        if data != placement.data_directory()
+            || rechecked.data_directory() != placement.data_directory()
+            || rechecked.bundle_root() != root
+        {
+            return Err(ConfigError("bootstrap-package-invalid"));
+        }
         let selection = selection_store(app)?;
         if let Some(value) = selection.read()? {
             serde_json::from_value::<crate::settings::AppSettings>(value)

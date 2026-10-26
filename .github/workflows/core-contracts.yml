@@ -54,6 +54,11 @@ on:
       - desktop/src/lib/diagnosticIssue.ts
       - desktop/src-tauri/src/provider_*.rs
       - desktop/src-tauri/src/offline_bootstrap*.rs
+      - desktop/src-tauri/src/portable.rs
+      - desktop/src-tauri/src/runtime_startup.rs
+      - tests/integration/bootstrap_preflight.rs
+      - tests/integration/history-metrics.ui.mjs
+      - tests/integration/fixtures/history-api.mjs
       - desktop/src-tauri/src/settings.rs
       - desktop/src-tauri/src/lib.rs
       - desktop/src-tauri/src/faithful_provider.rs

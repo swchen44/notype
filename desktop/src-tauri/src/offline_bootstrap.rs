@@ -141,6 +141,7 @@ pub fn recovery_command(command: &str) -> bool {
             | "get_default_settings"
             | "get_text_configuration"
             | "get_history_entries"
+            | "copy_history_text"
             | "get_workflow_readiness"
             | "get_model_root"
             | "get_model_catalog"

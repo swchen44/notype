@@ -36,6 +36,7 @@ mod paste_tx;
 pub mod portable;
 mod provider_config;
 mod provider_models;
+mod runtime_startup;
 mod secure_input;
 mod settings;
 mod shortcut;
@@ -325,16 +326,11 @@ impl window_lifecycle::MainWindow for NativeMainWindow<'_> {
     }
 }
 
+static RUNTIME_STARTUP: runtime_startup::RuntimeStartup = runtime_startup::RuntimeStartup::new();
+
 fn initialize_core_logic(app_handle: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     initialize_history_logic(app_handle)?;
     if !offline_bootstrap::domains_ready() {
-        return Ok(());
-    }
-    if app_handle
-        .try_state::<Arc<TranscriptionManager>>()
-        .is_some()
-    {
-        offline_bootstrap::runtime_ready();
         return Ok(());
     }
     // Note: Enigo (keyboard/mouse simulation) is NOT initialized here.
@@ -346,42 +342,61 @@ fn initialize_core_logic(app_handle: &AppHandle) -> Result<(), Box<dyn std::erro
     // explicitly, so always-on microphone startup can wire live-preview frames
     // even before Tauri state is populated.
     let model_manager = app_handle.state::<Arc<ModelManager>>().inner().clone();
-    let transcription_manager = Arc::new(TranscriptionManager::new(
-        app_handle,
-        model_manager.clone(),
-    )?);
-    let recording_manager = Arc::new(AudioRecordingManager::new(
-        app_handle,
-        transcription_manager.stream_router(),
-    )?);
-    // History was opened independently, including during incomplete setup.
-    managers::transcription::init_transcribe_backend();
-    managers::transcription::apply_accelerator_settings(app_handle);
-    app_handle.manage(recording_manager.clone());
-    app_handle.manage(TranscriptionCoordinator::new(
-        app_handle.clone(),
-        model_manager.roots.clone(),
-    ));
-    model_manager.start_initial_scan();
-    app_handle.manage(transcription_manager.clone());
-    app_handle.manage(tray::TrayState::new());
-    #[cfg(unix)]
-    signal_handle::setup_signal_handler(app_handle.clone());
-    if let Err(error) = create_tray_icon(app_handle).map(|tray| app_handle.manage(tray)) {
-        log::error!("Failed to initialize tray: {error}");
-    }
-    tray::update_tray_menu(app_handle);
-    let settings = settings::get_settings(app_handle);
-    if !settings.show_tray_icon {
-        tray::set_tray_visibility(app_handle, false);
-    }
-    let app_handle_for_listener = app_handle.clone();
-    app_handle.listen("model-state-changed", move |_| {
-        tray::update_tray_menu(&app_handle_for_listener);
-    });
-    autostart::apply_autostart(app_handle, settings.autostart_enabled);
-    utils::create_recording_overlay(app_handle);
-    offline_bootstrap::runtime_ready();
+    RUNTIME_STARTUP.initialize(
+        || {
+            let ready = app_handle
+                .try_state::<Arc<TranscriptionManager>>()
+                .is_some();
+            if ready {
+                offline_bootstrap::runtime_ready();
+            }
+            ready
+        },
+        || Arc::new(managers::transcription::StreamRouter::new()),
+        |router| {
+            Ok::<_, Box<dyn std::error::Error>>(Arc::new(AudioRecordingManager::new(
+                app_handle, router,
+            )?))
+        },
+        |router| {
+            Ok(Arc::new(TranscriptionManager::with_router(
+                app_handle,
+                model_manager.clone(),
+                router,
+            )?))
+        },
+        |recording_manager, transcription_manager| {
+            // History was opened independently, including during incomplete setup.
+            managers::transcription::init_transcribe_backend();
+            managers::transcription::apply_accelerator_settings(app_handle);
+            app_handle.manage(recording_manager.clone());
+            app_handle.manage(TranscriptionCoordinator::new(
+                app_handle.clone(),
+                model_manager.roots.clone(),
+            ));
+            model_manager.start_initial_scan();
+            app_handle.manage(transcription_manager.clone());
+            app_handle.manage(tray::TrayState::new());
+            #[cfg(unix)]
+            signal_handle::setup_signal_handler(app_handle.clone());
+            if let Err(error) = create_tray_icon(app_handle).map(|tray| app_handle.manage(tray)) {
+                log::error!("Failed to initialize tray: {error}");
+            }
+            tray::update_tray_menu(app_handle);
+            let settings = settings::get_settings(app_handle);
+            if !settings.show_tray_icon {
+                tray::set_tray_visibility(app_handle, false);
+            }
+            let app_handle_for_listener = app_handle.clone();
+            app_handle.listen("model-state-changed", move |_| {
+                tray::update_tray_menu(&app_handle_for_listener);
+            });
+            autostart::apply_autostart(app_handle, settings.autostart_enabled);
+            utils::create_recording_overlay(app_handle);
+            offline_bootstrap::runtime_ready();
+            Ok(())
+        },
+    )?;
     Ok(())
 }
 
@@ -696,6 +711,14 @@ fn run_headless_transcription(app: &AppHandle, args: &CliArgs) -> i32 {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run(cli_args: CliArgs) {
+    // Earlier main/platform work verifies regular bytes and host metadata only.
+    // Capture the entire bundle/data boundary before the first possible write.
+    let offline_placement = cli_args.offline_bundle_root.as_deref().map(|root| {
+        offline_bootstrap_native::preflight(root).unwrap_or_else(|code| {
+            eprintln!("notype: {code}");
+            std::process::exit(2)
+        })
+    });
     // Avoid ggml-metal residency-set teardown assertions when a native engine
     // outlives the Tauri shutdown sequence (#1902). This must happen before
     // transcribe-cpp initializes its Metal device. Advanced users can restore
@@ -715,7 +738,11 @@ pub fn run(cli_args: CliArgs) {
     memory::init_allocator();
 
     // Detect portable mode before anything else
-    portable::init();
+    portable::init(
+        offline_placement
+            .as_ref()
+            .map(|placement| placement.data_directory()),
+    );
 
     // Parse console logging directives from RUST_LOG, falling back to info-level logging
     // when the variable is unset
@@ -1017,7 +1044,7 @@ pub fn run(cli_args: CliArgs) {
             );
 
             specta_builder.mount_events(app);
-            offline_bootstrap_native::prepare(app.handle(),cli_args.offline_bundle_root.clone())?;
+            offline_bootstrap_native::prepare(app.handle(),offline_placement.clone())?;
 
             // Headless one-shot path (`--transcribe-file` / `--list-devices` /
             // `--list-models`): initialize only what transcription needs — the

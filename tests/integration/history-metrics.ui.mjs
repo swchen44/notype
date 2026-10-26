@@ -12,7 +12,9 @@ test("incomplete setup keeps original and result history copy on the safe existi
   await page
     .getByRole("button", { name: "Copy original", exact: true })
     .click();
-  await page.getByRole("button", { name: "Copy result", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Copy edited result", exact: true })
+    .click();
   assert.deepEqual(
     await page.evaluate(() =>
       window.calls

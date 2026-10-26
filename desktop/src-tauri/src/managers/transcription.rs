@@ -171,7 +171,7 @@ pub struct StreamRouter {
 }
 
 impl StreamRouter {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             tx: Mutex::new(None),
             open: Arc::new(AtomicBool::new(false)),
@@ -337,6 +337,14 @@ pub struct TranscriptionManager {
 
 impl TranscriptionManager {
     pub fn new(app_handle: &AppHandle, model_manager: Arc<ModelManager>) -> Result<Self> {
+        Self::with_router(app_handle, model_manager, Arc::new(StreamRouter::new()))
+    }
+    /// Compose only after fallible audio preparation, sharing its exact router.
+    pub(crate) fn with_router(
+        app_handle: &AppHandle,
+        model_manager: Arc<ModelManager>,
+        router: Arc<StreamRouter>,
+    ) -> Result<Self> {
         let manager = Self {
             engine: Arc::new(Mutex::new(EngineState::new())),
             model_manager,
@@ -347,7 +355,7 @@ impl TranscriptionManager {
             is_loading: Arc::new(Mutex::new(false)),
             loading_condvar: Arc::new(Condvar::new()),
             reload_model_on_next_use: Arc::new(AtomicBool::new(false)),
-            router: Arc::new(StreamRouter::new()),
+            router,
             stream_active: Arc::new(AtomicBool::new(false)),
             next_stream_worker_id: Arc::new(AtomicU64::new(1)),
             active_stream_worker: Arc::new(AtomicU64::new(0)),

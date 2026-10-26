@@ -24,10 +24,14 @@ impl RuntimeStartup {
             return Ok(false);
         }
         let router = router();
-        // Initially captures the reviewed construction order for a behavioral RED.
-        let transcription = transcription(router.clone())?;
-        let audio = audio(router)?;
+        let audio = audio(router.clone())?;
+        let transcription = transcription(router)?;
         publish(audio, transcription)?;
         Ok(true)
+    }
+}
+impl Default for RuntimeStartup {
+    fn default() -> Self {
+        Self::new()
     }
 }
