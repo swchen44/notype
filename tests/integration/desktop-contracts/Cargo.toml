@@ -5,6 +5,14 @@ edition = "2021"
 publish = false
 
 [[test]]
+name = "provider-probe-policy"
+path = "../../unittest/provider_probe_policy.rs"
+
+[[test]]
+name = "provider-probe-runtime"
+path = "../provider_probe_contracts.rs"
+
+[[test]]
 name = "provider-bootstrap"
 path = "../../unittest/provider_bootstrap.rs"
 
@@ -21,6 +29,10 @@ name = "bootstrap-preflight"
 path = "../bootstrap_preflight.rs"
 
 [workspace]
+
+[[bin]]
+name = "notype-provider-probe"
+path = "../provider_probe_main.rs"
 
 [[bin]]
 name = "notype-deepseek-probe"

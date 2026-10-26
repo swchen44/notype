@@ -13,6 +13,7 @@ use std::sync::{
 
 #[path = "faithful_provider.rs"]
 mod faithful_provider;
+pub use faithful_provider::experiment;
 pub use faithful_provider::{
     probe_processor as probe_text_processor, processor as text_processor,
     processor_with_trace as text_processor_with_trace, RuntimeCredential, ScenarioPrompts,

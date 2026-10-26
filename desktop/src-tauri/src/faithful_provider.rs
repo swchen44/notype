@@ -13,6 +13,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{sync::Arc, time::Duration};
 
+#[path = "provider_experiment.rs"]
+pub mod experiment;
+
 #[derive(Clone, Copy, Default, Serialize, Deserialize, specta::Type, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 /// Explicit transport choice; Disabled performs no text-service request.
@@ -423,6 +426,7 @@ impl TextConfiguration {
 }
 
 struct ChatProcessor {
+    experiment: Option<experiment::ExperimentContract>,
     credential: Option<RuntimeCredential>,
     request_parameters: Option<notype_core::observations::RequestParameters>,
     credential_source: Option<String>,
@@ -496,6 +500,7 @@ impl ChatProcessor {
         }
         let client = client.build().map_err(|_| invalid)?;
         Ok(Self {
+            experiment: None,
             credential,
             request_parameters: configuration.request_parameters,
             credential_source: configuration.credential_source,
@@ -654,6 +659,7 @@ impl ChatProcessor {
         let thinking_override = self.thinking_override;
         let temperature = self.temperature;
         let top_p = self.top_p;
+        let experiment = self.experiment.clone();
         Box::pin(async move {
             if cancellation.is_cancelled() {
                 return Err(TextFailure::Cancelled);
@@ -693,6 +699,9 @@ impl ChatProcessor {
             }
             if let Some(value) = max_output_tokens {
                 body["max_tokens"] = json!(value);
+            }
+            if let Some(policy) = &experiment {
+                policy.apply(&mut body);
             }
             let wire = serde_json::to_vec(&body).map_err(|_| TextFailure::ConfigurationRequired)?;
             if let Some(parameters) = &mut request_parameters {
@@ -741,6 +750,9 @@ impl ChatProcessor {
                     })
                 }) && body.get("tools").is_none(),
             };
+            if let Some(policy) = &experiment {
+                policy.validate_wire(&endpoint, &wire, &descriptor)?;
+            }
             let revision = observer
                 .as_ref()
                 .and_then(|observer| observer.processing_revision());
@@ -834,6 +846,7 @@ impl ChatProcessor {
             if let Some(authorization) = authorization {
                 request = request.header(reqwest::header::AUTHORIZATION, authorization);
             }
+            let mut observed_status = None;
             let operation = async {
                 if let Some(guard) = &mut guard {
                     if let Err(error) = guard.mark_sent() {
@@ -857,6 +870,10 @@ impl ChatProcessor {
                     .map_err(|error| trace_transport(&mut trace, error))?;
                 let success = response.status().is_success();
                 let status = response.status().as_u16();
+                observed_status = Some(status);
+                if let Some(policy) = &experiment {
+                    policy.headers(status);
+                }
                 if let Some(event) = trace.metadata() {
                     event.http_status = Some(status);
                 }
@@ -905,6 +922,9 @@ impl ChatProcessor {
                 };
                 let private_metadata = receipt.reported_model.as_deref().is_some_and(reflected)
                     || receipt.reported_effort.as_deref().is_some_and(reflected);
+                let experiment_response_valid = experiment
+                    .as_ref()
+                    .is_none_or(|policy| policy.response_valid(&value, &receipt, &bytes));
                 if receipt.reported_model.as_deref().is_some_and(reflected) {
                     receipt.reported_model = None;
                 }
@@ -923,6 +943,12 @@ impl ChatProcessor {
                 }
                 if let Some(error) = GatewayError::classify(status, Some(&value)) {
                     return Err(TextFailure::Provider(error));
+                }
+                if !experiment_response_valid {
+                    if let Some(policy) = &experiment {
+                        policy.contract_failed(Some(status));
+                    }
+                    return Err(TextFailure::InvalidResponse);
                 }
                 if private_metadata {
                     return Err(TextFailure::InvalidResponse);
@@ -954,6 +980,9 @@ impl ChatProcessor {
                 Ok(output)
             };
             let result = tokio::select! {biased; _=cancellation.cancelled()=>Err(TextFailure::Cancelled),result=tokio::time::timeout(deadline,operation)=>result.unwrap_or(Err(TextFailure::Timeout))};
+            if let (Some(policy), Err(error)) = (&experiment, &result) {
+                policy.failed(*error, observed_status);
+            }
             let (trace_result, category) = result
                 .as_ref()
                 .map(|_| {
