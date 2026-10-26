@@ -261,3 +261,144 @@ async fn actual_csv_replace_failure_halts_next_request_and_preserves_core_journa
     finished.send(()).unwrap();
     server.await.unwrap();
 }
+
+#[tokio::test]
+async fn actual_helper_reservation_and_core_send_commit_faults_prevent_http_without_refunding() {
+    for core_fault in [false, true] {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let endpoint = workflow::experiment::OwnedLoopback::from_listener(&listener).unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let listener = TcpListener::from_std(listener).unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path().join("owned");
+        let mut runner = ProbeRunner::for_owned_fixture(
+            &root,
+            endpoint,
+            identity(),
+            diagnostics::api::TraceContext::global(None),
+            Arc::new(probe::runner::RuntimeCancellationTimer),
+            Arc::new(OwnedSpace),
+        )
+        .unwrap();
+        let core = rusqlite::Connection::open(root.join("results/sessions.db")).unwrap();
+        let helper = rusqlite::Connection::open(root.join("round/round.sqlite")).unwrap();
+        if core_fault {
+            core.execute_batch("CREATE TRIGGER fail_sent BEFORE UPDATE OF send_state ON api_calls WHEN NEW.send_state='possibly_sent' BEGIN SELECT RAISE(FAIL,'owned core fault');END;").unwrap();
+        } else {
+            helper.execute_batch("CREATE TRIGGER fail_reserve BEFORE UPDATE ON reservation WHEN json_extract(NEW.payload,'$.records[0].state')='PossiblySent' BEGIN SELECT RAISE(FAIL,'owned helper fault');END;").unwrap();
+        }
+        assert!(runner.next().await.is_err());
+        assert!(runner.next().await.is_err());
+        assert!(
+            tokio::time::timeout(Duration::from_millis(100), listener.accept())
+                .await
+                .is_err()
+        );
+        let (calls, sent): (u64, u64) = core
+            .query_row(
+                "SELECT COUNT(*),COALESCE(SUM(send_state!='queued'),0) FROM api_calls",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!((calls, sent), (1, 0));
+        assert_eq!(
+            runner.snapshot().unwrap().reservation_units().unwrap(),
+            if core_fault { 104_448 } else { 0 }
+        );
+    }
+}
+
+#[tokio::test]
+async fn diagnostics_off_helper_finish_failure_blocks_automatic_reverse_after_real_forward_flush() {
+    use diagnostics::{api::*, service::*};
+    struct Off;
+    impl DiagnosticStorage for Off {
+        fn load_preference(&self) -> Result<Option<bool>, &'static str> {
+            Ok(Some(false))
+        }
+        fn save_preference(&self, _: bool) -> Result<(), &'static str> {
+            Ok(())
+        }
+        fn write_report(&self, _: &std::path::Path, _: &str) -> Result<(), &'static str> {
+            Err("unused")
+        }
+    }
+    struct Observer(Arc<DiagnosticService>);
+    impl ApiObserver for Observer {
+        fn begin(
+            &self,
+            scope: Option<ScopeBinding>,
+            revision: Option<u64>,
+        ) -> Option<TraceIdentity> {
+            self.0.begin_api(scope, revision)
+        }
+        fn record(&self, event: ApiEvent) {
+            self.0.record_api(event);
+        }
+    }
+    let service = Arc::new(DiagnosticService::new());
+    service.initialize(Arc::new(Off));
+    assert!(!service.status().enabled);
+    let tracing = TraceContext::new(
+        None,
+        Arc::new(capture_startup::MonotonicClock),
+        Arc::new(Observer(service.clone())),
+    );
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let endpoint = workflow::experiment::OwnedLoopback::from_listener(&listener).unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let listener = TcpListener::from_std(listener).unwrap();
+    let (finished, wait) = oneshot::channel();
+    let server = tokio::spawn(async move {
+        for slot in 1..=5 {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            request(&mut stream).await;
+            stream.write_all(reply(slot).as_bytes()).await.unwrap();
+        }
+        wait.await.unwrap();
+        assert!(
+            tokio::time::timeout(Duration::from_millis(100), listener.accept())
+                .await
+                .is_err()
+        );
+    });
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path().join("owned");
+    let mut runner = ProbeRunner::for_owned_fixture(
+        &root,
+        endpoint,
+        identity(),
+        tracing,
+        Arc::new(probe::runner::RuntimeCancellationTimer),
+        Arc::new(OwnedSpace),
+    )
+    .unwrap();
+    for _ in 0..4 {
+        runner.next().await.unwrap().unwrap();
+    }
+    let helper = rusqlite::Connection::open(root.join("round/round.sqlite")).unwrap();
+    helper.execute_batch("CREATE TRIGGER fail_finish BEFORE UPDATE ON reservation WHEN json_extract(NEW.payload,'$.records[4].state')='Finished' BEGIN SELECT RAISE(FAIL,'owned callback fault');END;").unwrap();
+    assert!(runner.next().await.is_err());
+    assert!(runner.next().await.is_err());
+    let entries = runner.sessions().search("").unwrap();
+    let forward = entries
+        .iter()
+        .find(|entry| entry.transcript == REVIEW)
+        .unwrap();
+    assert_eq!(
+        forward.result.as_deref(),
+        Some("Do not delete API_42; keep timeout at 0.5 seconds.")
+    );
+    assert!(forward.back_translation.is_none());
+    let core = rusqlite::Connection::open(root.join("results/sessions.db")).unwrap();
+    assert_eq!(
+        core.query_row("SELECT COUNT(*) FROM api_calls", [], |row| row
+            .get::<_, u64>(0))
+            .unwrap(),
+        5
+    );
+    assert!(!service.status().enabled);
+    finished.send(()).unwrap();
+    server.await.unwrap();
+}

@@ -245,7 +245,36 @@ impl ExperimentContract {
             || value["usage"]["cost"]
                 .as_f64()
                 .is_some_and(|cost| cost.is_finite() && cost == 0.0);
-        coherent_receipt(receipt) && zero_cost && no_numeric_underflow(raw)
+        coherent_receipt(receipt)
+            && zero_cost
+            && no_numeric_underflow(raw)
+            && receipt
+                .reported_model
+                .as_deref()
+                .is_some_and(|label| !self.documented_contradiction(label))
+    }
+    fn documented_contradiction(&self, label: &str) -> bool {
+        let label = label.to_ascii_lowercase();
+        let label = label.strip_suffix(":free").unwrap_or(&label);
+        // Only exact documented comparison/served IDs establish a contradiction.
+        // Unknown aliases remain observations; no prefix/substring invents an
+        // equivalence rule or rejects an otherwise unverified provider label.
+        let another_fixed_family = matches!(
+            label,
+            "google/gemma-4-26b-a4b-it"
+                | "gemini-3.8-flash"
+                | "gemini-3.5-flash-lite"
+                | "qwen/qwen3.8-27b"
+                | "deepseek-v4-pro"
+                | "deepseek-v4-pro-0813"
+        );
+        another_fixed_family
+            || match self.kind {
+                ExperimentKind::DeepSeekFlash => label == "google/gemma-4-31b-it",
+                ExperimentKind::OpenRouterGemma31bFreeGoogleAiStudio => {
+                    matches!(label, "deepseek-flash" | "deepseek-v4.1-flash-1017")
+                }
+            }
     }
     pub(super) fn contract_failed(&self, status: Option<u16>) {
         self.latch.mark(AdverseCategory::Contract, status);

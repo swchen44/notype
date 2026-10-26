@@ -108,6 +108,12 @@ pub fn verify(
             .find(|entry| entry.id == id)
             .ok_or(Failure::Storage)?;
         let expected_calls = entry.api_summary.observed_call_count;
+        let label = |value: &notype_core::observations::Completeness| match value {
+            notype_core::observations::Completeness::NotApplicable => "not_applicable",
+            notype_core::observations::Completeness::Complete => "complete",
+            notype_core::observations::Completeness::Partial => "partial",
+            notype_core::observations::Completeness::Unknown => "unknown",
+        };
         if get(row, "format_version")? != "2"
             || get(row, "original_text")? != entry.transcript
             || get(row, "result_text")? != entry.result.as_deref().unwrap_or("")
@@ -117,6 +123,50 @@ pub fn verify(
                 != entry
                     .api_summary
                     .call_count
+                    .map(|v| v.to_string())
+                    .unwrap_or_default()
+            || get(row, "input_tokens_status")? != label(&entry.api_summary.input.status)
+            || get(row, "output_tokens_status")? != label(&entry.api_summary.output.status)
+            || get(row, "input_tokens")?
+                != entry
+                    .api_summary
+                    .input
+                    .total
+                    .map(|v| v.to_string())
+                    .unwrap_or_default()
+            || get(row, "output_tokens")?
+                != entry
+                    .api_summary
+                    .output
+                    .total
+                    .map(|v| v.to_string())
+                    .unwrap_or_default()
+            || get(row, "input_tokens_reported_calls")?
+                != entry.api_summary.input.reported_calls.to_string()
+            || get(row, "output_tokens_reported_calls")?
+                != entry.api_summary.output.reported_calls.to_string()
+            || get(row, "original_count")?
+                != entry
+                    .observations
+                    .original_count
+                    .map(|v| v.to_string())
+                    .unwrap_or_default()
+            || get(row, "result_count")?
+                != entry
+                    .observations
+                    .result_count
+                    .map(|v| v.to_string())
+                    .unwrap_or_default()
+            || get(row, "latest_processing_ms")?
+                != entry
+                    .observations
+                    .latest_processing_ms
+                    .map(|v| v.to_string())
+                    .unwrap_or_default()
+            || get(row, "api_stage_ms")?
+                != entry
+                    .observations
+                    .latest_api_ms
                     .map(|v| v.to_string())
                     .unwrap_or_default()
             || get(row, "input_tokens_known_subtotal")?
@@ -155,6 +205,26 @@ pub fn verify(
             .collect::<Vec<_>>();
         if options != serde_json::to_value(expected).map_err(|_| Failure::Storage)? {
             return Err(Failure::Storage);
+        }
+        for (column, expected) in [
+            (
+                "api_requested_models",
+                serde_json::to_value(&entry.api_summary.requested_models),
+            ),
+            (
+                "api_reported_models",
+                serde_json::to_value(&entry.api_summary.reported_models),
+            ),
+            (
+                "api_model_efforts",
+                serde_json::to_value(&entry.api_summary.model_efforts),
+            ),
+        ] {
+            let actual: serde_json::Value =
+                serde_json::from_str(&get(row, column)?).map_err(|_| Failure::Storage)?;
+            if actual != expected.map_err(|_| Failure::Storage)? {
+                return Err(Failure::Storage);
+            }
         }
         calls = calls.checked_add(expected_calls).ok_or(Failure::Storage)?;
     }
