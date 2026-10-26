@@ -15,6 +15,10 @@ path = "../provider_probe_contracts.rs"
 [workspace]
 
 [[bin]]
+name = "notype-provider-probe"
+path = "../provider_probe_main.rs"
+
+[[bin]]
 name = "notype-deepseek-probe"
 path = "../deepseek_probe_main.rs"
 
