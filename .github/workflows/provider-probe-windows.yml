@@ -1,0 +1,88 @@
+name: Private provider helper Windows contracts
+
+on:
+  push:
+    branches: [main, implement/notype-mvp, ticket/25-provider-probe-v4]
+    paths:
+      - .github/workflows/provider-probe-windows.yml
+      - desktop/src-tauri/src/provider_probe/**
+      - desktop/src-tauri/src/provider_experiment.rs
+      - desktop/src-tauri/src/faithful_provider.rs
+      - tests/integration/provider_probe*.rs
+      - tests/unittest/provider_probe_policy.rs
+      - tests/integration/desktop-contracts/**
+  workflow_dispatch:
+    inputs:
+      reviewed_source:
+        description: Exact merged SHA with independent Spec0, Standards0 and applicable ALL CI
+        required: true
+        type: string
+      build_private_artifact:
+        description: Root auditor has verified all source gates; build only, never activate
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  contracts:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Install the pinned ordinary Rust toolchain
+        run: rustup toolchain install 1.99.1 --profile minimal --component rustfmt --component clippy
+      - name: Exercise real owned HTTP and SQLite contracts without credentials
+        run: cargo +1.99.1 test --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test provider-probe-policy --test provider-probe-runtime
+      - name: Lint the same helper contracts
+        run: cargo +1.99.1 clippy --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test provider-probe-policy --test provider-probe-runtime -- -D warnings
+  artifact:
+    if: github.event_name == 'workflow_dispatch' && inputs.build_private_artifact
+    needs: contracts
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Verify exact private source before a nonsecret compile pin
+        shell: pwsh
+        env:
+          REVIEWED_SOURCE: ${{ inputs.reviewed_source }}
+          PRIVATE_REPOSITORY: ${{ github.event.repository.private }}
+        run: |
+          $source = (git rev-parse HEAD).Trim()
+          if ($env:PRIVATE_REPOSITORY -ne 'true' -or $env:REVIEWED_SOURCE -cnotmatch '^[0-9a-f]{40}$' -or $source -cne $env:REVIEWED_SOURCE -or (git status --porcelain)) { throw 'probe-source-gate-failed' }
+          "NOTYPE_PROVIDER_PROBE_SOURCE_COMMIT=$source" >> $env:GITHUB_ENV
+      - run: rustup toolchain install 1.99.1 --profile minimal
+      - name: Build the ordinary headless executable only
+        run: cargo +1.99.1 build --locked --release --manifest-path tests/integration/desktop-contracts/Cargo.toml --bin notype-provider-probe
+      - name: Prepare exact manifest and fixed instructions without execution
+        shell: pwsh
+        run: |
+          $stage = Join-Path $env:RUNNER_TEMP 'provider-probe-private-artifact'
+          New-Item -ItemType Directory -Path $stage -ErrorAction Stop | Out-Null
+          $binary = 'tests/integration/desktop-contracts/target/release/notype-provider-probe.exe'
+          $item = Get-Item -LiteralPath $binary
+          if ($item.Length -le 0 -or $item.Length -gt 33554432) { throw 'probe-artifact-bound' }
+          Copy-Item -LiteralPath $binary -Destination $stage
+          Copy-Item -LiteralPath scripts/Start-provider-probe.cmd -Destination $stage
+          Copy-Item -LiteralPath docs/provider-probe-README.txt -Destination $stage
+          $vs = & "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe" -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $dumpbin = Get-ChildItem -LiteralPath (Join-Path $vs 'VC/Tools/MSVC') -Filter dumpbin.exe -Recurse | Where-Object { $_.FullName -match 'Hostx64.x64.dumpbin.exe$' } | Sort-Object FullName -Descending | Select-Object -First 1
+          if (!$dumpbin) { throw 'probe-import-tool-unavailable' }
+          $dependencyOutput = & $dumpbin.FullName /DEPENDENTS $binary
+          if ($LASTEXITCODE -ne 0) { throw 'probe-import-observation-failed' }
+          $imports = @($dependencyOutput | ForEach-Object { $_.Trim() } | Where-Object { $_ -match '^[A-Za-z0-9_.-]+[.]dll$' } | Sort-Object -Unique)
+          if ($imports.Count -eq 0 -or $imports.Count -gt 128) { throw 'probe-import-observation-failed' }
+          $manifest = [ordered]@{ source=$env:NOTYPE_PROVIDER_PROBE_SOURCE_COMMIT; binary_sha256=(Get-FileHash -LiteralPath $binary -Algorithm SHA256).Hash.ToLowerInvariant(); binary_bytes=$item.Length; lock_sha256=(Get-FileHash tests/integration/desktop-contracts/Cargo.lock -Algorithm SHA256).Hash.ToLowerInvariant(); workflow_sha256=(Get-FileHash .github/workflows/provider-probe-windows.yml -Algorithm SHA256).Hash.ToLowerInvariant(); toolchain='1.99.1'; workflow_run_id=[UInt64]$env:GITHUB_RUN_ID; artifact_name='notype-provider-probe-v4'; imports=$imports }
+          $manifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $stage 'manifest.json') -Encoding utf8NoBOM
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: notype-provider-probe-v4
+          path: ${{ runner.temp }}/provider-probe-private-artifact/*
+          if-no-files-found: error
+          retention-days: 7

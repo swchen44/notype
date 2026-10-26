@@ -34,6 +34,8 @@ pub struct Coordinator {
 /// Owned destination/quota boundary, called before every real observer begin
 /// and reservation. Failure prevents HTTP; it never supplies a spending permit.
 pub trait ResourceGate: Send + Sync {
+    /// Observe actual remaining owned allocation and coexisting volume floors;
+    /// an unavailable observation fails admission without polling HTTP.
     fn checkpoint(&self) -> Result<(), Failure>;
 }
 impl Coordinator {

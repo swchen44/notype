@@ -373,7 +373,11 @@ impl ResourceGate for QuotaGate {
         }
         let c_remaining = 128 * MIB - self.c_hwm;
         let d_remaining = 32 * MIB - high.saturating_add(self.d_launcher).min(32 * MIB);
-        let c_required = 2 * 1024 * MIB + 32 * MIB + 4257 * MIB + 32 * MIB + c_remaining;
+        // Keep the original P28 allowance, current bootstrap32MiB and Node16MiB
+        // alongside the future P14 budget. Actual existing allocations remain
+        // reflected in AvailableSpace; they are never refunded or deleted.
+        let c_required =
+            2 * 1024 * MIB + 32 * MIB + 4257 * MIB + 32 * MIB + 32 * MIB + 16 * MIB + c_remaining;
         let d_required = 1024 * MIB + 32 * MIB + 2817 * MIB + MIB + d_remaining;
         if available(Path::new("C:/"))? < c_required || available(Path::new("D:/"))? < d_required {
             return Err(Failure::Resource);
@@ -384,7 +388,10 @@ impl ResourceGate for QuotaGate {
 impl notype_core::csv::CsvSpaceProbe for QuotaGate {
     fn available_bytes(&self, directory: &Path) -> Result<u64, notype_core::csv::CsvExportError> {
         self.checkpoint()
-            .and_then(|_| available(directory))
+            .and_then(|_| {
+                let current = *self.runtime_hwm.lock().map_err(|_| Failure::Resource)?;
+                Ok(available(directory)?.min((24 * MIB).saturating_sub(current)))
+            })
             .map_err(|_| notype_core::csv::CsvExportError::SpaceUnavailable)
     }
 }

@@ -6,6 +6,9 @@ mod capture_startup;
 #[path = "../../desktop/src-tauri/src/diagnostics.rs"]
 mod diagnostics;
 #[allow(dead_code)]
+#[path = "../../desktop/src-tauri/src/provider_probe/mod.rs"]
+mod probe;
+#[allow(dead_code)]
 #[path = "../../desktop/src-tauri/src/provider_config.rs"]
 mod provider_config;
 #[allow(dead_code, unused_imports)]
@@ -20,5 +23,6 @@ use tokio::{
     sync::oneshot,
 };
 use workflow::TextConfiguration;
+mod provider_probe_evidence;
 mod provider_probe_runtime;
 mod provider_probe_transport;

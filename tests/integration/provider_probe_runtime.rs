@@ -1,9 +1,7 @@
 //! Actual sealed transport, authorization journal and production core stores.
-use super::*;
-#[allow(dead_code)]
-#[path = "../../desktop/src-tauri/src/provider_probe/mod.rs"]
-mod probe;
+use super::probe;
 use super::provider_config;
+use super::*;
 use probe::{
     journal::{Identity, State},
     policy::{DICTATION, REVIEW},
