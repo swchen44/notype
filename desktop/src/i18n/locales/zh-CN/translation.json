@@ -1,5 +1,11 @@
 {
   "notype": {
+    "bootstrap": {
+      "title": "首次设置尚未完成",
+      "description": "离线包默认设置尚未完整保存，录音与 API 操作暂停。仍可查看文字历史、安全设置及模型文件夹；如有需要，请选择有效的模型文件夹后重试。",
+      "retry": "重试设置",
+      "retrying": "重试中…"
+    },
     "modelFolder": {
       "cancel": "取消",
       "reload": "重新加载模型文件夹",
