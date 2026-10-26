@@ -1,5 +1,13 @@
 # Windows 11 開發接手
 
+## 最新 checkpoint：#26/#27 來源驗收完成
+
+2026-10-26 08:56：完整多連線／key fallback／thinking／模型清單／安全 API diagnostics 的 exact source `ab9e785e6b1faac2d70a759ed70b6582245b49ab`，以保留歷史的 merge `c5605f44ecb50ad36ee16e57f7e26973b8887974` 合入 `implement/notype-mvp`。獨立 Spec **0 未解**、Standards **0 違反／0 未解 smell**；[完整 ALL CI40251455558](https://github.com/swchen44/notype/actions/runs/40251455558) 在 exact ab9 **completed/success**，兩個 job 全通過：core49＋doc1、platform4、desktop158（另1個由通過的 parent 明確執行的 controlled child role）、Node24／18、UI3／66；lint／Clippy／TypeScript／Vite 通過。見 [最終 receipt／計畫與審查](docs/verification/provider-config.md) 及 [parent gate](https://github.com/swchen44/notype/issues/25#issuecomment-6405850082)。#26/#27 的 issue 明訂 source-only，來源／owned fixtures 已完成；native／live 驗收留在 #25/#14/#8，父規格仍 open。
+
+下一個產品實作 frontier 為 **#28 模型根目錄選取／重用**（[計畫](https://github.com/swchen44/notype/issues/28#issuecomment-6405356803)／[Astra 核准0](https://github.com/swchen44/notype/issues/28#issuecomment-6405400881)），之後 **#29 完整離線 ZIP／可選無 key 管理者預設**（[計畫](https://github.com/swchen44/notype/issues/29#issuecomment-6405357391)／[核准0](https://github.com/swchen44/notype/issues/29#issuecomment-6405428255)）；這次 merge 尚未包含兩者產品實作。使用者自行移動模型，App 重新指定／重用，不替使用者搬移。基本 App 缺模型可開設定，完整 ZIP 嚴格驗證宣告模型。**P14-build-v5／delivery-v5 現已實際 Astra 核准0**：[build 計畫](https://github.com/swchen44/notype/issues/14#issuecomment-6405766076)／[核准](https://github.com/swchen44/notype/issues/14#issuecomment-6405783543)，[delivery 計畫](https://github.com/swchen44/notype/issues/14#issuecomment-6405766320)／[核准](https://github.com/swchen44/notype/issues/14#issuecomment-6405789439)；依賴 #28/#29，核准不代表新版 App、原生 build 或 ZIP 已完成。
+
+來源階段 leases 全部交還，worktrees／review references 保留。沒有本機 Cargo、原生 App、真實 home/key、使用者 profile、live／paid API、npm／ZIP 交付或清理；保護原 App／Starter／模型／歷史。最近先前資源觀測約 C6.85GB／D4.14GB，舊空間不足文字已過時；任何 native 工作仍先做當下 budget／resource gate。#25/#8／native／live／公司與五 App 未驗收項目維持 open。以下所有較舊 checkpoint 的時態，以本節及 live issues 為準。
+
 更新日期：2026-10-26。Repository：[swchen44/notype](https://github.com/swchen44/notype)，private。
 
 使用者已決定在自己的 **Windows 11** 開發，MVP 只交付 **Windows amd64／x64**；架構預留 **macOS／Linux**，見 [ADR 0003](docs/adr/0003-shared-core-platform-adapters.md)。目前尚未交付 macOS／Linux App。Q1～Q15 為原始決策，後續三場景與點按操作更新以 #8／decision log 為準，不重問已確認項目。
