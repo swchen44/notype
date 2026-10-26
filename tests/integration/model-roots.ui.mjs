@@ -1240,3 +1240,28 @@ test("Show folder uses the generation-bound native action, safely retries and re
     [],
   );
 });
+
+test("a new root generation with a failed catalog refresh never presents the previous folder as current", async (t) => {
+  const page = await fixture(t, "settings");
+  await page.getByText("D:\\synthetic-empty", { exact: true }).waitFor();
+  await page.evaluate(() => {
+    window.handlers.get_model_catalog = () => {
+      throw new Error("PRIVATE_NEW_ROOT_FETCH");
+    };
+    window.emitModelEvent("model-root-changed", { generation: 2 });
+  });
+  await page.getByRole("alert").waitFor();
+  assert.equal(
+    await page.getByText("D:\\synthetic-empty", { exact: true }).count(),
+    0,
+  );
+  await page
+    .getByRole("button", { name: "Reload model folder", exact: true })
+    .waitFor();
+  assert.equal(
+    await page
+      .getByRole("button", { name: "Show folder", exact: true })
+      .isDisabled(),
+    true,
+  );
+});

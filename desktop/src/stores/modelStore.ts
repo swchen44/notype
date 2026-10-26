@@ -105,7 +105,13 @@ export const useModelStore = create<ModelsStore>()(
       ++selectionRequest;
       validationRequest = null;
       operations.clear();
-      set({ generation, models: [], artifacts: {}, ...transient() });
+      set({
+        generation,
+        root: null,
+        models: [],
+        artifacts: {},
+        ...transient(),
+      });
     };
     const clearDownload = (modelId: string) =>
       set(
