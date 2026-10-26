@@ -295,7 +295,7 @@ impl Diagnostics {
                         .map(|value| value.to_string())
                         .unwrap_or_else(|| "unassociated".into())
                 };
-                let _=write!(text," api_call={} epoch={} preference_revision={} session={} revision={} connection={} correlation_reassigned={} api_span={} last_span={} api_result={} category={} call_elapsed_ms={} http_status={} body_bytes={} bytes_capped={} body_complete={} body_cap_hit={} durable_admission={} possibly_sent={} cancel_requested={} timeout_source={} connect_related={:?} scenario={} purpose={} method={} profile={} endpoint_class={} auth_kind={} credential_source={} credential_present={} model_present={} reported_model_present={} model_matches_requested={:?} model_list_count={:?} effort={} thinking={:?} max_output_tokens={:?} timeout_ms={} request_bytes={} message_count={} non_streaming={} plain_text_only={}",api.identity.call,api.identity.binding.token.epoch,api.identity.binding.token.revision,number(scope.session.map(u64::from)),number(scope.revision),number(scope.connection.map(u64::from)),api.identity.binding.correlation_reassigned,api.span.label(),api.last_span.label(),api.result.label(),api.error.label(),api.call_elapsed_ms,number(api.http_status.map(u64::from)),api.body_bytes,api.bytes_capped,api.body_complete,api.body_cap_hit,api.durable_admission,api.possibly_sent,api.cancel_requested,api.timeout_source.label(),api.connect_related,api.options.scenario.label(),api.options.purpose.label(),api.options.method.label(),api.options.profile.label(),api.options.endpoint.label(),api.options.auth.label(),api.options.credential_source.label(),api.options.credential_present,api.options.model_present,api.reported_model_present,api.model_matches_requested,api.model_list_count,api.options.effort.label(),api.options.thinking,api.options.max_output_tokens,api.options.timeout_ms,api.options.request_bytes,api.options.message_count,api.options.non_streaming,api.options.plain_text_only);
+                let _=write!(text," api_call={} epoch={} preference_revision={} session={} revision={} connection={} correlation_reassigned={} api_span={} last_span={} api_result={} category={} call_elapsed_ms={} http_status={} body_bytes={} bytes_capped={} body_complete={} body_cap_hit={} durable_admission={} possibly_sent={} cancel_requested={} timeout_source={} connect_related={:?} scenario={} purpose={} method={} profile={} endpoint_class={} auth_kind={} credential_source={} credential_present={} model_present={} reported_model_present={} model_matches_requested={:?} model_list_count={:?} effort={} thinking={:?} max_output_tokens={:?} timeout_ms={} request_bytes={} message_count={} non_streaming={} plain_text_only={}",api.identity.call,api.identity.binding.token.epoch,api.identity.binding.token.revision,number(scope.session.map(u64::from)),number(scope.revision),number(scope.connection.map(u64::from)),api.identity.binding.correlation_reassigned,api.span.label(),api.last_span.label(),api.result.label(),api.error.label(),api.call_elapsed_ms,api.http_status.map_or_else(||"unavailable".into(),|value|value.to_string()),api.body_bytes,api.bytes_capped,api.body_complete,api.body_cap_hit,api.durable_admission,api.possibly_sent,api.cancel_requested,api.timeout_source.label(),api.connect_related,api.options.scenario.label(),api.options.purpose.label(),api.options.method.label(),api.options.profile.label(),api.options.endpoint.label(),api.options.auth.label(),api.options.credential_source.label(),api.options.credential_present,api.options.model_present,api.reported_model_present,api.model_matches_requested,api.model_list_count,api.options.effort.label(),api.options.thinking,api.options.max_output_tokens,api.options.timeout_ms,api.options.request_bytes,api.options.message_count,api.options.non_streaming,api.options.plain_text_only);
             }
             let code = match event.outcome {
                 Outcome::Failed => format!("{}-failed", event.phase.label()),
@@ -354,19 +354,37 @@ impl Diagnostics {
             let _=writeln!(text,"api_summary={call} epoch={epoch} preference_revision={revision} complete={} incomplete={} truncated={} body_complete={body_complete} bytes_capped={bytes_capped}",prepared&&finished&&body_complete,!prepared||!finished||!body_complete,!prepared);
         }
         let footer=format!("report_limit_bytes=65536 report_limit_lines=512\nevents_discarded={} ring_truncated={}\nRequest-wait spans send polling to response headers, including pool/proxy/DNS/connect/TLS/server waits. DNS/TLS subphase timing is unobservable. Body bytes are decoded bytes delivered by reqwest. Possibly-sent/cancel/timeout never establishes zero billing.\n",self.discarded,self.discarded>0);
-        let mut bounded = String::new();
-        let mut truncated = false;
-        for (lines, line) in text.lines().enumerate() {
-            if bounded.len() + line.len() + 1 + footer.len() + 64 > 65_536
-                || lines + footer.lines().count() + 2 > 512
+        let all_lines = text.lines().collect::<Vec<_>>();
+        let header_end = all_lines
+            .iter()
+            .position(|line| line.starts_with("elapsed_ms="))
+            .unwrap_or(all_lines.len());
+        let mut bounded = all_lines[..header_end].join("\n");
+        bounded.push('\n');
+        let mut selected = Vec::new();
+        let mut used_bytes = bounded.len();
+        // Preserve a contiguous newest tail, rather than losing the latest
+        // failure to earlier verbose rows. Headers and mandatory footer survive.
+        for line in all_lines[header_end..].iter().rev() {
+            if used_bytes + line.len() + 1 + footer.len() + 160 > 65_536
+                || header_end + selected.len() + footer.lines().count() + 4 > 512
             {
-                truncated = true;
                 break;
             }
+            selected.push(*line);
+            used_bytes += line.len() + 1;
+        }
+        let truncated = selected.len() < all_lines.len() - header_end;
+        let rendered = selected
+            .iter()
+            .filter(|line| line.starts_with("elapsed_ms="))
+            .count();
+        for line in selected.into_iter().rev() {
             bounded.push_str(line);
             bounded.push('\n');
         }
         bounded.push_str(&footer);
+        let _ = writeln!(bounded, "report_events_rendered={rendered}");
         let _ = writeln!(bounded, "report_truncated={truncated}");
         text = bounded;
         Report { id, text }

@@ -68,6 +68,7 @@ struct Cooldown {
 /// App-owned bounded admission/cancellation state. Cooldowns are conservative;
 /// metadata GETs never create generation/billing history observations.
 pub struct ModelDiscovery {
+    tracing: Option<trace::TraceContext>,
     clock: Arc<dyn crate::capture_startup::CaptureClock>,
     flights: Mutex<Vec<Flight>>,
     cooldowns: Mutex<Vec<Cooldown>>,
@@ -84,7 +85,16 @@ impl ModelDiscovery {
     }
     /// Compose the monotonic admission clock; transport deadlines remain actual.
     pub fn with_clock(clock: Arc<dyn crate::capture_startup::CaptureClock>) -> Self {
+        Self::with_diagnostics(clock, None)
+    }
+    /// Compose the same public diagnostics ports for an App-owned service.
+    /// None uses the process service; observations never authorize GET admission.
+    pub fn with_diagnostics(
+        clock: Arc<dyn crate::capture_startup::CaptureClock>,
+        tracing: Option<trace::TraceContext>,
+    ) -> Self {
         Self {
+            tracing,
             clock,
             flights: Mutex::new(vec![]),
             cooldowns: Mutex::new(vec![]),
@@ -213,11 +223,21 @@ impl ModelDiscovery {
                 ready: now + Duration::from_secs(60),
             });
         }
-        let scope =
-            diagnostics::service::global().api_connection_scope(None, Some(&request.connection.id));
+        let scope = if self.tracing.is_none() {
+            diagnostics::service::global().api_connection_scope(None, Some(&request.connection.id))
+        } else {
+            None
+        };
         let options = trace_options(&configuration, &request.connection, &endpoint);
-        let mut trace =
-            trace::CallTrace::global(scope, options, None, Arc::new(Cancel(cancellation.clone())));
+        let mut trace = match &self.tracing {
+            Some(context) => context.begin(options, None, Arc::new(Cancel(cancellation.clone()))),
+            None => trace::CallTrace::global(
+                scope,
+                options,
+                None,
+                Arc::new(Cancel(cancellation.clone())),
+            ),
+        };
         let mut builder = reqwest::Client::builder()
             .timeout(Duration::from_secs(10))
             .connect_timeout(Duration::from_secs(5))
@@ -322,9 +342,13 @@ impl ModelDiscovery {
             if category == trace::ApiErrorCategory::Timeout
                 && event.timeout_source == trace::TimeoutSource::None
             {
-                event.timeout_source = if event
-                    .http_status
-                    .is_some_and(|status| matches!(status, 408 | 504))
+                event.timeout_source = if outcome
+                    .as_ref()
+                    .err()
+                    .is_some_and(|error| error.0 == "provider-timeout")
+                    || event
+                        .http_status
+                        .is_some_and(|status| matches!(status, 408 | 504))
                 {
                     trace::TimeoutSource::ProviderStatus
                 } else {
@@ -396,7 +420,11 @@ pub fn project_models(
         .as_array()
         .ok_or(ConfigError("model-list-schema-unavailable"))?;
     if data.len() > 2000 {
-        return Err(ConfigError("model-list-response-limit"));
+        return Err(ConfigError(
+            status_error.map_or("model-list-response-limit", |error| {
+                error.history_code(false)
+            }),
+        ));
     }
     let mut ids = BTreeSet::new();
     for row in data {

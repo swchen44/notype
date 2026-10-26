@@ -423,6 +423,7 @@ impl TextConfiguration {
 }
 
 struct ChatProcessor {
+    credential: Option<RuntimeCredential>,
     request_parameters: Option<notype_core::observations::RequestParameters>,
     credential_source: Option<String>,
     thinking_override: Option<bool>,
@@ -478,6 +479,12 @@ impl ChatProcessor {
             return Err(invalid);
         }
         let authorization = configuration.authorization_header()?;
+        let credential = authorization
+            .as_ref()
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| value.strip_prefix("Bearer "))
+            .filter(|value| !value.is_empty())
+            .map(|value| RuntimeCredential::new(value.to_owned()));
         let deadline = Duration::from_millis(configuration.timeout_ms);
         let mut client = reqwest::Client::builder()
             .timeout(deadline)
@@ -489,6 +496,7 @@ impl ChatProcessor {
         }
         let client = client.build().map_err(|_| invalid)?;
         Ok(Self {
+            credential,
             request_parameters: configuration.request_parameters,
             credential_source: configuration.credential_source,
             thinking_override: configuration.thinking_override,
@@ -640,6 +648,7 @@ impl ChatProcessor {
         let effort = self.effort.clone();
         let max_output_tokens = self.max_output_tokens;
         let tracing = self.tracing.clone();
+        let credential = self.credential.clone();
         let mut request_parameters = self.request_parameters.clone();
         let credential_source = self.credential_source.clone();
         let thinking_override = self.thinking_override;
@@ -879,8 +888,22 @@ impl ChatProcessor {
                         TextFailure::Failed
                     }
                 })?;
+                let mut receipt = ApiReceipt::from_chat_json(&value);
+                let reflected = |text: &str| {
+                    credential
+                        .as_ref()
+                        .is_some_and(|key| key.reflected_in(text))
+                };
+                let private_metadata = receipt.reported_model.as_deref().is_some_and(reflected)
+                    || receipt.reported_effort.as_deref().is_some_and(reflected);
+                if receipt.reported_model.as_deref().is_some_and(reflected) {
+                    receipt.reported_model = None;
+                }
+                if receipt.reported_effort.as_deref().is_some_and(reflected) {
+                    receipt.reported_effort = None;
+                }
                 if let Some(guard) = &mut guard {
-                    guard.response(ApiReceipt::from_chat_json(&value));
+                    guard.response(receipt);
                 }
                 if let Some(event) = trace.metadata() {
                     event.reported_model_present = value["model"].is_string();
@@ -891,6 +914,9 @@ impl ChatProcessor {
                 }
                 if let Some(error) = GatewayError::classify(status, Some(&value)) {
                     return Err(TextFailure::Provider(error));
+                }
+                if private_metadata {
+                    return Err(TextFailure::InvalidResponse);
                 }
                 let choice = &value["choices"][0];
                 if choice["finish_reason"] != "stop"
@@ -910,7 +936,13 @@ impl ChatProcessor {
                     .as_str()
                     .filter(|s| !s.trim().is_empty())
                     .ok_or(TextFailure::InvalidResponse)?;
-                decode_output(content, envelope)
+                let output = decode_output(content, envelope)?;
+                if reflected(&output.text)
+                    || output.source_language.as_deref().is_some_and(reflected)
+                {
+                    return Err(TextFailure::InvalidResponse);
+                }
+                Ok(output)
             };
             let result = tokio::select! {biased; _=cancellation.cancelled()=>Err(TextFailure::Cancelled),result=tokio::time::timeout(deadline,operation)=>result.unwrap_or(Err(TextFailure::Timeout))};
             let (trace_result, category) = result

@@ -85,23 +85,10 @@ jobs:
           else
             node desktop/node_modules/playwright/cli.js install --with-deps chromium
           fi
-      - name: Exercise provider connection rendered contracts when present
+      - name: Exercise all composed UI units and rendered contracts
         run: |
-          if test -f tests/integration/provider-connections.ui.mjs; then
-            node --test tests/integration/provider-connections.ui.mjs
-          else
-            echo "Provider UI implementation is not composed in this backend checkpoint."
-          fi
-      - name: Exercise request option history when composed
-        run: |
-          if test -f tests/integration/provider-request-options.ui.mjs; then
-            node --test tests/integration/provider-request-options.ui.mjs
-          fi
-      - name: Exercise settings presenter units when composed
-        run: |
-          if test -f tests/unittest/provider-form.ui.mjs; then
-            node --test tests/unittest/provider-form.ui.mjs
-          fi
+          npm run test:ui:unit
+          npm run test:ui:integration
       - name: Lint and build composed provider UI
         working-directory: desktop
         run: |
@@ -131,9 +118,9 @@ jobs:
       - name: Lint the core
         run: cargo +1.99.1 clippy --locked --manifest-path crates/notype-core/Cargo.toml --all-targets -- -D warnings
       - name: Exercise desktop orchestration and HTTP contracts without Tauri
-        run: cargo +1.99.1 test --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test desktop-workflow --test desktop-provider --test history-metrics-dto --test physical-gestures --test native-delivery --test desktop-diagnostics --test diagnostics-export --test diagnostic-service --test diagnostic-api --test provider-config --test provider-config-store --test provider-models --test diagnostic-privacy --test diagnostic-control --test model-storage --test window-lifecycle --test overlay-lifecycle --test capture-startup --test capture-readiness --test deepseek-probe-bridge --test deepseek-probe-round --test deepseek-probe-console --test deepseek-probe-native
+        run: cargo +1.99.1 test --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test desktop-workflow --test desktop-provider --test history-metrics-dto --test physical-gestures --test native-delivery --test desktop-diagnostics --test diagnostics-export --test diagnostic-service --test diagnostic-api --test diagnostic-api-http --test provider-config --test provider-config-store --test provider-models --test diagnostic-privacy --test diagnostic-control --test model-storage --test window-lifecycle --test overlay-lifecycle --test capture-startup --test capture-readiness --test deepseek-probe-bridge --test deepseek-probe-round --test deepseek-probe-console --test deepseek-probe-native
       - name: Lint the actual desktop HTTP adapter without Tauri
-        run: cargo +1.99.1 clippy --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test desktop-provider --test provider-config --test provider-config-store --test provider-models -- -D warnings
+        run: cargo +1.99.1 clippy --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test desktop-provider --test provider-config --test provider-config-store --test provider-models --test diagnostic-api-http -- -D warnings
       - name: Exercise independent offline probe policy without HTTP or credentials
         run: |
           rustc +1.99.1 --edition=2021 -A dead_code --test tests/unittest/deepseek_probe_policy.rs -o /tmp/notype-probe-policy

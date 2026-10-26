@@ -137,3 +137,7 @@ path = "../provider_config.rs"
 [[test]]
 name = "provider-models"
 path = "../provider_models.rs"
+
+[[test]]
+name = "diagnostic-api-http"
+path = "../diagnostic_api.rs"

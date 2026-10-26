@@ -870,20 +870,29 @@ fn view(state: &StoredSettings) -> ConnectionSettingsView {
                             .trim()
                             .is_empty()
                             .then_some(ConfigError("configuration-model-required"))
+                    })
+                    .or_else(|| {
+                        resolution
+                            .as_ref()
+                            .ok()
+                            .is_some_and(|value| value.reason == "unresolved")
+                            .then_some(ConfigError("configuration-capability-required"))
                     });
                 let has_key = record.key.is_some();
+                let effective_app_key =
+                    has_key && record.draft.authentication == Authentication::Bearer;
                 let eligible = credentials::public_key(&record.draft).is_some();
                 ConnectionView {
                     connection: record.draft.clone(),
                     app_key_present: has_key,
-                    credential_present: if has_key {
+                    credential_present: if effective_app_key {
                         Some(true)
                     } else if record.draft.authentication == Authentication::None || !eligible {
                         Some(false)
                     } else {
                         None
                     },
-                    credential_source: if has_key {
+                    credential_source: if effective_app_key {
                         "app"
                     } else if record.draft.authentication == Authentication::None {
                         "none"

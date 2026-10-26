@@ -2,6 +2,9 @@
 #[path = "../../desktop/src-tauri/src/capture_startup.rs"]
 mod capture_startup;
 #[allow(dead_code)]
+#[path = "../../desktop/src-tauri/src/diagnostic_files.rs"]
+mod diagnostic_files;
+#[allow(dead_code)]
 #[path = "../../desktop/src-tauri/src/diagnostics.rs"]
 mod diagnostics;
 #[allow(dead_code)]
@@ -369,4 +372,210 @@ async fn redirects_truncated_transfer_and_unrelated_list_routes_never_forward_cr
             .await
             .is_err()
     );
+}
+
+#[tokio::test]
+async fn cooldown_uses_the_production_monotonic_clock_without_waiting_or_automatic_refresh() {
+    struct Clock(Mutex<std::time::Instant>);
+    impl capture_startup::CaptureClock for Clock {
+        fn now(&self) -> std::time::Instant {
+            *self.0.lock().unwrap()
+        }
+    }
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base = format!("http://{}/v1", listener.local_addr().unwrap());
+    let count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let accepted = count.clone();
+    let server = tokio::spawn(async move {
+        for _ in 0..2 {
+            let (mut stream, _) = tokio::time::timeout(Duration::from_secs(3), listener.accept())
+                .await
+                .unwrap()
+                .unwrap();
+            let mut bytes = vec![];
+            let mut buffer = [0; 1024];
+            while !bytes.windows(4).any(|part| part == b"\r\n\r\n") {
+                let n = stream.read(&mut buffer).await.unwrap();
+                assert!(n > 0);
+                bytes.extend_from_slice(&buffer[..n]);
+            }
+            assert!(bytes.starts_with(b"GET /v1/models "));
+            accepted.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            stream
+                .write_all(wire(200, r#"{"data":[{"id":"clock-model"}]}"#, "").as_bytes())
+                .await
+                .unwrap();
+        }
+        assert!(
+            tokio::time::timeout(Duration::from_millis(75), listener.accept())
+                .await
+                .is_err()
+        );
+    });
+    let (store, draft, revision) = configured(base);
+    let clock = Arc::new(Clock(Mutex::new(std::time::Instant::now())));
+    let discovery = ModelDiscovery::with_clock(clock.clone());
+    assert_eq!(
+        discovery
+            .query(store.clone(), request(&draft, revision, "one"), &NeverHome)
+            .await
+            .unwrap()
+            .status,
+        "ok"
+    );
+    *clock.0.lock().unwrap() += Duration::from_secs(59);
+    assert_eq!(
+        discovery
+            .query(
+                store.clone(),
+                request(&draft, revision, "blocked"),
+                &NeverHome
+            )
+            .await
+            .unwrap()
+            .status,
+        "throttled"
+    );
+    assert_eq!(count.load(std::sync::atomic::Ordering::SeqCst), 1);
+    *clock.0.lock().unwrap() += Duration::from_secs(2);
+    assert_eq!(
+        discovery
+            .query(store, request(&draft, revision, "two"), &NeverHome)
+            .await
+            .unwrap()
+            .status,
+        "ok"
+    );
+    server.await.unwrap();
+    assert_eq!(count.load(std::sync::atomic::Ordering::SeqCst), 2);
+}
+
+#[tokio::test]
+async fn model_get_uses_the_real_typed_service_and_exact_owned_report_export() {
+    use diagnostics::{
+        api::*, service::DiagnosticService, LogFileStatus, LogLevel, Platform, ReportContext,
+    };
+    struct Sink(Arc<DiagnosticService>);
+    impl ApiObserver for Sink {
+        fn begin(
+            &self,
+            scope: Option<ScopeBinding>,
+            revision: Option<u64>,
+        ) -> Option<TraceIdentity> {
+            self.0.begin_api(scope, revision)
+        }
+        fn record(&self, event: ApiEvent) {
+            self.0.record_api(event)
+        }
+    }
+    for (body, timeout) in [
+        (
+            r#"{"data":[{"id":"PRIVATE_MODEL_LIST_ID"}],"usage":{"prompt_tokens":99999}}"#,
+            false,
+        ),
+        (
+            r#"{"error":{"code":504,"message":"PRIVATE_ERROR_BODY"}}"#,
+            true,
+        ),
+    ] {
+        let directory = tempfile::tempdir().unwrap();
+        let diagnostic = Arc::new(DiagnosticService::new());
+        diagnostic.initialize(Arc::new(diagnostic_files::FileStorage::new(Some(
+            directory.path().join("diagnostics.json"),
+        ))));
+        let (base, received, server) = fixture(wire(200, body, ""), None).await;
+        let (store, draft, revision) = configured(base);
+        let binding = diagnostic.api_connection_scope(None, Some(&draft.id));
+        let context = TraceContext::new(
+            binding,
+            Arc::new(capture_startup::MonotonicClock),
+            Arc::new(Sink(diagnostic.clone())),
+        );
+        let discovery = ModelDiscovery::with_diagnostics(
+            Arc::new(capture_startup::MonotonicClock),
+            Some(context),
+        );
+        let result = discovery
+            .query(store, request(&draft, revision, "report"), &NeverHome)
+            .await
+            .unwrap();
+        received.await.unwrap();
+        server.await.unwrap();
+        if !timeout {
+            assert_eq!(result.models[0].id, "PRIVATE_MODEL_LIST_ID");
+        }
+        let preview = diagnostic
+            .publish_preview(
+                diagnostic.begin_preview().unwrap(),
+                ReportContext {
+                    version: "0.1.0",
+                    platform: Platform::Linux,
+                    log_level: LogLevel::Debug,
+                    debug_mode: false,
+                    always_on_microphone: false,
+                    model_selected: false,
+                    model_available: false,
+                    model_is_custom: false,
+                    local_log: LogFileStatus::Empty,
+                },
+            )
+            .unwrap();
+        let text = preview.report.text();
+        assert!(text.contains("purpose=model_list method=get"));
+        assert!(text.contains("durable_admission=false"));
+        assert!(text.contains("http_status=200"));
+        if timeout {
+            assert!(text.contains("timeout_source=provider_status"));
+        } else {
+            assert!(text.contains("model_list_count=Some(1)"));
+        }
+        for secret in [
+            "OWNED_KEY_SENTINEL",
+            "PRIVATE_MODEL_LIST_ID",
+            "PRIVATE_ERROR_BODY",
+            draft.id.as_str(),
+        ] {
+            assert!(!text.contains(secret));
+        }
+        let ticket = diagnostic.begin_export(preview.report.id()).unwrap();
+        let destination = directory.path().join("models.txt");
+        diagnostic.commit_export(&ticket, &destination).unwrap();
+        assert_eq!(std::fs::read_to_string(destination).unwrap(), text);
+    }
+}
+
+#[tokio::test]
+async fn model_get_real_whole_deadline_bounds_stalled_headers_and_partial_body() {
+    async fn run(partial_body: bool) {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let base = format!("http://{}/v1", listener.local_addr().unwrap());
+        let (release, held) = oneshot::channel();
+        let server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let mut bytes = vec![];
+            let mut buffer = [0; 1024];
+            while !bytes.windows(4).any(|part| part == b"\r\n\r\n") {
+                let n = stream.read(&mut buffer).await.unwrap();
+                assert!(n > 0);
+                bytes.extend_from_slice(&buffer[..n]);
+            }
+            if partial_body {
+                stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 1000\r\nConnection: close\r\n\r\n{\"data\":").await.unwrap();
+            }
+            let _ = held.await;
+        });
+        let (store, draft, revision) = configured(base);
+        let result = tokio::time::timeout(
+            Duration::from_secs(15),
+            ModelDiscovery::new().query(store, request(&draft, revision, "deadline"), &NeverHome),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        let _ = release.send(());
+        server.await.unwrap();
+        assert_eq!(result.error_code.as_deref(), Some("model-list-timeout"));
+        assert!(result.models.is_empty());
+    }
+    tokio::join!(run(false), run(true));
 }
