@@ -688,33 +688,33 @@ async getModelInfo(modelId: string) : Promise<Result<ModelInfo | null, string>> 
     else return { status: "error", error: e  as any };
 }
 },
-async downloadModel(modelId: string) : Promise<Result<null, string>> {
+async downloadModel(modelId: string, expectedGeneration?: number) : Promise<Result<null, string>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("download_model", { modelId }) };
+    return { status: "ok", data: await TAURI_INVOKE("download_model", { modelId, expectedGeneration }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
 },
-async deleteModel(modelId: string) : Promise<Result<null, string>> {
+async deleteModel(modelId: string, expectedGeneration?: number) : Promise<Result<null, string>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("delete_model", { modelId }) };
+    return { status: "ok", data: await TAURI_INVOKE("delete_model", { modelId, expectedGeneration }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
 },
-async cancelDownload(modelId: string) : Promise<Result<null, string>> {
+async cancelDownload(modelId: string, expectedGeneration?: number) : Promise<Result<null, string>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("cancel_download", { modelId }) };
+    return { status: "ok", data: await TAURI_INVOKE("cancel_download", { modelId, expectedGeneration }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
 },
-async setActiveModel(modelId: string) : Promise<Result<null, string>> {
+async setActiveModel(modelId: string, expectedGeneration?: number) : Promise<Result<null, string>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("set_active_model", { modelId }) };
+    return { status: "ok", data: await TAURI_INVOKE("set_active_model", { modelId, expectedGeneration }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
