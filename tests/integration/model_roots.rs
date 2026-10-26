@@ -653,6 +653,29 @@ fn actual_atomic_preference_rename_failure_preserves_destination_and_removes_onl
         .starts_with(".notype-model-root-")));
 }
 
+#[test]
+fn replacing_owned_download_with_identical_external_bytes_does_not_inherit_delete_permission() {
+    let fixture = Fixture::new();
+    let service = fixture.service("config.json");
+    let path = service.snapshot().root.join("Q6.gguf");
+    std::fs::write(&path, b"abc").unwrap();
+    service.rescan("download", &|_, _| {}).unwrap();
+    service.mark_owned("fixture/speech/Q6.gguf");
+    assert!(service.artifacts()["fixture/speech/Q6.gguf"].owned);
+    std::fs::rename(&path, path.with_extension("original")).unwrap();
+    std::fs::write(&path, b"abc").unwrap();
+    service.rescan("external", &|_, _| {}).unwrap();
+    let record = service.artifacts()["fixture/speech/Q6.gguf"].clone();
+    assert!(!record.owned);
+    assert!(service
+        .delete_owned(
+            &record,
+            &service.admit_mutation(&record.key.model_id).unwrap()
+        )
+        .is_err());
+    assert_eq!(std::fs::read(path).unwrap(), b"abc");
+}
+
 #[cfg(unix)]
 #[test]
 fn hf_single_relative_blob_link_is_accepted_and_an_escape_is_rejected_without_touching_target() {

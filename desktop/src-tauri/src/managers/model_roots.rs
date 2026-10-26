@@ -88,14 +88,14 @@ impl ArtifactStatus {
         matches!(self, Self::Verified | Self::CustomUnverified)
     }
 }
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Fingerprint {
     pub volume: u64,
     pub file: u64,
     pub size: u64,
     pub modified: u128,
 }
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ArtifactKey {
     pub generation: u64,
     pub model_id: String,
@@ -183,7 +183,7 @@ struct State {
     refresh: Option<Scan>,
     serial: u64,
     initialized: bool,
-    owned: BTreeSet<(String, String)>,
+    owned: BTreeSet<ArtifactKey>,
 }
 
 pub struct RootService {
@@ -570,10 +570,7 @@ impl RootService {
         state.refresh = None;
         let mut projection = result.unwrap_or_else(|_| Projection::unavailable());
         for record in projection.artifacts.values_mut() {
-            record.owned = state.owned.contains(&(
-                record.key.model_id.clone(),
-                record.key.content_identity.clone(),
-            ));
+            record.owned = state.owned.contains(&record.key);
         }
         state.projection = Arc::new(projection);
         Ok(())
@@ -747,8 +744,8 @@ impl RootService {
             .get(id)
             .filter(|r| r.status == ArtifactStatus::Verified && !r.legacy && !r.custom)
         {
-            let identity = record.key.content_identity.clone();
-            state.owned.insert((id.to_owned(), identity));
+            let key = record.key.clone();
+            state.owned.insert(key);
             let mut projection = (*state.projection).clone();
             if let Some(record) = projection.artifacts.get_mut(id) {
                 record.owned = true;
