@@ -14,6 +14,10 @@ on:
       - desktop/src-tauri/src/commands/history_metrics.rs
       - tests/integration/provider_config.rs
       - tests/integration/provider_models.rs
+      - tests/integration/provider_bootstrap.rs
+      - tests/integration/bootstrap-recovery.ui.mjs
+      - tests/integration/offline-bundle.test.mjs
+      - tests/integration/fixtures/offline-bundle.mjs
       - tests/integration/diagnostic_api.rs
       - tests/integration/desktop_provider.rs
       - tests/integration/desktop_diagnostics.rs
@@ -51,6 +55,14 @@ on:
       - desktop/src-tauri/src/provider_*.rs
       - desktop/src-tauri/src/provider_probe/**
       - tests/integration/provider_probe_*.rs
+      - desktop/src-tauri/src/offline_bootstrap*.rs
+      - desktop/src-tauri/src/portable.rs
+      - desktop/src-tauri/src/runtime_startup.rs
+      - tests/integration/bootstrap_preflight.rs
+      - tests/integration/history-metrics.ui.mjs
+      - tests/integration/fixtures/history-api.mjs
+      - desktop/src-tauri/src/settings.rs
+      - desktop/src-tauri/src/lib.rs
       - desktop/src-tauri/src/faithful_provider.rs
       - desktop/src-tauri/src/recognition.rs
       - desktop/src-tauri/src/physical_gestures.rs
@@ -123,6 +135,10 @@ jobs:
         run: rustup toolchain install 1.99.1 --profile minimal --component rustfmt --component clippy
       - name: Check core formatting
         run: cargo +1.99.1 fmt --manifest-path crates/notype-core/Cargo.toml -- --check
+      - name: Exercise first-use bootstrap without native dependencies
+        run: cargo +1.99.1 test --locked --no-fail-fast --manifest-path tests/integration/desktop-contracts/Cargo.toml --test provider-bootstrap --test offline-bootstrap-store --test runtime-startup --test bootstrap-preflight
+      - name: Lint bootstrap placement and runtime ownership without native dependencies
+        run: cargo +1.99.1 clippy --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test provider-bootstrap --test offline-bootstrap-store --test runtime-startup --test bootstrap-preflight -- -D warnings
       - name: Check platform adapter formatting
         run: cargo +1.99.1 fmt --manifest-path crates/notype-platform/Cargo.toml -- --check
       - name: Exercise the native launch policy without Tauri or speech engines

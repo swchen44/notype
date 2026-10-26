@@ -2,6 +2,7 @@ import path from "node:path";
 import { createRequire } from "node:module";
 import { realpath } from "node:fs/promises";
 import { spawn } from "node:child_process";
+import { inspectBundle } from "./offline-bundle.mjs";
 import {
   PackageError,
   jsonFile,
@@ -55,6 +56,8 @@ async function inspectInputs(
     platform = process.platform,
     arch = process.arch,
     env = process.env,
+    offlineBundle = false,
+    execPath = process.execPath,
   },
   probe,
   strictModels = false,
@@ -64,6 +67,9 @@ async function inspectInputs(
       "unsupported-platform",
       "This release supports Windows x64 only.",
     );
+  const bundle = offlineBundle
+    ? await inspectBundle({ facadeRoot, execPath, strictModels })
+    : undefined;
   const release = await jsonFile(path.join(facadeRoot, "release.json"));
   if (release.schema !== 2 || release.status !== "assembled")
     throw new PackageError(
@@ -77,8 +83,16 @@ async function inspectInputs(
       "invalid-manifest",
       "Facade and release versions differ.",
     );
-  if (Object.keys(facade.dependencies ?? {}).length !== 1 || facade.dependencies?.[release.application.name] !== release.application.version || Object.keys(facade.optionalDependencies ?? {}).length !== 0)
-    throw new PackageError("invalid-manifest", "The base facade must depend only on its pinned application payload.");
+  if (
+    Object.keys(facade.dependencies ?? {}).length !== 1 ||
+    facade.dependencies?.[release.application.name] !==
+      release.application.version ||
+    Object.keys(facade.optionalDependencies ?? {}).length !== 0
+  )
+    throw new PackageError(
+      "invalid-manifest",
+      "The base facade must depend only on its pinned application payload.",
+    );
   const require = createRequire(path.join(facadeRoot, "package.json"));
   function packageRoot(pin) {
     try {
@@ -90,14 +104,18 @@ async function inspectInputs(
       );
     }
   }
-  const applicationRoot = packageRoot(release.application);
-  const application = await verifyPackage(
-    applicationRoot,
-    release.application,
-    "application",
-  );
+  const applicationRoot = bundle
+    ? path.join(facadeRoot, "node_modules/notype-win32-x64")
+    : packageRoot(release.application);
+  const application =
+    bundle?.application ??
+    (await verifyPackage(applicationRoot, release.application, "application"));
   let modelRoot;
   let model;
+  if (bundle) {
+    modelRoot = path.join(bundle.root, "models");
+    model = bundle.model;
+  }
   if (release.model !== undefined) {
     try {
       validatePin(release.model);
@@ -133,8 +151,13 @@ async function inspectInputs(
     );
   const dataDirectory = path.resolve(configured);
   const resolvedData = await resolvedFuturePath(dataDirectory);
-  for (const root of [facadeRoot, applicationRoot, modelRoot].filter(Boolean)) {
-    const packageDirectory = await realpath(root);
+  for (const root of [
+    bundle?.root,
+    facadeRoot,
+    applicationRoot,
+    modelRoot,
+  ].filter(Boolean)) {
+    const packageDirectory = await resolvedFuturePath(root);
     if (
       contains(packageDirectory, resolvedData) ||
       contains(resolvedData, packageDirectory)
@@ -149,7 +172,8 @@ async function inspectInputs(
       ([name]) =>
         !name.toUpperCase().startsWith("WEBVIEW2_") &&
         name.toUpperCase() !== "GGML_BACKEND_PATH" &&
-        name.toUpperCase() !== "NOTYPE_DATA_DIR",
+        name.toUpperCase() !== "NOTYPE_DATA_DIR" &&
+        !/^NOTYPE_(?:BOOTSTRAP|BUNDLE|OFFLINE|MODEL)/i.test(name),
     ),
   );
   if (env.NOTYPE_DATA_DIR !== undefined)
@@ -160,6 +184,7 @@ async function inspectInputs(
     host,
     cpu: application.cpu,
     dataDirectory,
+    arguments: bundle ? ["--offline-bundle-root", bundle.root] : [],
     model: model && {
       identity: model.identity,
       root: modelRoot,
@@ -214,15 +239,12 @@ export async function prepareLaunch(options) {
 export async function runApplication(options) {
   const plan = await prepareLaunch(options);
   if (options.signal?.aborted)
-    throw new PackageError(
-      "launch-cancelled",
-      "Local launch was cancelled.",
-    );
+    throw new PackageError("launch-cancelled", "Local launch was cancelled.");
   if (options.launch) return options.launch(plan);
   return new Promise((resolve, reject) => {
     const child = spawn(
       plan.executable,
-      options.startHidden ? ["--start-hidden"] : [],
+      [...plan.arguments, ...(options.startHidden ? ["--start-hidden"] : [])],
       {
         cwd: path.dirname(plan.executable),
         env: plan.environment,

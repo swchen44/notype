@@ -17,6 +17,10 @@ import { ModelStateEvent, RecordingErrorEvent } from "./lib/types/events";
 import "./App.css";
 import AccessibilityPermissions from "./components/AccessibilityPermissions";
 import SecureInputWarning from "./components/SecureInputWarning";
+import {
+  BootstrapRecovery,
+  useBootstrapRecovery,
+} from "./components/BootstrapRecovery";
 import Footer from "./components/footer";
 import Onboarding, { AccessibilityOnboarding } from "./components/onboarding";
 import {
@@ -52,6 +56,9 @@ const renderSettingsContent = (
 };
 
 function App() {
+  const bootstrap = useBootstrapRecovery();
+  const bootstrapBlocked =
+    bootstrap.status !== null && bootstrap.status.state !== "ready";
   const { t, i18n } = useTranslation();
   const [onboardingStep, setOnboardingStep] = useState<OnboardingStep | null>(
     null,
@@ -113,7 +120,11 @@ function App() {
 
   // Initialize Enigo, shortcuts, and refresh audio devices when main app loads
   useEffect(() => {
-    if (onboardingStep === "done" && !hasCompletedPostOnboardingInit.current) {
+    if (
+      onboardingStep === "done" &&
+      !bootstrapBlocked &&
+      !hasCompletedPostOnboardingInit.current
+    ) {
       hasCompletedPostOnboardingInit.current = true;
       Promise.all([
         commands.initializeEnigo(),
@@ -124,7 +135,12 @@ function App() {
       refreshAudioDevices();
       refreshOutputDevices();
     }
-  }, [onboardingStep, refreshAudioDevices, refreshOutputDevices]);
+  }, [
+    onboardingStep,
+    bootstrapBlocked,
+    refreshAudioDevices,
+    refreshOutputDevices,
+  ]);
 
   // Handle keyboard shortcuts for debug mode toggle
   useEffect(() => {
@@ -363,7 +379,7 @@ function App() {
   );
 
   // Still checking onboarding status
-  if (onboardingStep === null) {
+  if (onboardingStep === null && !bootstrapBlocked) {
     return null;
   }
 
@@ -391,11 +407,11 @@ function App() {
         </button>
       </>
     );
-  } else if (onboardingStep === "accessibility") {
+  } else if (!bootstrapBlocked && onboardingStep === "accessibility") {
     content = (
       <AccessibilityOnboarding onComplete={handleAccessibilityComplete} />
     );
-  } else if (onboardingStep === "model") {
+  } else if (!bootstrapBlocked && onboardingStep === "model") {
     content = <Onboarding onModelSelected={handleModelSelected} />;
   } else {
     content = (
@@ -418,6 +434,7 @@ function App() {
               <div className="settings-content flex flex-col items-center gap-6">
                 <AccessibilityPermissions />
                 <SecureInputWarning />
+                <BootstrapRecovery {...bootstrap} />
                 {needsModelRecovery && currentSection !== "models" && (
                   <ModelFolderControl />
                 )}

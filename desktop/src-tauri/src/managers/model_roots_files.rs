@@ -24,13 +24,23 @@ struct Preference {
     schema: u8,
     revision: u64,
     root: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    bootstrap_applied: Option<String>,
 }
 pub fn encode(root: &Path, revision: u64) -> RootResult<Vec<u8>> {
+    encode_bootstrap(root, revision, None)
+}
+pub fn encode_bootstrap(
+    root: &Path,
+    revision: u64,
+    bootstrap: Option<&str>,
+) -> RootResult<Vec<u8>> {
     let root = display_path(root);
     let bytes = serde_json::to_vec(&Preference {
         schema: 1,
         revision,
         root,
+        bootstrap_applied: bootstrap.map(str::to_owned),
     })
     .map_err(|_| RootError("model-root-persistence-failed"))?;
     if bytes.len() > MAX_STORE {
@@ -47,6 +57,13 @@ pub fn decode(bytes: &[u8]) -> RootResult<(PathBuf, u64)> {
     if preference.schema != 1
         || preference.revision >= 9_007_199_254_740_991
         || preference.root.is_empty()
+        || preference.bootstrap_applied.as_deref().is_some_and(|id| {
+            id.is_empty()
+                || id.len() > 128
+                || !id
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.'))
+        })
     {
         return Err(RootError("model-root-invalid"));
     }

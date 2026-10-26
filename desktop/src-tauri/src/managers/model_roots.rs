@@ -476,6 +476,32 @@ impl RootService {
         revision: u64,
         invalidate: impl FnOnce(),
     ) -> RootResult<Arc<RootSnapshot>> {
+        self.apply_with_marker(candidate_id, revision, None, invalidate)
+    }
+    /// Initial bundle commit records consumed evidence in this same root authority.
+    pub fn apply_bootstrap(
+        &self,
+        candidate_id: &str,
+        revision: u64,
+        bootstrap_id: &str,
+    ) -> RootResult<Arc<RootSnapshot>> {
+        if bootstrap_id.is_empty()
+            || bootstrap_id.len() > 128
+            || !bootstrap_id
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.'))
+        {
+            return Err(RootError("model-root-invalid"));
+        }
+        self.apply_with_marker(candidate_id, revision, Some(bootstrap_id), || {})
+    }
+    fn apply_with_marker(
+        &self,
+        candidate_id: &str,
+        revision: u64,
+        bootstrap: Option<&str>,
+        invalidate: impl FnOnce(),
+    ) -> RootResult<Arc<RootSnapshot>> {
         let _transition = self
             .gate
             .transition()
@@ -521,7 +547,7 @@ impl RootService {
             record.key.generation = generation;
         }
         let projection = Arc::new(projection);
-        let bytes = super::model_roots_files::encode(&root.root, revision)?;
+        let bytes = super::model_roots_files::encode_bootstrap(&root.root, revision, bootstrap)?;
         self.storage.commit(&bytes)?;
         {
             let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
@@ -836,6 +862,13 @@ impl RootService {
             }
             state.projection = Arc::new(projection);
         }
+    }
+    /// P29 default only: explicit or corrupt initialized preferences always win.
+    pub fn initialized(&self) -> bool {
+        self.state
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .initialized
     }
     /// P29 default only: explicit or corrupt initialized preferences always win.
     pub fn initialize_default_if_unset(&self, folder: &Path) -> RootResult<bool> {

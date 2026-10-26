@@ -508,6 +508,12 @@
         "failed": "Failed",
         "cancelled": "Cancelled"
       }
+    },
+    "bootstrap": {
+      "title": "Setup incomplete",
+      "description": "Local defaults have not been fully saved. Capture and API operations are paused. History, safe settings and the model folder controls remain available. Choose a valid model folder if needed, then retry.",
+      "retry": "Retry setup",
+      "retrying": "Retrying…"
     }
   },
   "tray": {

@@ -13,10 +13,13 @@
   "files": [
     "bin/notype.mjs",
     "lib/launcher.mjs",
+    "lib/offline-bundle.mjs",
     "lib/manifest.mjs",
     "lib/model.mjs",
     "lib/windows-host.mjs",
     "release.json",
+    "OFFLINE-README-zh-TW.md",
+    "bootstrap.example.json",
     "README.md"
   ]
 }

@@ -14,6 +14,7 @@ mod physical_gestures;
 mod physical_shortcuts;
 // Retained upstream helpers are test-only. Production has no arbitrary-focus
 // paste or legacy prompt transport; #13 supplies a guarded delivery adapter.
+mod bootstrap_selection;
 #[cfg(test)]
 mod clipboard;
 mod commands;
@@ -26,6 +27,8 @@ mod input;
 mod llm_client;
 mod managers;
 mod memory;
+mod offline_bootstrap;
+mod offline_bootstrap_native;
 mod overlay;
 mod overlay_lifecycle;
 #[cfg(test)]
@@ -33,6 +36,7 @@ mod paste_tx;
 pub mod portable;
 mod provider_config;
 mod provider_models;
+mod runtime_startup;
 mod secure_input;
 mod settings;
 mod shortcut;
@@ -322,7 +326,13 @@ impl window_lifecycle::MainWindow for NativeMainWindow<'_> {
     }
 }
 
+static RUNTIME_STARTUP: runtime_startup::RuntimeStartup = runtime_startup::RuntimeStartup::new();
+
 fn initialize_core_logic(app_handle: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
+    initialize_history_logic(app_handle)?;
+    if !offline_bootstrap::domains_ready() {
+        return Ok(());
+    }
     // Note: Enigo (keyboard/mouse simulation) is NOT initialized here.
     // The frontend is responsible for calling the `initialize_enigo` command
     // after onboarding completes. This avoids triggering permission dialogs
@@ -331,16 +341,72 @@ fn initialize_core_logic(app_handle: &AppHandle) -> Result<(), Box<dyn std::erro
     // Initialize the managers. The audio recorder receives the streaming router
     // explicitly, so always-on microphone startup can wire live-preview frames
     // even before Tauri state is populated.
-    let model_manager =
-        Arc::new(ModelManager::new(app_handle).expect("Failed to initialize model manager"));
-    let transcription_manager = Arc::new(
-        TranscriptionManager::new(app_handle, model_manager.clone())
-            .expect("Failed to initialize transcription manager"),
-    );
-    let recording_manager = Arc::new(
-        AudioRecordingManager::new(app_handle, transcription_manager.stream_router())
-            .expect("Failed to initialize recording manager"),
-    );
+    let model_manager = app_handle.state::<Arc<ModelManager>>().inner().clone();
+    RUNTIME_STARTUP.initialize(
+        || {
+            let ready = app_handle
+                .try_state::<Arc<TranscriptionManager>>()
+                .is_some();
+            if ready {
+                offline_bootstrap::runtime_ready();
+            }
+            ready
+        },
+        || Arc::new(managers::transcription::StreamRouter::new()),
+        |router| {
+            Ok::<_, Box<dyn std::error::Error>>(Arc::new(AudioRecordingManager::new(
+                app_handle, router,
+            )?))
+        },
+        |router| {
+            Ok(Arc::new(TranscriptionManager::with_router(
+                app_handle,
+                model_manager.clone(),
+                router,
+            )?))
+        },
+        |recording_manager, transcription_manager| {
+            // History was opened independently, including during incomplete setup.
+            managers::transcription::init_transcribe_backend();
+            managers::transcription::apply_accelerator_settings(app_handle);
+            app_handle.manage(recording_manager.clone());
+            app_handle.manage(TranscriptionCoordinator::new(
+                app_handle.clone(),
+                model_manager.roots.clone(),
+            ));
+            model_manager.start_initial_scan();
+            app_handle.manage(transcription_manager.clone());
+            app_handle.manage(tray::TrayState::new());
+            #[cfg(unix)]
+            signal_handle::setup_signal_handler(app_handle.clone());
+            if let Err(error) = create_tray_icon(app_handle).map(|tray| app_handle.manage(tray)) {
+                log::error!("Failed to initialize tray: {error}");
+            }
+            tray::update_tray_menu(app_handle);
+            let settings = settings::get_settings(app_handle);
+            if !settings.show_tray_icon {
+                tray::set_tray_visibility(app_handle, false);
+            }
+            let app_handle_for_listener = app_handle.clone();
+            app_handle.listen("model-state-changed", move |_| {
+                tray::update_tray_menu(&app_handle_for_listener);
+            });
+            autostart::apply_autostart(app_handle, settings.autostart_enabled);
+            utils::create_recording_overlay(app_handle);
+            offline_bootstrap::runtime_ready();
+            Ok(())
+        },
+    )?;
+    Ok(())
+}
+
+fn initialize_history_logic(app_handle: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
+    if app_handle
+        .try_state::<Arc<workflow::DesktopWorkflow>>()
+        .is_some()
+    {
+        return Ok(());
+    }
     let data_root = portable::app_data_dir(app_handle)?;
     let sessions = notype_core::SessionService::open(data_root.join("sessions.db"))?;
     let legacy = data_root.join("history.db");
@@ -365,67 +431,7 @@ fn initialize_core_logic(app_handle: &AppHandle) -> Result<(), Box<dyn std::erro
         .with_delivery(Arc::new(native_input.clone())),
     );
     app_handle.manage(native_input);
-
-    // Initialize the transcribe-cpp native backend (logging + backend module
-    // registration) once, before any whisper model is loaded.
-    managers::transcription::init_transcribe_backend();
-
-    // Apply accelerator preferences before any model loads
-    managers::transcription::apply_accelerator_settings(app_handle);
-
-    // Add managers to Tauri's managed state
-    app_handle.manage(recording_manager.clone());
-    app_handle.manage(model_manager.clone());
-    app_handle.manage(TranscriptionCoordinator::new(
-        app_handle.clone(),
-        model_manager.roots.clone(),
-    ));
-    model_manager.start_initial_scan();
-    app_handle.manage(transcription_manager.clone());
     app_handle.manage(workflow);
-    app_handle.manage(tray::TrayState::new());
-
-    // Note: Shortcuts are NOT initialized here.
-    // The frontend is responsible for calling the `initialize_shortcuts` command
-    // after permissions are confirmed (on macOS) or after onboarding completes.
-    // This matches the pattern used for Enigo initialization.
-
-    // Set up signal handlers for toggling transcription. On Linux, SIGUSR1 is
-    // deliberately not handled — it belongs to WebKitGTK's garbage collector
-    // (#1660) — see signal_handle.rs.
-    #[cfg(unix)]
-    signal_handle::setup_signal_handler(app_handle.clone());
-
-    // The macOS activation policy for a start-hidden launch is applied before
-    // the event loop runs (see `apply_startup_activation_policy`), not here:
-    // by the time `setup` runs the app has already launched as a Regular
-    // (Dock) app, and demoting it at runtime is unreliable (#1787).
-
-    if let Err(error) = create_tray_icon(app_handle).map(|tray| app_handle.manage(tray)) {
-        log::error!("Failed to initialize tray: {error}");
-    }
-
-    // Initialize tray menu with idle state
-    tray::update_tray_menu(app_handle);
-
-    // Apply show_tray_icon setting
-    let settings = settings::get_settings(app_handle);
-    if !settings.show_tray_icon {
-        tray::set_tray_visibility(app_handle, false);
-    }
-
-    // Refresh tray menu when model state changes
-    let app_handle_for_listener = app_handle.clone();
-    app_handle.listen("model-state-changed", move |_| {
-        tray::update_tray_menu(&app_handle_for_listener);
-    });
-
-    // Apply the autostart preference (SMAppService login item on macOS 13+,
-    // tauri-plugin-autostart elsewhere)
-    autostart::apply_autostart(app_handle, settings.autostart_enabled);
-
-    // Create the recording overlay window (hidden by default)
-    utils::create_recording_overlay(app_handle);
     Ok(())
 }
 
@@ -705,6 +711,14 @@ fn run_headless_transcription(app: &AppHandle, args: &CliArgs) -> i32 {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run(cli_args: CliArgs) {
+    // Earlier main/platform work verifies regular bytes and host metadata only.
+    // Capture the entire bundle/data boundary before the first possible write.
+    let offline_placement = cli_args.offline_bundle_root.as_deref().map(|root| {
+        offline_bootstrap_native::preflight(root).unwrap_or_else(|code| {
+            eprintln!("notype: {code}");
+            std::process::exit(2)
+        })
+    });
     // Avoid ggml-metal residency-set teardown assertions when a native engine
     // outlives the Tauri shutdown sequence (#1902). This must happen before
     // transcribe-cpp initializes its Metal device. Advanced users can restore
@@ -724,7 +738,11 @@ pub fn run(cli_args: CliArgs) {
     memory::init_allocator();
 
     // Detect portable mode before anything else
-    portable::init();
+    portable::init(
+        offline_placement
+            .as_ref()
+            .map(|placement| placement.data_directory()),
+    );
 
     // Parse console logging directives from RUST_LOG, falling back to info-level logging
     // when the variable is unset
@@ -732,6 +750,8 @@ pub fn run(cli_args: CliArgs) {
 
     let specta_builder = Builder::<tauri::Wry>::new()
         .commands(collect_commands![
+            offline_bootstrap_native::get_bootstrap_status,
+            offline_bootstrap_native::retry_offline_bootstrap,
             shortcut::change_binding,
             shortcut::reset_binding,
             shortcut::change_shortcut_activation_setting,
@@ -971,6 +991,10 @@ pub fn run(cli_args: CliArgs) {
     // instance instead.
     if !headless_mode {
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            if offline_bootstrap::blocked() {
+                show_main_window(app);
+                return;
+            }
             if args.iter().any(|a| a == "--toggle-transcription") {
                 signal_handle::send_transcription_input(app, "transcribe", "CLI");
             } else if args.iter().any(|a| a == "--toggle-post-process") {
@@ -1020,6 +1044,7 @@ pub fn run(cli_args: CliArgs) {
             );
 
             specta_builder.mount_events(app);
+            offline_bootstrap_native::prepare(app.handle(),offline_placement.clone())?;
 
             // Headless one-shot path (`--transcribe-file` / `--list-devices` /
             // `--list-models`): initialize only what transcription needs — the
@@ -1029,19 +1054,18 @@ pub fn run(cli_args: CliArgs) {
             // recorder (so it never opens the mic, even with always_on_microphone),
             // signal handlers, and autostart that initialize_core_logic sets up.
             if headless_mode {
+                if !offline_bootstrap::domains_ready() { return Err("bootstrap-incomplete".into()); }
                 let app_handle = app.handle().clone();
-                let model_manager = Arc::new(
-                    ModelManager::new(&app_handle).expect("Failed to initialize model manager"),
-                );
+                let model_manager = app_handle.state::<Arc<ModelManager>>().inner().clone();
                 let transcription_manager = Arc::new(
                     TranscriptionManager::new(&app_handle, model_manager.clone())
                         .expect("Failed to initialize transcription manager"),
                 );
-                app_handle.manage(model_manager);
                 app_handle.manage(transcription_manager);
                 managers::transcription::init_transcribe_backend();
                 managers::transcription::report_compute_devices();
                 managers::transcription::apply_accelerator_settings(&app_handle);
+                offline_bootstrap::runtime_ready();
 
                 let handle = app_handle.clone();
                 let args = cli_args.clone();
@@ -1066,6 +1090,8 @@ pub fn run(cli_args: CliArgs) {
                 });
                 return Ok(());
             }
+
+            initialize_history_logic(app.handle())?;
 
             // Create main window programmatically so we can set data_directory
             // for portable mode (redirects WebView2 cache to portable Data dir)
@@ -1156,7 +1182,9 @@ pub fn run(cli_args: CliArgs) {
                 if core_result.is_ok() { diagnostics::Outcome::Ok } else { diagnostics::Outcome::Failed },
                 Some(diagnostic_startup_started.elapsed().as_millis().min(u64::MAX as u128) as u64),
             );
-            core_result?;
+            if core_result.is_err() {
+                offline_bootstrap::finish(Err(provider_config::ConfigError("bootstrap-runtime-unavailable")));
+            }
 
             // Initialize the local script dictionary away from the first Stop.
             // The headless CLI branch returns earlier and retains cold timings.
@@ -1190,10 +1218,10 @@ pub fn run(cli_args: CliArgs) {
             // ORT execution providers and transcribe-cpp compute devices; without this
             // the cost is paid synchronously when the user first opens Advanced
             // settings, freezing the UI. Result is cached in a OnceLock.
-            std::thread::spawn(|| {
+            if !offline_bootstrap::blocked() { std::thread::spawn(|| {
                 crate::managers::transcription::report_compute_devices();
                 let _ = crate::managers::transcription::get_available_accelerators();
-            });
+            }); }
 
             // Hide tray icon if --no-tray was passed
             if cli_args.no_tray {
@@ -1251,6 +1279,10 @@ pub fn run(cli_args: CliArgs) {
             _ => {}
         })
         .invoke_handler(move |invoke| {
+            if offline_bootstrap::blocked() && !offline_bootstrap::recovery_command(invoke.message.command()) {
+                invoke.resolver.reject("bootstrap-incomplete");
+                return true;
+            }
             #[cfg(debug_assertions)]
             if matches!(invoke.message.command(),"debug_begin_session"|"debug_finish_session") { return debug_handler(invoke); }
             invoke_handler(invoke)

@@ -8,19 +8,21 @@ static CONFIGURED_DATA_DIR: OnceLock<Option<PathBuf>> = OnceLock::new();
 
 /// Capture an optional isolated per-user directory before Tauri initializes.
 /// Relative overrides are rejected so a launch cannot create package-local data.
-pub fn init() {
+pub fn init(checked_bundle_data: Option<&std::path::Path>) {
     CONFIGURED_DATA_DIR.get_or_init(|| {
-        let configured = std::env::var_os("NOTYPE_DATA_DIR").map(PathBuf::from);
+        let configured = checked_bundle_data
+            .map(std::path::Path::to_path_buf)
+            .or_else(|| std::env::var_os("NOTYPE_DATA_DIR").map(PathBuf::from));
         if let Some(directory) = configured {
             let directory = match crate::data_policy::resolve_data_dir(&directory, None) {
                 Ok(directory) => directory,
-                Err(error) => {
-                    eprintln!("{error}");
+                Err(_) => {
+                    eprintln!("invalid-data-directory");
                     std::process::exit(2);
                 }
             };
-            if let Err(error) = std::fs::create_dir_all(&directory) {
-                eprintln!("Unable to create notype data directory: {error}");
+            if std::fs::create_dir_all(&directory).is_err() {
+                eprintln!("data-directory-unavailable");
                 std::process::exit(2);
             }
             std::env::set_var("HF_HOME", directory.join("huggingface"));
