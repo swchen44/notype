@@ -13,6 +13,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{sync::Arc, time::Duration};
 
+#[path = "provider_experiment.rs"]
+pub mod experiment;
+
 #[derive(Clone, Copy, Default, Serialize, Deserialize, specta::Type, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 /// Explicit transport choice; Disabled performs no text-service request.
