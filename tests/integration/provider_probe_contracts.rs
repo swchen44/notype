@@ -23,6 +23,7 @@ use tokio::{
     sync::oneshot,
 };
 use workflow::TextConfiguration;
+mod provider_probe_cli;
 mod provider_probe_evidence;
 mod provider_probe_runtime;
 mod provider_probe_smoke;

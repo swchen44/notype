@@ -14,7 +14,7 @@ use crate::{
     provider_config,
     workflow::experiment::OwnedLoopback,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{path::Path, sync::Arc, time::Duration};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -26,7 +26,8 @@ const OPENROUTER: &str = "SYNTHETIC-P25-OPENROUTER-NOT-A-REAL-KEY";
 pub trait SmokeSpace: ResourceGate + notype_core::csv::CsvSpaceProbe {}
 impl<T: ResourceGate + notype_core::csv::CsvSpaceProbe> SmokeSpace for T {}
 /// Safe successful synthetic proof; never an inference/billing result.
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SmokeProof {
     /// The owned server accepted exactly the12 eligible synthetic POSTs.
     pub accepted_requests: u8,

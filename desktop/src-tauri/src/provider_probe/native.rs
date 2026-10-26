@@ -246,6 +246,8 @@ pub struct Readiness {
     pub c_allocation_hwm: u64,
     /// Actual new D launcher/instruction allocation, with no cleanup credit.
     pub d_launcher_allocation_hwm: u64,
+    /// External retained runtime high-water mark; never reset between processes.
+    pub d_runtime_allocation_hwm: u64,
 }
 /// Current verified source/binary and one externally audited staging ledger.
 pub struct Verified {
@@ -296,6 +298,7 @@ impl Verified {
             || !readiness.private_repository
             || readiness.c_allocation_hwm > 112 * MIB
             || readiness.d_launcher_allocation_hwm > MIB
+            || readiness.d_runtime_allocation_hwm >= 24 * MIB
         {
             return Err(Failure::NotReady);
         }
@@ -322,7 +325,7 @@ impl Verified {
             root,
             c_hwm: self.readiness.c_allocation_hwm,
             d_launcher: self.readiness.d_launcher_allocation_hwm,
-            runtime_hwm: Mutex::new(0),
+            runtime_hwm: Mutex::new(self.readiness.d_runtime_allocation_hwm),
         })
     }
 }
@@ -332,6 +335,24 @@ pub struct QuotaGate {
     c_hwm: u64,
     d_launcher: u64,
     runtime_hwm: Mutex<u64>,
+}
+impl QuotaGate {
+    /// Retain a same-binary check's peak when entering the later live process.
+    pub(super) fn retain_high_water(&self, observed: u64) -> Result<(), Failure> {
+        if observed >= 24 * MIB {
+            return Err(Failure::Resource);
+        }
+        let mut high = self.runtime_hwm.lock().map_err(|_| Failure::Resource)?;
+        *high = (*high).max(observed);
+        Ok(())
+    }
+    /// Safe monotonic peak for the external retained resource ledger.
+    pub fn high_water(&self) -> Result<u64, Failure> {
+        self.runtime_hwm
+            .lock()
+            .map(|value| *value)
+            .map_err(|_| Failure::Resource)
+    }
 }
 fn allocated(root: &Path) -> Result<u64, Failure> {
     plain(root)?;
@@ -365,7 +386,12 @@ fn allocated(root: &Path) -> Result<u64, Failure> {
 }
 impl ResourceGate for QuotaGate {
     fn checkpoint(&self) -> Result<(), Failure> {
-        let allocated = allocated(&self.root)?;
+        if self.root != live_root() && self.root != smoke_root() {
+            return Err(Failure::Resource);
+        }
+        let allocated = allocated(&live_root())?
+            .checked_add(allocated(&smoke_root())?)
+            .ok_or(Failure::Resource)?;
         let mut high = self.runtime_hwm.lock().map_err(|_| Failure::Resource)?;
         *high = (*high).max(allocated);
         if *high >= 24 * MIB || self.c_hwm > 112 * MIB || self.d_launcher > MIB {
