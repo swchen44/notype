@@ -356,22 +356,38 @@ impl Verified {
     pub fn resources(&self, root: PathBuf) -> Arc<QuotaGate> {
         Arc::new(QuotaGate {
             root,
-            c_hwm: self.readiness.c_allocation_hwm,
-            d_launcher: self.readiness.d_launcher_allocation_hwm,
-            runtime_hwm: Mutex::new(self.readiness.d_runtime_allocation_hwm),
+            budget: ResourceBudget::new(
+                self.readiness.c_allocation_hwm,
+                self.readiness.d_launcher_allocation_hwm,
+                self.readiness.d_runtime_allocation_hwm,
+            ),
         })
     }
 }
 /// Actual runtime resource guard, preserving pending P14/P28 coexisting budgets.
 pub struct QuotaGate {
     root: PathBuf,
+    budget: ResourceBudget,
+}
+/// Fixed helper admission policy and retained allocation ledger. Observations
+/// contain bytes only; callers cannot replace floors, caps or delivery scope.
+/// Failed admissions retain observed runtime peaks for this ledger's lifetime.
+pub struct ResourceBudget {
     c_hwm: u64,
     d_launcher: u64,
     runtime_hwm: Mutex<u64>,
 }
-impl QuotaGate {
-    /// Retain a same-binary check's peak when entering the later live process.
-    pub(super) fn retain_high_water(&self, observed: u64) -> Result<(), Failure> {
+impl ResourceBudget {
+    /// Import externally retained staging, launcher and combined smoke/live
+    /// runtime peaks. Invalid marks fail closed when requirements are queried.
+    pub fn new(c_hwm: u64, d_launcher: u64, runtime_hwm: u64) -> Self {
+        Self {
+            c_hwm,
+            d_launcher,
+            runtime_hwm: Mutex::new(runtime_hwm),
+        }
+    }
+    fn retain_high_water(&self, observed: u64) -> Result<(), Failure> {
         if observed >= 24 * MIB {
             return Err(Failure::Resource);
         }
@@ -385,6 +401,50 @@ impl QuotaGate {
             .lock()
             .map(|value| *value)
             .map_err(|_| Failure::Resource)
+    }
+    /// Required currently available C/D bytes, retaining all future delivery
+    /// reservations. An invalid/poisoned ledger has no admissible requirement.
+    pub fn requirements(&self) -> Result<(u64, u64), Failure> {
+        let high = self.high_water()?;
+        if high >= 24 * MIB || self.c_hwm > 112 * MIB || self.d_launcher > MIB {
+            return Err(Failure::Resource);
+        }
+        let c_remaining = 128 * MIB - self.c_hwm;
+        let d_remaining = 32 * MIB - high.saturating_add(self.d_launcher).min(32 * MIB);
+        let c_required =
+            2 * 1024 * MIB + 32 * MIB + 4257 * MIB + 32 * MIB + 32 * MIB + 16 * MIB + c_remaining;
+        let d_required = 1024 * MIB + 32 * MIB + 2817 * MIB + MIB + d_remaining;
+        Ok((c_required, d_required))
+    }
+    /// Admit actual allocation/availability observations. Retain combined
+    /// runtime consumption even when availability fails; no missing probe has
+    /// a zero fallback and later smaller allocations never refund the peak.
+    pub fn admit(
+        &self,
+        runtime: Result<u64, Failure>,
+        c_available: Result<u64, Failure>,
+        d_available: Result<u64, Failure>,
+    ) -> Result<(), Failure> {
+        let observed = runtime?;
+        {
+            let mut high = self.runtime_hwm.lock().map_err(|_| Failure::Resource)?;
+            *high = (*high).max(observed);
+        }
+        let (c_required, d_required) = self.requirements()?;
+        if c_available? < c_required || d_available? < d_required {
+            return Err(Failure::Resource);
+        }
+        Ok(())
+    }
+}
+impl QuotaGate {
+    /// Retain a same-binary check's peak when entering the later live process.
+    pub(super) fn retain_high_water(&self, observed: u64) -> Result<(), Failure> {
+        self.budget.retain_high_water(observed)
+    }
+    /// Safe monotonic peak for the external retained resource ledger.
+    pub fn high_water(&self) -> Result<u64, Failure> {
+        self.budget.high_water()
     }
 }
 fn allocated(root: &Path) -> Result<u64, Failure> {
@@ -514,30 +574,18 @@ impl ResourceGate for QuotaGate {
         let allocated = allocated(&live_root())?
             .checked_add(allocated(&smoke_root())?)
             .ok_or(Failure::Resource)?;
-        let mut high = self.runtime_hwm.lock().map_err(|_| Failure::Resource)?;
-        *high = (*high).max(allocated);
-        if *high >= 24 * MIB || self.c_hwm > 112 * MIB || self.d_launcher > MIB {
-            return Err(Failure::Resource);
-        }
-        let c_remaining = 128 * MIB - self.c_hwm;
-        let d_remaining = 32 * MIB - high.saturating_add(self.d_launcher).min(32 * MIB);
-        // Keep the original P28 allowance, current bootstrap32MiB and Node16MiB
-        // alongside the future P14 budget. Actual existing allocations remain
-        // reflected in AvailableSpace; they are never refunded or deleted.
-        let c_required =
-            2 * 1024 * MIB + 32 * MIB + 4257 * MIB + 32 * MIB + 32 * MIB + 16 * MIB + c_remaining;
-        let d_required = 1024 * MIB + 32 * MIB + 2817 * MIB + MIB + d_remaining;
-        if available(Path::new("C:/"))? < c_required || available(Path::new("D:/"))? < d_required {
-            return Err(Failure::Resource);
-        }
-        Ok(())
+        self.budget.admit(
+            Ok(allocated),
+            available(Path::new("C:/")),
+            available(Path::new("D:/")),
+        )
     }
 }
 impl notype_core::csv::CsvSpaceProbe for QuotaGate {
     fn available_bytes(&self, directory: &Path) -> Result<u64, notype_core::csv::CsvExportError> {
         self.checkpoint()
             .and_then(|_| {
-                let current = *self.runtime_hwm.lock().map_err(|_| Failure::Resource)?;
+                let current = self.high_water()?;
                 Ok(available(directory)?.min((24 * MIB).saturating_sub(current)))
             })
             .map_err(|_| notype_core::csv::CsvExportError::SpaceUnavailable)
