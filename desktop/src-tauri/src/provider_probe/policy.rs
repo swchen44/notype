@@ -122,6 +122,107 @@ pub fn schedule() -> [Slot; 16] {
         make(16, 12, GeminiSealed, Sealed, ASK),
     ]
 }
+// These probes recognise only a small set of fixed-corpus forms. Normalising a
+// local copy never edits stored output and never certifies general meaning.
+fn compact(text: &str) -> String {
+    text.chars()
+        .filter(|character| !character.is_whitespace())
+        .map(|character| match character {
+            '，' => ',',
+            '；' => ';',
+            '。' => '.',
+            '’' => '\'',
+            other => other,
+        })
+        .collect::<String>()
+        .to_ascii_lowercase()
+}
+fn fact_range(text: &str, phrase: &str) -> Option<std::ops::Range<usize>> {
+    text.match_indices(phrase).find_map(|(start, _)| {
+        let end = start + phrase.len();
+        text[end..]
+            .chars()
+            .next()
+            .is_none_or(|next| !next.is_ascii_alphanumeric() && next != '_')
+            .then_some(start..end)
+    })
+}
+fn protected_negation(text: &str, positive: &[String], negative: &[String]) -> bool {
+    let mut remaining = text.to_owned();
+    let mut found = false;
+    for phrase in negative {
+        while let Some(range) = fact_range(&remaining, phrase) {
+            remaining.replace_range(range, " ");
+            found = true;
+        }
+    }
+    found
+        && !positive
+            .iter()
+            .any(|phrase| fact_range(&remaining, phrase).is_some())
+}
+fn prohibits_deletion(text: &str, identifier: &str) -> bool {
+    let mut positive = vec![];
+    let mut negative = vec![];
+    for verb in ["delete", "deletethe", "remove", "removethe"] {
+        let phrase = format!("{verb}{identifier}");
+        for prefix in ["donot", "don't", "mustnot"] {
+            negative.push(format!("{prefix}{phrase}"));
+        }
+        positive.push(phrase);
+    }
+    for verb in ["刪掉", "刪除"] {
+        let phrase = format!("{verb}{identifier}");
+        for prefix in ["不要", "請勿", "不得", "不能"] {
+            negative.push(format!("{prefix}{phrase}"));
+        }
+        positive.push(phrase);
+    }
+    protected_negation(text, &positive, &negative)
+}
+fn not_five_seconds(text: &str) -> bool {
+    [
+        "not5seconds",
+        "not5second",
+        "不是5秒",
+        "而非5秒",
+        "0.5seconds,not5",
+        "0.5second,not5",
+        "0.5,not5",
+        "0.5秒,不是5",
+        "0.5,不是5",
+    ]
+    .iter()
+    .any(|phrase| {
+        fact_range(text, phrase).is_some_and(|range| {
+            let mut tail = text[range.end..].chars();
+            !(tail.next() == Some('.') && tail.next().is_some_and(|next| next.is_ascii_digit()))
+        })
+    })
+}
+fn full_corpus(text: &str, probe: &str) -> bool {
+    ["session_id", "timeout", "0.5", "42", "API"]
+        .iter()
+        .all(|part| text.contains(part))
+        && prohibits_deletion(probe, "session_id")
+        && not_five_seconds(probe)
+}
+fn no_slide_preparation(text: &str) -> bool {
+    let positive = vec!["準備投影片".into(), "prepareslides".into()];
+    let mut negative = ["不用", "不必", "無須", "無需", "不需", "不要", "請勿"]
+        .iter()
+        .map(|prefix| format!("{prefix}準備投影片"))
+        .collect::<Vec<_>>();
+    negative.extend(
+        [
+            "donotprepareslides",
+            "don'tprepareslides",
+            "noneedtoprepareslides",
+        ]
+        .map(str::to_owned),
+    );
+    protected_negation(text, &positive, &negative)
+}
 /// Bounded local automated checks, not certification of human meaning.
 pub fn quality(slot: Slot, text: &str) -> bool {
     let text = text.trim();
@@ -143,30 +244,21 @@ pub fn quality(slot: Slot, text: &str) -> bool {
     {
         return false;
     }
+    let probe = compact(text);
     match slot.purpose {
         Purpose::Connection => text == "OK",
-        Purpose::Dictation | Purpose::Translation => {
-            ["session_id", "0.5", "42", "API"]
-                .iter()
-                .all(|part| text.contains(part))
-                && (text.contains('不')
-                    || text.to_ascii_lowercase().contains("not")
-                    || text.to_ascii_lowercase().contains("don't"))
-        }
+        Purpose::Dictation | Purpose::Translation => full_corpus(text, &probe),
         Purpose::ForwardReview | Purpose::Reverse if slot.provider == Provider::DeepSeek => {
             ["API_42", "timeout", "0.5"]
                 .iter()
                 .all(|part| text.contains(part))
-                && (text.contains('不')
-                    || text.to_ascii_lowercase().contains("not")
-                    || text.to_ascii_lowercase().contains("don't"))
+                && prohibits_deletion(&probe, "api_42")
         }
-        Purpose::ForwardReview | Purpose::Reverse => ["session_id", "0.5", "42", "API"]
-            .iter()
-            .all(|part| text.contains(part)),
+        Purpose::ForwardReview | Purpose::Reverse => full_corpus(text, &probe),
         Purpose::Ask => {
             (text.contains("星期三") || text.to_ascii_lowercase().contains("wednesday"))
                 && (text.contains("兩點") || text.contains('2'))
+                && no_slide_preparation(&probe)
         }
         Purpose::Cancellation | Purpose::Retry => {
             text.chars().any(|c| matches!(c as u32, 0x3400..=0x9fff))
