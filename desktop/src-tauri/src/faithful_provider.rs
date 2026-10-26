@@ -809,7 +809,10 @@ impl ChatProcessor {
             {
                 Ok(guard) => guard,
                 Err(error) => {
-                    trace.observe(diagnostic::ApiSpan::Admitted, diagnostic::ApiResult::Failed);
+                    trace.observe(
+                        diagnostic::ApiSpan::AdmissionFailed,
+                        diagnostic::ApiResult::Failed,
+                    );
                     let (result, category) = trace_failure(error);
                     trace.finish(result, category);
                     return Err(error);

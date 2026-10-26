@@ -322,12 +322,14 @@ pub struct RequestParameters {
 }
 impl RequestParameters {
     fn valid(&self) -> bool {
-        let number = |value: &Option<String>, lower: f64, upper: f64| {
+        let number = |value: &Option<String>, upper: f64, positive: bool| {
             value.as_ref().is_none_or(|text| {
-                text.len() <= 64
-                    && text
-                        .parse::<f64>()
-                        .is_ok_and(|value| value.is_finite() && value >= lower && value <= upper)
+                text.len() <= 400
+                    && text.parse::<f64>().is_ok_and(|value| {
+                        value.is_finite()
+                            && value <= upper
+                            && if positive { value > 0.0 } else { value >= 0.0 }
+                    })
             })
         };
         self.preference_effort.as_deref().is_none_or(valid_effort)
@@ -353,11 +355,11 @@ impl RequestParameters {
                     ["omitted", "sent", "ignored_by_provider", "unsupported"]
                         .contains(&value.as_str())
                 })
-            && number(&self.configured_temperature, 0.0, 2.0)
-            && number(&self.wire_temperature, 0.0, 2.0)
-            && number(&self.configured_top_p, f64::MIN_POSITIVE, 1.0)
-            && number(&self.wire_top_p, f64::MIN_POSITIVE, 1.0)
-            && number(&self.documented_top_p, f64::MIN_POSITIVE, 1.0)
+            && number(&self.configured_temperature, 2.0, false)
+            && number(&self.wire_temperature, 2.0, false)
+            && number(&self.configured_top_p, 1.0, true)
+            && number(&self.wire_top_p, 1.0, true)
+            && number(&self.documented_top_p, 1.0, true)
             && self
                 .max_output_tokens
                 .is_none_or(|value| value > 0 && value <= 1_000_000)
