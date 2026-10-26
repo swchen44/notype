@@ -58,3 +58,44 @@ requires its own reviewed root operation before any `main` mutation.
 No downloaded Windows artifact check, actual API language quality/account tier,
 human acceptance, microphone, App delivery, enterprise TLS/proxy or p95 is
 claimed. Reservations/zero-price metadata never populate production actual fees.
+
+## Approved review fixes
+
+Original independent review at `6c7f7c4`: Spec findings P1 (forward quality checked
+after automatic reverse) and P2 (unattached/missing protected negation); Standards0.
+The original findings are retained in the outside-repository review reports.
+[Reviewfix-v1](https://github.com/swchen44/notype/issues/25#issuecomment-6409094265)
+received actual [GPT-6-Astra APPROVED / zero unresolved](https://github.com/swchen44/notype/issues/25#issuecomment-6409112341).
+
+P2 test-only `8cbaca2` produced actual
+[Windows40276076285](https://github.com/swchen44/notype/actions/runs/40276076285)
+runtime RED:7 existing policy/SQLite tests passed; the new protected-fact test
+failed because slot10 accepted affirmative deletion. The narrow matcher uses
+only finite supported deletion/slide-prohibition forms and the distinct not-five
+contrast. An unrelated negative token is insufficient; stored output is unchanged
+and no generic semantic correctness is claimed.
+
+P2 `6ada6e2` passed [Windows40276603301](https://github.com/swchen44/notype/actions/runs/40276603301),
+including all supported positive forms and the unchanged full synthetic round.
+After integration composition, P1 test-only `ce218bd` produced actual
+[Windows40277277505](https://github.com/swchen44/notype/actions/runs/40277277505)
+runtime RED:8 policy/SQLite tests and19 existing integration tests passed; the
+two new tests observed6 rather than5 and11 rather than10 actual owned POSTs.
+Compilation/lint failures are not included as RED evidence.
+
+The fix checks the exact `BackTranslationRequest.text` at reverse entry and
+irreversibly halts the same Coordinator before pacing/observer construction.
+The forward stays a successful, already-flushed transport call. Both negative
+integration cases run with diagnostics OFF before processing and Clear before
+the bad forward; they assert no reverse call/link/reservation/POST or later call,
+and reopen the actual owned SQLite to verify original/forward text, usage and
+UNKNOWN fees. Conservative reservations remain522240 units at slot5 and835584
+at slot10; Gemini stays sealed. The existing positive pairs, complete12-call/
+9-history smoke, callback faults,429/cancel and completion-winning timer tests
+remain required in final exact-source CI.
+
+Latest integration `0a0fc82` was merged, preserving both bootstrap and helper
+harness targets, CI steps/filters and test documentation. The private Windows
+workflow bytes remain identical to the original reviewed helper candidate.
+No core, wire/parser, CLI, credential, schedule, fee or activation change is part
+of these review fixes. Exact final CI/source rechecks remain separate gates.

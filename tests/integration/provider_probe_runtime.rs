@@ -599,12 +599,10 @@ async fn invalid_forward_stops_reverse(bad: u8) {
         "invalid forward must not spend its reverse HTTP request"
     );
     let original = probe::policy::schedule()[usize::from(bad - 1)].corpus;
-    let entries = runner.sessions().search("").unwrap();
-    let forward = entries
-        .iter()
-        .find(|entry| {
-            entry.transcript == original && entry.scenario == notype_core::Scenario::Translation
-        })
+    let state = runner.snapshot().unwrap();
+    let forward = runner
+        .sessions()
+        .get(&state.records[usize::from(bad - 1)].history)
         .unwrap();
     assert_eq!(forward.result.as_deref(), Some(bad_text));
     assert!(forward.back_translation.is_none());
@@ -630,7 +628,6 @@ async fn invalid_forward_stops_reverse(bad: u8) {
         .unwrap();
     assert_eq!(outcome, "success");
     assert!(!receipt.is_empty());
-    let state = runner.snapshot().unwrap();
     assert!(state.halted);
     assert_eq!(state.records[usize::from(bad - 1)].state, State::Reconciled);
     assert_eq!(state.records[usize::from(bad)].state, State::NotRun);

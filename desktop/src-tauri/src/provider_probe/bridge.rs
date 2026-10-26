@@ -2,7 +2,7 @@
 //! locks never cover core callbacks, another SQLite store, cancellation or await.
 use super::{
     journal::{Failure, Journal, Outcome, Record, Snapshot, State},
-    policy::{schedule, Provider, Purpose, MAX_CALLS},
+    policy::{quality, schedule, Provider, Purpose, MAX_CALLS},
 };
 use crate::workflow::experiment::{AdverseLatch, ExperimentProcessor};
 use notype_core::{
@@ -287,6 +287,16 @@ impl TextProcessor for BudgetProcessor {
     ) -> TextFuture {
         if !matches!(self.slot, 5 | 10) {
             return Box::pin(async { Err(TextFailure::HistoryStorage) });
+        }
+        // Core has already saved this actual forward result and receipt. Stop
+        // before reverse pacing/observer admission without rewriting that
+        // successful transport/accounting evidence as a failed or unsent call.
+        if !quality(schedule()[usize::from(self.slot - 1)], &request.text) {
+            let halted = self.coordinator.halt();
+            return Box::pin(async move {
+                halted.map_err(|_| TextFailure::HistoryStorage)?;
+                Err(TextFailure::InvalidResponse)
+            });
         }
         let inner = self.inner.clone();
         let coordinator = self.coordinator.clone();
