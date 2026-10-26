@@ -1,9 +1,7 @@
 //! Actual experiment wire through the production resolver/provider/SQLite seam.
+use super::provider_config;
 use super::*;
 use workflow::experiment::*;
-#[allow(dead_code)]
-#[path = "../../desktop/src-tauri/src/provider_config.rs"]
-mod provider_config;
 struct Memory;
 impl provider_config::ConfigurationStorage for Memory {
     fn load(&self) -> Result<Option<Vec<u8>>, provider_config::ConfigError> {

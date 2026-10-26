@@ -3,9 +3,7 @@ use super::*;
 #[allow(dead_code)]
 #[path = "../../desktop/src-tauri/src/provider_probe/mod.rs"]
 mod probe;
-#[allow(dead_code)]
-#[path = "../../desktop/src-tauri/src/provider_config.rs"]
-mod provider_config;
+use super::provider_config;
 use probe::{
     journal::{Identity, State},
     policy::{DICTATION, REVIEW},
@@ -15,6 +13,12 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
     Mutex,
 };
+struct OwnedSpace;
+impl probe::bridge::ResourceGate for OwnedSpace {
+    fn checkpoint(&self) -> Result<(), probe::journal::Failure> {
+        Ok(())
+    }
+}
 fn identity() -> Identity {
     Identity {
         source: "a".repeat(40),
@@ -147,6 +151,7 @@ async fn completion_winning_slot7_fully_joins_its_pending_timer_before_same_hist
         identity(),
         diagnostics::api::TraceContext::global(None),
         timer,
+        Arc::new(OwnedSpace),
     )
     .unwrap();
     let mut histories = vec![];

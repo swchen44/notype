@@ -29,16 +29,28 @@ pub struct Coordinator {
     failed: AtomicBool,
     latch: AdverseLatch,
     last_openrouter: Mutex<Option<std::time::Instant>>,
+    resource: Arc<dyn ResourceGate>,
+}
+/// Owned destination/quota boundary, called before every real observer begin
+/// and reservation. Failure prevents HTTP; it never supplies a spending permit.
+pub trait ResourceGate: Send + Sync {
+    fn checkpoint(&self) -> Result<(), Failure>;
 }
 impl Coordinator {
     /// Bind already created owned stores. A retained journal remains report-only.
-    pub fn new(journal: Journal, core_path: PathBuf, latch: AdverseLatch) -> Arc<Self> {
+    pub fn new(
+        journal: Journal,
+        core_path: PathBuf,
+        latch: AdverseLatch,
+        resource: Arc<dyn ResourceGate>,
+    ) -> Arc<Self> {
         Arc::new(Self {
             journal: Mutex::new(journal),
             core_path,
             failed: AtomicBool::new(false),
             latch,
             last_openrouter: Mutex::new(None),
+            resource,
         })
     }
     /// Safe reservation/source snapshot, never provider/body/settings data.
@@ -101,6 +113,7 @@ impl Coordinator {
         Ok(())
     }
     fn before_begin(&self, slot: u8) -> Result<(), Failure> {
+        self.resource.checkpoint()?;
         self.eligible()?;
         self.reconcile()?;
         self.eligible()?;
@@ -360,6 +373,10 @@ impl ApiCallObserver for Observer {
     fn mark_sent(&self, id: &str) -> Result<(), TextFailure> {
         self.current(id).map_err(|_| self.fail())?;
         self.coordinator.eligible().map_err(|_| self.fail())?;
+        self.coordinator
+            .resource
+            .checkpoint()
+            .map_err(|_| self.fail())?;
         self.coordinator
             .mutate(|journal| journal.reserve(self.slot, id))
             .map_err(|_| self.fail())?;

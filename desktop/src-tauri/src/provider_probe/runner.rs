@@ -1,7 +1,7 @@
 //! Fixed serial schedule through actual SessionService. Slot7 always settles
 //! both its processing task and owned timer before reconciliation or retry8.
 use super::{
-    bridge::{BudgetProcessor, Coordinator},
+    bridge::{BudgetProcessor, Coordinator, ResourceGate},
     configuration::{self, LiveConfigurations},
     journal::{Failure, Identity, Journal, Snapshot},
     policy::{quality, schedule, Purpose, MAX_CALLS},
@@ -60,14 +60,23 @@ impl ProbeRunner {
         identity: Identity,
         tracing: TraceContext,
         timer: Arc<dyn CancellationTimer>,
+        resource: Arc<dyn ResourceGate>,
     ) -> Result<Self, Failure> {
-        Self::fresh(root, Source::Owned(endpoint), identity, tracing, timer)
+        Self::fresh(
+            root,
+            Source::Owned(endpoint),
+            identity,
+            tracing,
+            timer,
+            resource,
+        )
     }
     pub(super) fn live(
         root: &Path,
         configuration: LiveConfigurations,
         identity: Identity,
         tracing: TraceContext,
+        resource: Arc<dyn ResourceGate>,
     ) -> Result<Self, Failure> {
         Self::fresh(
             root,
@@ -75,6 +84,7 @@ impl ProbeRunner {
             identity,
             tracing,
             Arc::new(RuntimeCancellationTimer),
+            resource,
         )
     }
     fn fresh(
@@ -83,6 +93,7 @@ impl ProbeRunner {
         identity: Identity,
         tracing: TraceContext,
         timer: Arc<dyn CancellationTimer>,
+        resource: Arc<dyn ResourceGate>,
     ) -> Result<Self, Failure> {
         super::journal::plain(root)?;
         std::fs::create_dir(root).map_err(|_| Failure::ReportOnly)?;
@@ -93,7 +104,7 @@ impl ProbeRunner {
         let mut journal = Journal::open(&root.join("round"), identity)?;
         journal.arm()?;
         let latch = AdverseLatch::new();
-        let coordinator = Coordinator::new(journal, core_path, latch.clone());
+        let coordinator = Coordinator::new(journal, core_path, latch.clone(), resource);
         Ok(Self {
             sessions,
             coordinator,
@@ -204,8 +215,8 @@ impl ProbeRunner {
         } else {
             slot.number
         };
-        if slot.number != 7 {
-            if history.error.is_some()
+        if slot.number != 7
+            && (history.error.is_some()
                 || history
                     .result
                     .as_deref()
@@ -214,11 +225,10 @@ impl ProbeRunner {
                     && history
                         .back_translation
                         .as_deref()
-                        .is_none_or(|text| !quality(schedule()[usize::from(last - 1)], text))
-            {
-                self.halt()?;
-                return Err(Failure::Quality);
-            }
+                        .is_none_or(|text| !quality(schedule()[usize::from(last - 1)], text)))
+        {
+            self.halt()?;
+            return Err(Failure::Quality);
         }
         if slot.number == 7 {
             self.retry_history = Some(id);
