@@ -83,8 +83,16 @@ async function inspectInputs(
       "invalid-manifest",
       "Facade and release versions differ.",
     );
-  if (Object.keys(facade.dependencies ?? {}).length !== 1 || facade.dependencies?.[release.application.name] !== release.application.version || Object.keys(facade.optionalDependencies ?? {}).length !== 0)
-    throw new PackageError("invalid-manifest", "The base facade must depend only on its pinned application payload.");
+  if (
+    Object.keys(facade.dependencies ?? {}).length !== 1 ||
+    facade.dependencies?.[release.application.name] !==
+      release.application.version ||
+    Object.keys(facade.optionalDependencies ?? {}).length !== 0
+  )
+    throw new PackageError(
+      "invalid-manifest",
+      "The base facade must depend only on its pinned application payload.",
+    );
   const require = createRequire(path.join(facadeRoot, "package.json"));
   function packageRoot(pin) {
     try {
@@ -96,12 +104,12 @@ async function inspectInputs(
       );
     }
   }
-  const applicationRoot = packageRoot(release.application);
-  const application = await verifyPackage(
-    applicationRoot,
-    release.application,
-    "application",
-  );
+  const applicationRoot = bundle
+    ? path.join(facadeRoot, "node_modules/notype-win32-x64")
+    : packageRoot(release.application);
+  const application =
+    bundle?.application ??
+    (await verifyPackage(applicationRoot, release.application, "application"));
   let modelRoot;
   let model;
   if (bundle) {
@@ -143,7 +151,12 @@ async function inspectInputs(
     );
   const dataDirectory = path.resolve(configured);
   const resolvedData = await resolvedFuturePath(dataDirectory);
-  for (const root of [bundle?.root, facadeRoot, applicationRoot, modelRoot].filter(Boolean)) {
+  for (const root of [
+    bundle?.root,
+    facadeRoot,
+    applicationRoot,
+    modelRoot,
+  ].filter(Boolean)) {
     const packageDirectory = await resolvedFuturePath(root);
     if (
       contains(packageDirectory, resolvedData) ||
@@ -226,10 +239,7 @@ export async function prepareLaunch(options) {
 export async function runApplication(options) {
   const plan = await prepareLaunch(options);
   if (options.signal?.aborted)
-    throw new PackageError(
-      "launch-cancelled",
-      "Local launch was cancelled.",
-    );
+    throw new PackageError("launch-cancelled", "Local launch was cancelled.");
   if (options.launch) return options.launch(plan);
   return new Promise((resolve, reject) => {
     const child = spawn(

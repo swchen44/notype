@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "bootstrap_id": "synthetic-administrator-example-v1",
+  "stt": {
+    "model_id": "handy-computer/Qwen3-ASR-0.6B-gguf/Qwen3-ASR-0.6B-Q6_K.gguf",
+    "root": "models"
+  },
+  "connection": {
+    "display_name": "Synthetic administrator example",
+    "kind": "custom",
+    "dialect": "generic",
+    "address_mode": "base_url",
+    "api_address": "https://reserved.invalid/v1",
+    "models_endpoint": null,
+    "model": "administrator-supplied-model",
+    "authentication": "bearer",
+    "timeout_ms": 30000,
+    "thinking_preference": "off",
+    "effort": null,
+    "capability_declaration": {
+      "kind": "non_reasoning",
+      "minimum_effort": null,
+      "supported_efforts": [],
+      "temperature_supported": true,
+      "top_p_supported": true
+    },
+    "temperature": null,
+    "top_p": null,
+    "max_output_tokens": null
+  }
+}
