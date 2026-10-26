@@ -140,53 +140,6 @@ fn zero(value: &Value) -> bool {
         _ => false,
     }
 }
-// Reject numeric underflow before the metadata-only JSON projection. Inference
-// remains parsed solely by the production provider. A positive1e-999 price must
-// never become a float zero and grant free admission.
-fn no_underflow(bytes: &[u8]) -> bool {
-    let (mut index, mut quoted, mut escaped) = (0, false, false);
-    while index < bytes.len() {
-        let byte = bytes[index];
-        if quoted {
-            if escaped {
-                escaped = false;
-            } else if byte == b'\\' {
-                escaped = true;
-            } else if byte == b'"' {
-                quoted = false;
-            }
-            index += 1;
-            continue;
-        }
-        if byte == b'"' {
-            quoted = true;
-            index += 1;
-            continue;
-        }
-        if byte.is_ascii_digit() || byte == b'-' {
-            let start = index;
-            while index < bytes.len()
-                && matches!(bytes[index], b'0'..=b'9' | b'.' | b'-' | b'+' | b'e' | b'E')
-            {
-                index += 1;
-            }
-            let Ok(token) = std::str::from_utf8(&bytes[start..index]) else {
-                return false;
-            };
-            if token.parse::<f64>().is_ok_and(|value| value == 0.0)
-                && token
-                    .split(['e', 'E'])
-                    .next()
-                    .is_some_and(|part| part.bytes().any(|b| matches!(b, b'1'..=b'9')))
-            {
-                return false;
-            }
-            continue;
-        }
-        index += 1;
-    }
-    true
-}
 /// Validate one fixed public page through the production activation boundary.
 /// Inputs are untrusted public bytes; errors disclose no rejected value. This
 /// cannot manufacture a FreshContracts or change a destination/model policy.
@@ -323,7 +276,7 @@ fn validate_pricing(html: &str) -> Result<(), Failure> {
     }
 }
 fn validate_endpoints(body: &[u8]) -> Result<(), Failure> {
-    if !no_underflow(body) {
+    if !crate::workflow::experiment::no_numeric_underflow(body) {
         return Err(Failure::Contract);
     }
     let value: Value = serde_json::from_slice(body).map_err(|_| Failure::Contract)?;

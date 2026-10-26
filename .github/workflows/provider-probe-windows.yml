@@ -2,7 +2,7 @@ name: Private provider helper Windows contracts
 
 on:
   push:
-    branches: [main, implement/notype-mvp, ticket/25-provider-probe-v4]
+    branches: [implement/notype-mvp, ticket/25-provider-probe-v4]
     paths:
       - .github/workflows/provider-probe-windows.yml
       - desktop/src-tauri/src/provider_probe/**
@@ -78,7 +78,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'probe-import-observation-failed' }
           $imports = @($dependencyOutput | ForEach-Object { $_.Trim() } | Where-Object { $_ -match '^[A-Za-z0-9_.-]+[.]dll$' } | Sort-Object -Unique)
           if ($imports.Count -eq 0 -or $imports.Count -gt 128) { throw 'probe-import-observation-failed' }
-          $manifest = [ordered]@{ source=$env:NOTYPE_PROVIDER_PROBE_SOURCE_COMMIT; binary_sha256=(Get-FileHash -LiteralPath $binary -Algorithm SHA256).Hash.ToLowerInvariant(); binary_bytes=$item.Length; lock_sha256=(Get-FileHash tests/integration/desktop-contracts/Cargo.lock -Algorithm SHA256).Hash.ToLowerInvariant(); workflow_sha256=(Get-FileHash .github/workflows/provider-probe-windows.yml -Algorithm SHA256).Hash.ToLowerInvariant(); toolchain='1.99.1'; workflow_run_id=[UInt64]$env:GITHUB_RUN_ID; artifact_name='notype-provider-probe-v4'; imports=$imports }
+          $manifest = [ordered]@{ source=$env:NOTYPE_PROVIDER_PROBE_SOURCE_COMMIT; binary_sha256=(Get-FileHash -LiteralPath $binary -Algorithm SHA256).Hash.ToLowerInvariant(); binary_bytes=$item.Length; lock_sha256=(Get-FileHash tests/integration/desktop-contracts/Cargo.lock -Algorithm SHA256).Hash.ToLowerInvariant(); workflow_sha256=(Get-FileHash .github/workflows/provider-probe-windows.yml -Algorithm SHA256).Hash.ToLowerInvariant(); launcher_sha256=(Get-FileHash scripts/Start-provider-probe.cmd -Algorithm SHA256).Hash.ToLowerInvariant(); readme_sha256=(Get-FileHash docs/provider-probe-README.txt -Algorithm SHA256).Hash.ToLowerInvariant(); toolchain='1.99.1'; workflow_run_id=[UInt64]$env:GITHUB_RUN_ID; artifact_name='notype-provider-probe-v4'; imports=$imports }
           $manifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $stage 'manifest.json') -Encoding utf8NoBOM
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:

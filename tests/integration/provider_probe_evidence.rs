@@ -11,6 +11,9 @@ fn actual_windows_available_space_and_sha256_work_on_owned_fixture() {
         super::probe::native::sha256(b"abc").unwrap(),
         "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
     );
+    let path = directory.path().join("owned.bin");
+    std::fs::write(&path, [1u8; 8192]).unwrap();
+    assert!(super::probe::native::file_allocation(&path).unwrap() >= 8192);
 }
 
 fn pricing(input: &str, output: &str) -> String {

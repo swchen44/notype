@@ -240,12 +240,12 @@ impl ExperimentContract {
         }
         Ok(())
     }
-    pub(super) fn response_valid(&self, value: &Value, receipt: &ApiReceipt) -> bool {
+    pub(super) fn response_valid(&self, value: &Value, receipt: &ApiReceipt, raw: &[u8]) -> bool {
         let zero_cost = self.kind != ExperimentKind::OpenRouterGemma31bFreeGoogleAiStudio
             || value["usage"]["cost"]
                 .as_f64()
                 .is_some_and(|cost| cost.is_finite() && cost == 0.0);
-        coherent_receipt(receipt) && zero_cost
+        coherent_receipt(receipt) && zero_cost && no_numeric_underflow(raw)
     }
     pub(super) fn contract_failed(&self, status: Option<u16>) {
         self.latch.mark(AdverseCategory::Contract, status);
@@ -267,6 +267,54 @@ impl ExperimentContract {
         };
         self.latch.mark(category, status);
     }
+}
+/// Validate number lexemes without parsing another response or extracting any
+/// field. The ordinary JSON parser remains authoritative; this bounded guard
+/// only prevents a nonzero cost/usage number from silently rounding to zero.
+/// Quoted text is skipped and no raw bytes leave this backend boundary.
+pub(crate) fn no_numeric_underflow(bytes: &[u8]) -> bool {
+    let (mut index, mut quoted, mut escaped) = (0, false, false);
+    while index < bytes.len() {
+        let byte = bytes[index];
+        if quoted {
+            if escaped {
+                escaped = false;
+            } else if byte == b'\\' {
+                escaped = true;
+            } else if byte == b'"' {
+                quoted = false;
+            }
+            index += 1;
+            continue;
+        }
+        if byte == b'"' {
+            quoted = true;
+            index += 1;
+            continue;
+        }
+        if byte.is_ascii_digit() || byte == b'-' {
+            let start = index;
+            while index < bytes.len()
+                && matches!(bytes[index], b'0'..=b'9' | b'.' | b'-' | b'+' | b'e' | b'E')
+            {
+                index += 1;
+            }
+            let Ok(token) = std::str::from_utf8(&bytes[start..index]) else {
+                return false;
+            };
+            if token.parse::<f64>().is_ok_and(|value| value == 0.0)
+                && token
+                    .split(['e', 'E'])
+                    .next()
+                    .is_some_and(|part| part.bytes().any(|b| matches!(b, b'1'..=b'9')))
+            {
+                return false;
+            }
+            continue;
+        }
+        index += 1;
+    }
+    true
 }
 /// Same bounded typed receipt contract for the common parser, composed observer
 /// and independent persisted-core reconciliation. Cost stays a separate gate.

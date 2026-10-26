@@ -190,6 +190,7 @@ async fn check() -> Result<Summary, Failure> {
 fn report() -> Result<Summary, Failure> {
     let root = native::live_root();
     journal::plain(&root)?;
+    native::validate_runtime(&root)?;
     if !root.is_dir() {
         return Err(Failure::ReportOnly);
     }

@@ -12,6 +12,9 @@ copy only the exact independently reviewed workflow file to `main`, preserving
 its bytes, then dispatch it with `--ref` equal to the final merged helper SHA.
 Source files, dependencies, credentials and application delivery are excluded
 from that promotion. No such change is performed by this implementation.
+The push trigger deliberately excludes `main`: a workflow-only registration
+commit there must not try to test absent helper source. The later explicit
+dispatch checks out and tests the exact complete integration SHA instead.
 
 Before artifact dispatch, independently verify Spec0, Standards0, exact-source
 ALL CI and Windows contracts. The `reviewed_source` input must equal the clean

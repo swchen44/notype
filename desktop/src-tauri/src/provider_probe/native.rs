@@ -216,6 +216,8 @@ struct Manifest {
     binary_bytes: u64,
     lock_sha256: String,
     workflow_sha256: String,
+    launcher_sha256: String,
+    readme_sha256: String,
     toolchain: String,
     workflow_run_id: u64,
     artifact_name: String,
@@ -259,6 +261,24 @@ impl Verified {
     /// This discovers no credential and creates no live/smoke state.
     pub fn load() -> Result<Self, Failure> {
         let artifact = artifact_directory()?;
+        for entry in fs::read_dir(&artifact).map_err(|_| Failure::NotReady)? {
+            let entry = entry.map_err(|_| Failure::NotReady)?;
+            plain(&entry.path())?;
+            if !entry.file_type().map_err(|_| Failure::NotReady)?.is_file()
+                || ![
+                    "notype-provider-probe.exe",
+                    "Start-provider-probe.cmd",
+                    "provider-probe-README.txt",
+                    "manifest.json",
+                    "readiness.json",
+                    "check.json",
+                ]
+                .iter()
+                .any(|name| entry.file_name() == *name)
+            {
+                return Err(Failure::NotReady);
+            }
+        }
         let exe = std::env::current_exe().map_err(|_| Failure::NotReady)?;
         plain(&exe)?;
         if exe.file_name() != Some(std::ffi::OsStr::new("notype-provider-probe.exe"))
@@ -311,6 +331,15 @@ impl Verified {
             || sha256(include_bytes!(
                 "../../../../.github/workflows/provider-probe-windows.yml"
             ))? != manifest.workflow_sha256
+            || sha256(&read(&artifact.join("Start-provider-probe.cmd"), 65_536)?)?
+                != manifest.launcher_sha256
+            || sha256(include_bytes!(
+                "../../../../scripts/Start-provider-probe.cmd"
+            ))? != manifest.launcher_sha256
+            || sha256(&read(&artifact.join("provider-probe-README.txt"), 65_536)?)?
+                != manifest.readme_sha256
+            || sha256(include_bytes!("../../../../docs/provider-probe-README.txt"))?
+                != manifest.readme_sha256
         {
             return Err(Failure::NotReady);
         }
@@ -369,13 +398,48 @@ fn allocated(root: &Path) -> Result<u64, Failure> {
         }
         plain(&path)?;
         let meta = fs::symlink_metadata(&path).map_err(|_| Failure::Resource)?;
+        let relative = path.strip_prefix(root).map_err(|_| Failure::Resource)?;
+        let parts = relative
+            .components()
+            .map(|part| part.as_os_str().to_str().ok_or(Failure::Resource))
+            .collect::<Result<Vec<_>, _>>()?;
+        let allowed = match parts.as_slice() {
+            [] => meta.is_dir(),
+            ["round" | "results"] => meta.is_dir(),
+            ["synthetic-home"] => root == smoke_root() && meta.is_dir(),
+            ["preparation.lock" | "contracts.json"] => meta.is_file(),
+            ["round", "round.lock" | "round.sqlite" | "round.sqlite-journal"] => meta.is_file(),
+            ["synthetic-home", ".env"] => root == smoke_root() && meta.is_file(),
+            ["results", name] => {
+                meta.is_file()
+                    && ([
+                        "sessions.db",
+                        "sessions.db.notype-lock",
+                        "sessions.db-wal",
+                        "sessions.db-shm",
+                        "history.csv",
+                        "diagnostics.txt",
+                        "final.json",
+                    ]
+                    .contains(name)
+                        || name.starts_with(".notype-history-") && name.ends_with(".partial")
+                        || (name.starts_with("diagnostics-") && name.ends_with(".txt")
+                            || name.starts_with("receipt-") && name.ends_with(".json"))
+                            && name.len() <= 24)
+            }
+            _ => false,
+        };
+        if !allowed {
+            return Err(Failure::Resource);
+        }
         if meta.is_dir() {
+            total = total.checked_add(65_536).ok_or(Failure::Resource)?;
             for entry in fs::read_dir(&path).map_err(|_| Failure::Resource)? {
                 pending.push(entry.map_err(|_| Failure::Resource)?.path());
             }
         } else if meta.is_file() {
             total = total
-                .checked_add(meta.len())
+                .checked_add(file_allocation(&path)?)
                 .and_then(|value| value.checked_add(4096))
                 .ok_or(Failure::Resource)?;
         } else {
@@ -383,6 +447,53 @@ fn allocated(root: &Path) -> Result<u64, Failure> {
         }
     }
     Ok(total)
+}
+/// Validate retained task-owned runtime paths without opening a core writer,
+/// creating a directory or repairing foreign/orphan entries.
+pub fn validate_runtime(root: &Path) -> Result<(), Failure> {
+    allocated(root).map(|_| ())
+}
+/// Actual allocation observation for one regular owned Windows file. Count at
+/// least its logical length, including sparse/compressed cases; no unavailable
+/// observation is treated as zero. Hard links are rejected.
+#[cfg(windows)]
+pub fn file_allocation(path: &Path) -> Result<u64, Failure> {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::Storage::FileSystem::{
+        FileStandardInfo, GetFileInformationByHandleEx, FILE_STANDARD_INFO,
+    };
+    plain(path)?;
+    let file = fs::File::open(path).map_err(|_| Failure::Resource)?;
+    let metadata = file.metadata().map_err(|_| Failure::Resource)?;
+    if !metadata.is_file() {
+        return Err(Failure::Resource);
+    }
+    let mut info = FILE_STANDARD_INFO::default();
+    // SAFETY: owned live file handle and correctly sized SDK structure. This
+    // read-only query returns actual allocation; it changes no file/profile.
+    // https://learn.microsoft.com/windows/win32/api/winbase/ns-winbase-file_standard_info
+    if unsafe {
+        GetFileInformationByHandleEx(
+            file.as_raw_handle().cast(),
+            FileStandardInfo,
+            (&mut info as *mut FILE_STANDARD_INFO).cast(),
+            std::mem::size_of::<FILE_STANDARD_INFO>() as u32,
+        )
+    } == 0
+        || info.AllocationSize < 0
+        || info.EndOfFile < 0
+        || info.NumberOfLinks != 1
+        || info.DeletePending
+        || info.Directory
+    {
+        return Err(Failure::Resource);
+    }
+    Ok((info.AllocationSize as u64).max(metadata.len()))
+}
+/// Portable synthetic tests cannot assert a Windows filesystem allocation.
+#[cfg(not(windows))]
+pub fn file_allocation(_: &Path) -> Result<u64, Failure> {
+    Err(Failure::Resource)
 }
 impl ResourceGate for QuotaGate {
     fn checkpoint(&self) -> Result<(), Failure> {
