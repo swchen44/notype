@@ -19,6 +19,9 @@ pub mod model_runtime_metadata;
 #[allow(dead_code)]
 #[path = "../../desktop/src-tauri/src/provider_config.rs"]
 mod provider_config;
+#[allow(dead_code)]
+#[path = "../../desktop/src-tauri/src/provider_models.rs"]
+mod provider_models;
 #[allow(dead_code, unused_imports)]
 #[path = "../../desktop/src-tauri/src/workflow.rs"]
 mod workflow;
@@ -362,4 +365,59 @@ fn explicit_user_root_with_another_model_ignores_missing_bundle_selection_withou
     assert_eq!(settings["selected_model"], "");
     assert_eq!(settings["onboarding_completed"], false);
     assert_eq!(roots.projection().count(), 1);
+}
+
+#[tokio::test]
+async fn bootstrap_and_safe_view_send_zero_http_until_an_explicit_model_list() {
+    use tokio::{
+        io::{AsyncReadExt, AsyncWriteExt},
+        net::TcpListener,
+        time::{timeout, Duration},
+    };
+    struct NeverHome;
+    impl provider_config::credentials::CredentialReader for NeverHome {
+        fn read(
+            &self,
+            _: provider_config::credentials::PublicKey,
+        ) -> Result<Option<String>, provider_config::ConfigError> {
+            panic!("bootstrap or anonymous explicit operation must not read home credentials")
+        }
+    }
+    let directory = tempfile::tempdir().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let mut preset = connection();
+    preset.api_address = format!("http://{}/v1", listener.local_addr().unwrap());
+    preset.authentication = provider_config::Authentication::None;
+    let store = Arc::new(
+        ConnectionStore::open(Arc::new(FileStorage::new(
+            directory.path().join("provider_connections_v2.json"),
+        )))
+        .unwrap(),
+    );
+    store.bootstrap_if_empty(preset, "synthetic-v1").unwrap();
+    let view = store.view().unwrap();
+    assert!(!view.connections[0].app_key_present);
+    assert!(timeout(Duration::from_millis(30), listener.accept())
+        .await
+        .is_err());
+    let draft = store.view().unwrap().connections.remove(0).connection;
+    let discovery = provider_models::ModelDiscovery::new();
+    let request = provider_models::ModelListRequest {
+        request_id: "explicit".into(),
+        expected_revision: 1,
+        connection: draft,
+        key_action: provider_config::KeyAction::Keep,
+    };
+    let server = async {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        let mut request = vec![0; 8192];
+        let n = socket.read(&mut request).await.unwrap();
+        let text = String::from_utf8_lossy(&request[..n]);
+        assert!(text.starts_with("GET /v1/models "));
+        assert!(!text.to_ascii_lowercase().contains("authorization:"));
+        let body = r#"{"data":[{"id":"synthetic-explicit"}]}"#;
+        socket.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",body.len(),body).as_bytes()).await.unwrap();
+    };
+    let (_, result) = tokio::join!(server, discovery.query(store, request, &NeverHome));
+    assert_eq!(result.unwrap().models[0].id, "synthetic-explicit");
 }

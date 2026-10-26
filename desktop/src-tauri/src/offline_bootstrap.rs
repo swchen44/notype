@@ -189,6 +189,7 @@ pub fn initialize(
     } else {
         None
     };
+    let mut selected_default = input.stt.model_id.as_str();
     if root_pending || selection_pending {
         let projection = candidate
             .as_ref()
@@ -199,7 +200,12 @@ pub fn initialize(
             .get(&input.stt.model_id)
             .is_some_and(|artifact| artifact.status == ArtifactStatus::Verified)
         {
-            return Err(ConfigError("bootstrap-model-unavailable"));
+            if root_pending {
+                return Err(ConfigError("bootstrap-model-unavailable"));
+            }
+            // The explicit root wins. Leave ordinary first-run model choice to
+            // the user instead of selecting a different artifact automatically.
+            selected_default = "";
         }
     }
     if let Some(candidate) = candidate {
@@ -217,7 +223,7 @@ pub fn initialize(
         )?;
     }
     if selection_pending {
-        selection.initialize_if_absent(defaults, &input.stt.model_id, &input.bootstrap_id)?;
+        selection.initialize_if_absent(defaults, selected_default, &input.bootstrap_id)?;
     }
     Ok(())
 }

@@ -39,6 +39,8 @@ operation reads credentials or performs a model listing/API request.
 Existing initialized settings/root/provider state always wins and is skipped
 without a rewrite. A missing unused bundled default cannot block an existing
 valid explicit root/selection. Fresh required model failure opens Recovery;
+an explicit user root without the bundled model initializes fresh settings with
+an empty selection, so normal setup lets the user choose without auto-selection.
 full bundle --check still fails any missing declared asset. Required fresh
 domains are validated together, committed independently with durable applied
 markers, then readiness is published. Partial failure blocks capture/API and

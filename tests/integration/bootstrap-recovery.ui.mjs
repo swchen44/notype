@@ -12,6 +12,7 @@ test("setup recovery offers explicit retry without automatic API calls and waits
     window.__TAURI_INTERNALS__ = {
       invoke: async (cmd) => {
         window.calls.push(cmd);
+        if (cmd === "get_app_settings") return { ui_language: "en" };
         if (cmd === "get_bootstrap_status")
           return {
             state: "incomplete",
@@ -36,9 +37,12 @@ test("setup recovery offers explicit retry without automatic API calls and waits
     );
   });
   await page.getByText("Setup incomplete", { exact: true }).waitFor();
-  assert.deepEqual(await page.evaluate(() => window.calls), [
-    "get_bootstrap_status",
-  ]);
+  assert.deepEqual(
+    await page.evaluate(() =>
+      window.calls.filter((cmd) => cmd !== "get_app_settings"),
+    ),
+    ["get_bootstrap_status"],
+  );
   await page.getByRole("button", { name: "Retry setup", exact: true }).click();
   assert.equal(
     await page
@@ -52,8 +56,10 @@ test("setup recovery offers explicit retry without automatic API calls and waits
   await page
     .getByText("Setup incomplete", { exact: true })
     .waitFor({ state: "detached" });
-  assert.deepEqual(await page.evaluate(() => window.calls), [
-    "get_bootstrap_status",
-    "retry_offline_bootstrap",
-  ]);
+  assert.deepEqual(
+    await page.evaluate(() =>
+      window.calls.filter((cmd) => cmd !== "get_app_settings"),
+    ),
+    ["get_bootstrap_status", "retry_offline_bootstrap"],
+  );
 });

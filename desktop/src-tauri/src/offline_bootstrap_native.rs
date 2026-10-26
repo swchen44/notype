@@ -85,11 +85,12 @@ fn input(root: &Path) -> Result<BootstrapInput, ConfigError> {
     let root = std::fs::canonicalize(root).map_err(|_| ConfigError("bootstrap-package-invalid"))?;
     let expected = root.join("app/node_modules/notype-win32-x64/app/notype.exe");
     provider_config::files::plain(&expected)?;
-    if std::fs::canonicalize(expected).ok()
-        != std::env::current_exe()
-            .ok()
-            .and_then(|p| std::fs::canonicalize(p).ok())
-    {
+    let expected =
+        std::fs::canonicalize(expected).map_err(|_| ConfigError("bootstrap-package-invalid"))?;
+    let actual = std::env::current_exe()
+        .and_then(std::fs::canonicalize)
+        .map_err(|_| ConfigError("bootstrap-package-invalid"))?;
+    if expected != actual {
         return Err(ConfigError("bootstrap-package-invalid"));
     }
     let bundle: Bundle = serde_json::from_slice(&read(&root.join("bundle.json"))?)
