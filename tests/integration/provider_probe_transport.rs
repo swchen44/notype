@@ -161,6 +161,26 @@ async fn positive_cost_that_underflows_float_cannot_be_accepted_as_reported_nume
 }
 
 #[tokio::test]
+async fn a_documented_different_comparison_model_is_a_contradiction_while_unknown_alias_is_unverified(
+) {
+    let mut reply = good_reply();
+    reply["model"] = json!("google/gemma-4-26b-a4b-it");
+    let (entry, _, latch) = owned_openrouter_response(reply).await;
+    assert_eq!(entry.error.as_deref(), Some("llm-invalid-response"));
+    assert_eq!(
+        entry.api_summary.reported_models,
+        vec!["google/gemma-4-26b-a4b-it"]
+    );
+    assert_eq!(entry.api_summary.input.total, Some(5));
+    assert!(latch.observed().is_some());
+    let mut reply = good_reply();
+    reply["model"] = json!("unknown-reported-alias-equivalence-unverified");
+    let (entry, _, latch) = owned_openrouter_response(reply).await;
+    assert_eq!(entry.result.as_deref(), Some("OK"));
+    assert!(latch.observed().is_none());
+}
+
+#[tokio::test]
 async fn sealed_response_rejects_incoherent_usage_reasoning_and_model_but_retains_actual_receipt() {
     let mut cases = vec![];
     for (field, value) in [
