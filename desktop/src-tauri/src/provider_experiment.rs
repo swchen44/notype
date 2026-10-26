@@ -228,7 +228,7 @@ impl ExperimentContract {
         if deepseek {
             if body["thinking"] != json!({"type":"disabled"})
                 || body["reasoning_effort"] != "none"
-                || body["temperature"] != 0
+                || body["temperature"].as_f64() != Some(0.0)
             {
                 return Err(invalid());
             }
@@ -239,6 +239,47 @@ impl ExperimentContract {
             return Err(invalid());
         }
         Ok(())
+    }
+    pub(super) fn response_valid(&self, value: &Value, receipt: &ApiReceipt) -> bool {
+        let (Some(input), Some(output), Some(total)) = (
+            receipt.usage.input,
+            receipt.usage.output,
+            receipt.total_tokens,
+        ) else {
+            return false;
+        };
+        let usage_valid = input <= 32768
+            && output <= 512
+            && input.checked_add(output) == Some(total)
+            && !receipt.usage_invalid
+            && !receipt.reasoning_nonempty
+            && receipt
+                .usage
+                .reasoning_output
+                .is_none_or(|value| value == 0)
+            && receipt
+                .usage
+                .cached_input
+                .is_none_or(|value| value <= input)
+            && receipt
+                .usage
+                .uncached_input
+                .is_none_or(|value| value <= input)
+            && match (receipt.usage.cached_input, receipt.usage.uncached_input) {
+                (Some(hit), Some(miss)) => hit.checked_add(miss) == Some(input),
+                _ => true,
+            };
+        let identity_valid = receipt.reported_model.as_deref().is_some_and(|model| {
+            !model.trim().is_empty() && model.len() <= 256 && !model.chars().any(char::is_control)
+        });
+        let zero_cost = self.kind != ExperimentKind::OpenRouterGemma31bFreeGoogleAiStudio
+            || value["usage"]["cost"]
+                .as_f64()
+                .is_some_and(|cost| cost.is_finite() && cost == 0.0);
+        usage_valid && identity_valid && zero_cost
+    }
+    pub(super) fn contract_failed(&self, status: Option<u16>) {
+        self.latch.mark(AdverseCategory::Contract, status);
     }
 }
 impl ExperimentProcessor {

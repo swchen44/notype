@@ -11,6 +11,8 @@ mod workflow;
 // failure boundaries execute before the workflow advances to Clippy.
 #[path = "../unittest/gateway_error_context.rs"]
 mod gateway_error_context;
+#[path = "../unittest/provider_probe_policy.rs"]
+mod provider_probe_policy;
 #[path = "provider_probe_transport.rs"]
 mod provider_probe_transport;
 use notype_core::{RecognitionMode, SessionOptions, SessionService, SessionStatus};

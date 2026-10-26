@@ -917,6 +917,9 @@ impl ChatProcessor {
                 };
                 let private_metadata = receipt.reported_model.as_deref().is_some_and(reflected)
                     || receipt.reported_effort.as_deref().is_some_and(reflected);
+                let experiment_response_valid = experiment
+                    .as_ref()
+                    .is_none_or(|policy| policy.response_valid(&value, &receipt));
                 if receipt.reported_model.as_deref().is_some_and(reflected) {
                     receipt.reported_model = None;
                 }
@@ -935,6 +938,12 @@ impl ChatProcessor {
                 }
                 if let Some(error) = GatewayError::classify(status, Some(&value)) {
                     return Err(TextFailure::Provider(error));
+                }
+                if !experiment_response_valid {
+                    if let Some(policy) = &experiment {
+                        policy.contract_failed(Some(status));
+                    }
+                    return Err(TextFailure::InvalidResponse);
                 }
                 if private_metadata {
                     return Err(TextFailure::InvalidResponse);
