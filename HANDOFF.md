@@ -6,6 +6,16 @@
 
 ## 目前 checkpoint
 
+2026-10-26 台灣時間 08:40 接續狀態：integration `cfd8c1b` 已包含 #27 provider UI（產品 `a8aacbe`、凍結 `7d2e4e5`）及模型資料夾／離線 ZIP 決策文件。#26 多連線／安全 config／API diagnostics 的 composed candidate `2977db0635e7f02afb8064ad33abd644bb0c246e` 在 [完整 ALL CI40249253105](https://github.com/swchen44/notype/actions/runs/40249253105) completed/success，包含真實 owned proxy 與 headers 後停滯 body 的回歸。獨立 Spec review 發現三項問題：準備失敗時遺失翻譯設定、model-list Error 後 pending guard 未釋放、無關設定儲存繞過限流；Standards 無規則違反，另有 credential policy 重複建議。修正依 [P25-config-reviewfix-v2](https://github.com/swchen44/notype/issues/25#issuecomment-6405575893)／[實際 GPT-6-Astra APPROVED0](https://github.com/swchen44/notype/issues/25#issuecomment-6405614167) 由 diagnostics 單一 fixer 做 RED→GREEN，最後仍須 exact CI 與兩軸複審後合入。這不是未修問題的 source0，也不是新版 App 已交付。
+
+使用者最新模型資料夾需求已完整 to-spec：[#28 模型根目錄計畫](https://github.com/swchen44/notype/issues/28#issuecomment-6405356803)／[Astra 核准0](https://github.com/swchen44/notype/issues/28#issuecomment-6405400881)，與 [#29 完整離線 ZIP／無 key 預設](https://github.com/swchen44/notype/issues/29#issuecomment-6405357391)／[核准0](https://github.com/swchen44/notype/issues/29#issuecomment-6405428255)。待 #26 最終 source gate 後實作：使用者可自行移動整個模型資料夾，重新安裝後指定新位置重用，App 不搬移／複製／刪除模型；動態套用須涵蓋錄音、預載、解碼、下載與真正 worker 結束的 admission／generation fences。基本 App 不強制取得模型，缺模型仍可開啟選擇資料夾；整包 ZIP 完整性檢查維持嚴格。離線包帶完整 runtime／已驗證模型及可選管理者無 key 內網預設，已有個人設定優先。實際公司 IP／model ID 未知，不猜測。見已修訂 [ADR0001](docs/adr/0001-portable-npm-distribution.md)。兩份計畫核准不代表來源或 ZIP 已完成。
+
+本機資源最新只讀值（00:35 UTC）：C 6,862,983,168 B、D 4,151,177,216 B，並非仍卡在舊 1.8GB 狀態，沒有刪任何快取／個人檔。無 notype 程序的觀測只適用該時刻；任何原生 QA 前仍需當下檢查。#14 build/delivery-v3 只有 DRAFT、未核准，必須合併 #28/#29 的 optional-model／ZIP 語意另訂新版本並實際 Astra 審查，不能逕行本機 Cargo／組包。持續保護舊 App／local-trial／Starter／原模型及歷史；沒有真實 API 呼叫或 key 值輸出。新的 live 計畫仍待 source／artifact／預算／免費資格 gate，不啟動舊 source41 helper。
+
+以下 checkpoint 保留先前證據；「最新／正在實作／空間不足」等時態以本節及 live issues 為準。
+
+## 先前 checkpoint
+
 2026-10-26 最新 source：#25 第一階段錯誤處理 `d4315522171a393f01012a934d78b110cd72fb25` 已合入並推送 `ec37ab6741422c9e7ba5aeeb5f93553cd508f401`。依 [P25-errors-v1](https://github.com/swchen44/notype/issues/25#issuecomment-6403957943)／[Astra APPROVED0](https://github.com/swchen44/notype/issues/25#issuecomment-6403993599) 及 [context 優先序修正 v2](https://github.com/swchen44/notype/issues/25#issuecomment-6404301764)／[核准](https://github.com/swchen44/notype/issues/25#issuecomment-6404307928)，真實 HTTP adapter 現在提供安全錯誤分類、保存可重試原稿／回譯前向結果與 usage，歷史介面有 EN／繁／簡訊息；沒有自動重送。最終獨立 Spec／Standards 皆 0，[完整 Linux CI 40240970555](https://github.com/swchen44/notype/actions/runs/40240970555) 在精確 `d431552` **completed／success**。見 [provider errors receipt](docs/verification/provider-errors.md)。這不代表 Windows 新版 App 或真實 API 已驗收。
 
 #25 其餘使用者決策已確認，不重新訪談：DeepSeek Flash4.1 的本輪總預算 **US$2**，取代先前 US$0.10；Gemini／OpenRouter 僅可免費路線。App 非空 key 優先、家目錄 `~/.env` 後備；已授權的 names-only 查核只確認三個預期變數存在，未輸出值。多份 connection、一份 active，包含 Custom／Local；Local 先指明確設定的 OpenAI 相容 endpoint，不自動啟動或下載模型。UI 的 Gemini／OpenRouter model ID 預設空白，由使用者填寫；View model IDs 只顯示／Copy，手動貼上，不自動選或覆寫。實驗模型 ID 與 UI 設定分開。Thinking 預設 OFF；不能關閉時提示限制並使用已知最小值，requested／effective 分開記錄。
