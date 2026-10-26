@@ -2,10 +2,12 @@
 status: accepted
 ---
 
-# 以 npm 配送 Windows amd64 portable payload
+# 以 npm 或完整離線 ZIP 配送 Windows amd64 portable payload
 
-公司電腦不能使用 installer，但公司 npm Proxy 可取得自製套件，因此產品只發 Windows amd64 的預編譯 portable payload，將必要 App、DLL、runtime 與模型納入明確的套件／manifest，讓使用者透過 npm 取得；Python wheel 與 setup／MSI 不是交付方式。通用產品包以公開 npm 為發布方向，公司 endpoint、model ID 與憑證保存在本機，GitHub 研究／程式碼 repo 維持 private。
+公司電腦不能使用 installer，因此產品配送 Windows amd64 的預編譯 portable payload。保留 npm／公司 npm Proxy 取得方式，另提供包含 App、完整 runtime、已驗證語音模型及可選非機密預設連線的離線 ZIP，供網路受限環境解壓啟動；不要求收件者安裝 Node、開發工具或 runtime bootstrapper。通用產品包不含公司私有 endpoint、model ID 或憑證；管理者可在私有離線包另附無 key 的內網預設，使用者於 App 填入自己的 key。GitHub repo 維持 private。
 
-安裝後的執行不應臨時要求 bootstrapper 或 native build tools；持久資料須與 npm 管理的版本化程式檔分開，以保留模型及文字歷史。實際 payload、registry 權限、第三方 notices 與公司 Windows 冷啟動仍須驗證；本決策不代表已建置或發布產品。
+基本 App 與模型取得分開：沒有模型也能啟動設定介面，模型 add-on 由使用者明確下載或指定既有資料夾。使用者可自行搬移整個模型資料夾，在重新安裝後指定新位置；App 選取與重新掃描不搬移、複製或刪除既有模型。個人設定與歷史放在程式及模型資料夾之外，已有設定優先於離線包預設。完整 ZIP 的整包驗證仍須包含所有宣告模型；一般啟動時模型缺失則提供選取資料夾的復原介面。
 
-依據：[Q9、Q12 與部署限制](../research/08-decision-log.md)，以及 [package 研究](../research/05-performance-and-package-delivery.md)。
+2026-10-26 使用者新增模型重用與內網 ZIP 場景，修訂原 npm-only／強制取得模型的限制，避免大模型重複下載。這是配送與資料邊界決策，尚不代表新版來源、原生啟動、整包組裝、乾淨環境或內網服務驗收通過；實際 payload、registry 權限、第三方 notices 仍須分別驗證。
+
+依據：[決策紀錄](../research/08-decision-log.md)、[package 研究](../research/05-performance-and-package-delivery.md)、[#28 計畫](https://github.com/swchen44/notype/issues/28#issuecomment-6405356803)／[GPT-6-Astra 核准](https://github.com/swchen44/notype/issues/28#issuecomment-6405400881)，以及 [#29 計畫](https://github.com/swchen44/notype/issues/29#issuecomment-6405357391)／[核准](https://github.com/swchen44/notype/issues/29#issuecomment-6405428255)。
