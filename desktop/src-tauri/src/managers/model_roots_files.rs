@@ -317,9 +317,12 @@ pub struct ArtifactUse {
     pub path: PathBuf,
     _handles: Vec<File>,
 }
+/// Pins plain root/cache directory ancestors for an admitted worker lifetime.
 pub struct RootUse {
     _handles: Vec<File>,
 }
+/// Owns a read handle denying Windows write/replacement until publication.
+/// Obtain only by verifying an operation-reserved partial; never synthesize it.
 #[derive(Debug)]
 pub struct VerifiedDownload {
     pub path: PathBuf,
@@ -332,12 +335,15 @@ pub struct Filesystem {
     custom: Arc<Prober>,
 }
 impl Filesystem {
+    /// Captures this already-open file's stable physical identity and metadata.
     pub fn file_identity(&self, file: &File) -> RootResult<Fingerprint> {
         identity(file)
     }
+    /// Reads identity without following unsupported links or mutating bytes.
     pub fn observe_download(&self, path: &Path) -> RootResult<Fingerprint> {
         identity(&open_plain(path, false, true)?)
     }
+    /// Reads only a plain file matching the reservation's volume/file identity.
     pub fn partial_size(&self, path: &Path, expected: &Fingerprint) -> RootResult<u64> {
         let current = self.observe_download(path)?;
         if !same_directory(&current, expected) {
@@ -345,6 +351,9 @@ impl Filesystem {
         }
         Ok(current.size)
     }
+    /// Exclusively creates a plain partial, or reopens only the exact previously
+    /// reserved file. RootService must retain admitted ancestry handles and the
+    /// reservation through all writes/workers. Existing foreign files are refused.
     pub fn open_partial(&self, path: &Path, owned: Option<&Fingerprint>) -> RootResult<File> {
         plain_ancestors(path)?;
         let mut options = OpenOptions::new();
@@ -379,6 +388,8 @@ impl Filesystem {
         plain_ancestors(path)?;
         Ok(file)
     }
+    /// Deletes only the operation-reserved physical file, using an exact handle
+    /// identity check on Windows; substitution and unsupported links are retained.
     pub fn remove_partial(&self, path: &Path, expected: &Fingerprint) -> RootResult<()> {
         match fs::symlink_metadata(path) {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
@@ -392,6 +403,9 @@ impl Filesystem {
         drop(file);
         self.delete_exact(path, &current)
     }
+    /// Publishes a verified, pinned source using an exclusive hard link.
+    /// The caller must retain root admission/ancestry and remove the owned
+    /// partial afterward. Existing destinations are never replaced.
     pub fn publish_download(
         &self,
         verified: VerifiedDownload,
@@ -402,6 +416,9 @@ impl Filesystem {
             .map_err(|_| RootError("model-artifact-invalid"))?;
         Ok(verified.fingerprint.clone())
     }
+    /// Verifies only a reserved physical file under the shared hash mutex.
+    /// Returns its read guard for publication. Mismatch cleanup targets only
+    /// the unchanged owned file; I/O or substitution errors retain the bytes.
     pub fn verify_download(
         &self,
         path: &Path,
@@ -524,14 +541,15 @@ impl Filesystem {
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
                 Err(_) => return Err(RootError("model-root-unavailable")),
             };
-            plain_ancestors(pointer.parent().ok_or(RootError("model-root-invalid"))?)?;
+            let parent = pointer.parent().ok_or(RootError("model-root-invalid"))?;
+            plain_ancestors(parent)?;
             if metadata.file_type().is_symlink() {
                 let link = fs::read_link(&pointer).map_err(|_| RootError("model-root-invalid"))?;
                 if link.is_absolute() {
                     return Err(RootError("model-root-invalid"));
                 }
                 let mut target = PathBuf::new();
-                for component in pointer.parent().unwrap().join(link).components() {
+                for component in parent.join(link).components() {
                     match component {
                         std::path::Component::ParentDir => {
                             if !target.pop() {

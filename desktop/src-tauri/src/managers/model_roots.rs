@@ -594,6 +594,9 @@ impl RootService {
         };
         self.current(key) && self.acquire(&key.model_id, &activity).is_ok()
     }
+    /// Publishes only while the complete loadable artifact key is current.
+    /// The callback runs under the root-state mutex: it must be memory-only,
+    /// infallible, and must not re-enter RootService or acquire an inverted lock.
     pub fn with_current<T>(&self, key: &ArtifactKey, publish: impl FnOnce() -> T) -> Option<T> {
         let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         if state.root.generation == key.generation
@@ -650,6 +653,10 @@ impl RootService {
             .check_root_identity(&activity.root, &self.projection())?;
         Ok(activity.root.root.clone())
     }
+    /// Exclusively creates a root-local partial or resumes the exact file this
+    /// admitted operation reserved. All worker clones share that reservation;
+    /// foreign/replaced files are retained and rejected. Keep activity alive
+    /// through writes and any spawned worker, then close this handle to verify.
     pub fn open_partial(&self, path: &Path, activity: &RootActivity) -> RootResult<std::fs::File> {
         if path.parent() != Some(activity.root.root.as_path())
             || self.snapshot().generation != activity.root.generation
@@ -661,11 +668,15 @@ impl RootService {
         owned.insert(path.to_owned(), self.files.file_identity(&file)?);
         Ok(file)
     }
+    /// Removes only an unchanged physical file reserved by this operation.
+    /// Missing is harmless; replacement and foreign paths remain untouched.
     pub fn remove_partial(&self, path: &Path, activity: &RootActivity) -> RootResult<()> {
         let owned = activity.partials.lock().unwrap_or_else(|e| e.into_inner());
         let expected = owned.get(path).ok_or(RootError("model-root-readonly"))?;
         self.files.remove_partial(path, expected)
     }
+    /// Returns the current size of this operation's plain reserved file.
+    /// An absent path is zero; existing unowned/replaced paths are rejected.
     pub fn partial_size(&self, path: &Path, activity: &RootActivity) -> RootResult<u64> {
         if std::fs::symlink_metadata(path).is_err() {
             return Ok(0);
@@ -676,6 +687,8 @@ impl RootService {
             owned.get(path).ok_or(RootError("model-root-readonly"))?,
         )
     }
+    /// Captures a completed root-local HF file's physical identity before a
+    /// later hash scan, so ownership cannot attach to an external replacement.
     pub fn observe_download(
         &self,
         path: &Path,
@@ -686,6 +699,10 @@ impl RootService {
         }
         self.files.observe_download(path)
     }
+    /// Consumes a pinned verification guard and creates the final name without
+    /// replacing existing bytes, then removes only its reserved partial.
+    /// Keep activity alive throughout; failure can retain the verified partial
+    /// or published file for recovery and never claims ownership automatically.
     pub fn publish_download(
         &self,
         verified: super::model_roots_files::VerifiedDownload,
@@ -703,6 +720,9 @@ impl RootService {
         self.remove_partial(&path, activity)?;
         Ok(fingerprint)
     }
+    /// Hashes this operation's reserved partial on the shared single hash lane.
+    /// The returned guard pins unchanged bytes through publication. Only a hash
+    /// mismatch may clean the exact owned file; other failures preserve it.
     pub fn verify_download(
         &self,
         path: &Path,
@@ -758,6 +778,8 @@ impl RootService {
         )?));
         Ok(())
     }
+    /// Reconciles availability only if this complete artifact key still owns
+    /// the projection; delayed results cannot modify a same-ID successor.
     pub fn mark_unavailable(&self, key: &ArtifactKey) {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         if state.root.generation != key.generation
@@ -793,6 +815,11 @@ impl RootService {
         let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         (state.root.clone(), state.projection.clone())
     }
+    /// Records provenance only after the caller's successful explicit download.
+    /// The caller supplies that download's observed physical fingerprint; an
+    /// identical external replacement must not inherit deletion permission.
+    /// Callers must never use this to claim imported data; legacy and custom
+    /// records are independently rejected here.
     pub fn mark_owned(&self, id: &str, fingerprint: &Fingerprint) {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(record) = state.projection.artifacts.get(id).filter(|r| {
