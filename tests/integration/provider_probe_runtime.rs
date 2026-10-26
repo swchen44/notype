@@ -339,7 +339,7 @@ async fn diagnostics_off_helper_finish_failure_blocks_automatic_reverse_after_re
     }
     let service = Arc::new(DiagnosticService::new());
     service.initialize(Arc::new(Off));
-    assert!(!service.status().enabled);
+    assert!(!service.status().effective_enabled);
     let tracing = TraceContext::new(
         None,
         Arc::new(capture_startup::MonotonicClock),
@@ -398,7 +398,7 @@ async fn diagnostics_off_helper_finish_failure_blocks_automatic_reverse_after_re
             .unwrap(),
         5
     );
-    assert!(!service.status().enabled);
+    assert!(!service.status().effective_enabled);
     finished.send(()).unwrap();
     server.await.unwrap();
 }
