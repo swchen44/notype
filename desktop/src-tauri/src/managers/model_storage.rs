@@ -74,8 +74,12 @@ pub trait ModelPathAccess {
     /// Resolve for activation, retaining stale HF partial cleanup and notifying
     /// the manager only when an advertised completed path is missing.
     fn get_model_path(&self, model_id: &str) -> Result<PathBuf, Self::Error> {
-        let result = self.storage_snapshot(model_id)?.activation_path();
-        if matches!(result, Err(StorageError::Missing)) {
+        let storage = self.storage_snapshot(model_id)?;
+        let reconcile = !matches!(storage.source, StorageSource::SelectedRoot { .. });
+        let result = storage.activation_path();
+        // Selected-root availability is fenced by the root authority's full
+        // artifact key. An old path query must never reconcile a successor by ID.
+        if reconcile && matches!(result, Err(StorageError::Missing)) {
             self.reconcile_missing(model_id);
         }
         result.map_err(Into::into)

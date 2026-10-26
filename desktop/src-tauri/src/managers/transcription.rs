@@ -7,6 +7,7 @@ use crate::capture_startup::{CaptureOutcome, CaptureSpan, CaptureTrace};
 use crate::chinese_script::{convert_chinese_script, ChineseVariety};
 use crate::managers::audio::AudioRecordingManager;
 use crate::managers::model::{EngineType, ModelManager};
+use crate::managers::model_engine_state::{EngineLease, EngineState};
 use crate::managers::model_roots::{ArtifactKey, RootActivity};
 use crate::managers::model_roots_files::ArtifactUse;
 use crate::settings::{
@@ -302,10 +303,9 @@ impl Drop for StreamWorkerGuard {
 
 #[derive(Clone)]
 pub struct TranscriptionManager {
-    engine: Arc<Mutex<Option<LoadedEngine>>>,
+    engine: Arc<Mutex<EngineState<ArtifactKey, LoadedEngine>>>,
     model_manager: Arc<ModelManager>,
     app_handle: AppHandle,
-    current_model_id: Arc<Mutex<Option<ArtifactKey>>>,
     last_activity: Arc<AtomicU64>,
     shutdown_signal: Arc<AtomicBool>,
     watcher_handle: Arc<Mutex<Option<thread::JoinHandle<()>>>>,
@@ -338,10 +338,9 @@ pub struct TranscriptionManager {
 impl TranscriptionManager {
     pub fn new(app_handle: &AppHandle, model_manager: Arc<ModelManager>) -> Result<Self> {
         let manager = Self {
-            engine: Arc::new(Mutex::new(None)),
+            engine: Arc::new(Mutex::new(EngineState::new())),
             model_manager,
             app_handle: app_handle.clone(),
-            current_model_id: Arc::new(Mutex::new(None)),
             last_activity: Arc::new(AtomicU64::new(Self::now_ms())),
             shutdown_signal: Arc::new(AtomicBool::new(false)),
             watcher_handle: Arc::new(Mutex::new(None)),
@@ -430,7 +429,7 @@ impl TranscriptionManager {
     }
 
     /// Lock the engine mutex, recovering from poison if a previous transcription panicked.
-    fn lock_engine(&self) -> MutexGuard<'_, Option<LoadedEngine>> {
+    fn lock_engine(&self) -> MutexGuard<'_, EngineState<ArtifactKey, LoadedEngine>> {
         self.engine.lock().unwrap_or_else(|poisoned| {
             warn!("Engine mutex was poisoned by a previous panic, recovering");
             poisoned.into_inner()
@@ -475,15 +474,7 @@ impl TranscriptionManager {
         let unload_start = std::time::Instant::now();
         debug!("Starting to unload model");
 
-        {
-            let mut engine = self.lock_engine();
-            // Dropping the engine frees all resources
-            *engine = None;
-        }
-        {
-            let mut current_model = self.current_model_id.lock().unwrap();
-            *current_model = None;
-        }
+        self.lock_engine().clear();
 
         // Emit unloaded event
         let _ = self.app_handle.emit(
@@ -506,11 +497,7 @@ impl TranscriptionManager {
     }
 
     pub fn invalidate_idle_root(&self) {
-        *self.lock_engine() = None;
-        *self
-            .current_model_id
-            .lock()
-            .unwrap_or_else(|e| e.into_inner()) = None;
+        self.lock_engine().clear();
         self.reload_model_on_next_use
             .store(false, Ordering::Release);
     }
@@ -648,14 +635,7 @@ impl TranscriptionManager {
         // frees the previous native context first — avoids holding two models at
         // once (peak memory on large GGUFs). Clear the id too: if the new load
         // fails, status should read "no loaded model", not the dropped engine.
-        {
-            let mut engine = self.lock_engine();
-            *engine = None;
-        }
-        {
-            let mut current_model = self.current_model_id.lock().unwrap();
-            *current_model = None;
-        }
+        let ticket = self.lock_engine().begin_load(artifact.key.clone());
 
         // Create appropriate engine based on model type
 
@@ -822,13 +802,13 @@ impl TranscriptionManager {
         self.model_manager
             .roots
             .with_current(&artifact.key, || {
-                {
-                    let mut engine = self.lock_engine();
-                    let backend = match &loaded_engine {
-                        EngineKind::TranscribeCpp(session) => session.model().backend().to_string(),
-                        _ => "onnx".into(),
-                    };
-                    *engine = Some(LoadedEngine {
+                let backend = match &loaded_engine {
+                    EngineKind::TranscribeCpp(session) => session.model().backend().to_string(),
+                    _ => "onnx".into(),
+                };
+                self.lock_engine().publish(
+                    ticket,
+                    LoadedEngine {
                         kind: loaded_engine,
                         artifact: artifact.clone(),
                         identity: ModelIdentity {
@@ -836,13 +816,10 @@ impl TranscriptionManager {
                             name: Some(model_info.name.clone()),
                             backend: Some(backend),
                         },
-                    });
-                }
-                {
-                    let mut current_model = self.current_model_id.lock().unwrap();
-                    *current_model = Some(artifact.key.clone());
-                }
+                    },
+                )
             })
+            .filter(|accepted| *accepted)
             .ok_or_else(|| anyhow::anyhow!("model-root-stale"))?;
 
         // Reset idle timer so the watcher doesn't immediately unload a just-loaded model
@@ -933,11 +910,7 @@ impl TranscriptionManager {
     }
 
     pub fn get_current_model(&self) -> Option<String> {
-        let key = self
-            .current_model_id
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone();
+        let key = self.lock_engine().current_key().cloned();
         key.filter(|key| self.model_manager.roots.current(key))
             .map(|key| key.model_id)
     }
@@ -1068,6 +1041,12 @@ impl TranscriptionManager {
                 return;
             }
         };
+
+        if !self.model_manager.roots.usable(&engine.artifact.key) {
+            self.router.clear();
+            drain_until_finalize(rx);
+            return;
+        }
 
         // Only transcribe-cpp models expose streaming; ONNX engines fall back to
         // batch. The loaded session (not the ModelManager copy) is the source of
@@ -1292,23 +1271,15 @@ impl TranscriptionManager {
     /// unloaded during transcription (in which case the stale engine is dropped).
     fn return_engine(
         &self,
-        engine: LoadedEngine,
+        engine: EngineLease<ArtifactKey, LoadedEngine>,
         _expected_model_id: &str,
         owner: Option<&crate::workflow::GenerationToken>,
     ) {
         let operation = || {
             let key = engine.artifact.key.clone();
-            self.model_manager.roots.with_current(&key, || {
-                if self
-                    .current_model_id
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .as_ref()
-                    == Some(&key)
-                {
-                    *self.lock_engine() = Some(engine);
-                }
-            });
+            self.model_manager
+                .roots
+                .with_current(&key, || self.lock_engine().return_engine(engine));
         };
         if let Some(owner) = owner {
             owner.run(operation);
@@ -1505,7 +1476,7 @@ impl TranscriptionManager {
             if !self.model_manager.roots.usable(&engine.artifact.key) {
                 return Err(anyhow::anyhow!("model-artifact-unavailable"));
             }
-            let producing_key = engine.artifact.key.clone();
+            let producing_marker = engine.marker().clone();
             producer_model = Some(engine.identity.clone());
             // No ownership gate or engine mutex is held during native decoding.
 
@@ -1688,15 +1659,9 @@ impl TranscriptionManager {
 
                     // Clear the model ID so it will be reloaded on next attempt
                     let clear = || {
-                        let mut current_model = self
-                            .current_model_id
-                            .lock()
-                            .unwrap_or_else(|e| e.into_inner());
-                        if current_model.as_ref() != Some(&producing_key) {
+                        if !self.lock_engine().clear_if(&producing_marker) {
                             return;
                         }
-                        *current_model = None;
-                        drop(current_model);
 
                         let _ = self.app_handle.emit(
                             "model-state-changed",

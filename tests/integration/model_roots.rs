@@ -1,9 +1,19 @@
+#[allow(dead_code)]
+#[path = "../../desktop/src-tauri/src/managers/gguf_meta.rs"]
+mod gguf_meta;
+#[allow(dead_code)]
+#[path = "../../desktop/src-tauri/src/managers/model_capabilities.rs"]
+mod model_capabilities;
+#[allow(dead_code)]
 #[path = "../../desktop/src-tauri/src/managers/model_root_activity.rs"]
 mod model_root_activity;
+#[allow(dead_code)]
 #[path = "../../desktop/src-tauri/src/managers/model_roots.rs"]
 mod model_roots;
+#[allow(dead_code)]
 #[path = "../../desktop/src-tauri/src/managers/model_roots_files.rs"]
 mod model_roots_files;
+use model_capabilities::{CapabilityProber, Compatibility, GgufHeaderProber};
 use model_roots::{ArtifactDescriptor, ArtifactStatus, RootService};
 use model_roots_files::{FileStorage, Filesystem};
 use std::{
@@ -37,7 +47,12 @@ impl Fixture {
         RootService::open(
             self.path.join("default"),
             Arc::new(FileStorage::new(self.path.join(config))),
-            Arc::new(Filesystem::new(|_| false)),
+            Arc::new(Filesystem::new(|path| {
+                matches!(
+                    GgufHeaderProber.probe_file(path).verdict,
+                    Compatibility::Compatible
+                )
+            })),
             vec![ArtifactDescriptor {
                 model_id: "fixture/speech/Q6.gguf".into(),
                 filename: "Q6.gguf".into(),
@@ -251,4 +266,338 @@ fn current_root_terminal_refresh_does_not_discard_a_validated_folder_waiting_for
         service.snapshot().root,
         std::fs::canonicalize(folder).unwrap()
     );
+}
+
+fn gguf_header(architecture: &str) -> Vec<u8> {
+    let mut bytes = b"GGUF".to_vec();
+    bytes.extend_from_slice(&3_u32.to_le_bytes());
+    bytes.extend_from_slice(&0_u64.to_le_bytes());
+    bytes.extend_from_slice(&1_u64.to_le_bytes());
+    let key = b"general.architecture";
+    bytes.extend_from_slice(&(key.len() as u64).to_le_bytes());
+    bytes.extend_from_slice(key);
+    bytes.extend_from_slice(&8_u32.to_le_bytes());
+    bytes.extend_from_slice(&(architecture.len() as u64).to_le_bytes());
+    bytes.extend_from_slice(architecture.as_bytes());
+    bytes
+}
+
+#[test]
+fn actual_bounded_gguf_probe_admits_supported_custom_speech_as_unverified_and_ignores_llm() {
+    let fixture = Fixture::new();
+    let folder = fixture.path.join("custom");
+    std::fs::create_dir(&folder).unwrap();
+    std::fs::write(folder.join("my-voice.gguf"), gguf_header("whisper")).unwrap();
+    std::fs::write(folder.join("llm.gguf"), gguf_header("llama")).unwrap();
+    let service = fixture.service("config.json");
+    let candidate = service.validate(&folder, "custom", &|_, _| {}).unwrap();
+    assert_eq!(
+        candidate.projection.artifacts["my-voice"].status,
+        ArtifactStatus::CustomUnverified
+    );
+    assert!(!candidate.projection.artifacts.contains_key("llm"));
+}
+
+#[test]
+fn a_folder_changed_after_validation_cannot_publish_an_outdated_empty_projection() {
+    let fixture = Fixture::new();
+    let folder = fixture.path.join("changing");
+    std::fs::create_dir(&folder).unwrap();
+    let service = fixture.service("config.json");
+    let before = service.snapshot();
+    let candidate = service.validate(&folder, "choose", &|_, _| {}).unwrap();
+    std::fs::write(folder.join("Q6.gguf"), b"abc").unwrap();
+    assert!(service
+        .apply(&candidate.id, candidate.revision, || panic!(
+            "not published"
+        ))
+        .is_err());
+    assert_eq!(service.snapshot().generation, before.generation);
+    assert!(!fixture.path.join("config.json").exists());
+}
+
+#[test]
+fn wrong_size_and_hash_are_retained_and_never_replace_the_current_root() {
+    let fixture = Fixture::new();
+    let service = fixture.service("config.json");
+    let old = service.snapshot();
+    for (name, bytes) in [("size", b"abcd".as_slice()), ("hash", b"bad".as_slice())] {
+        let folder = fixture.path.join(name);
+        std::fs::create_dir(&folder).unwrap();
+        std::fs::write(folder.join("Q6.gguf"), bytes).unwrap();
+        let candidate = service.validate(&folder, name, &|_, _| {}).unwrap();
+        assert_eq!(
+            candidate.projection.artifacts["fixture/speech/Q6.gguf"].status,
+            ArtifactStatus::Invalid
+        );
+        assert!(service
+            .apply(&candidate.id, candidate.revision, || panic!("invalidated"))
+            .is_err());
+        assert_eq!(service.snapshot().root, old.root);
+        assert_eq!(std::fs::read(folder.join("Q6.gguf")).unwrap(), bytes);
+    }
+}
+
+#[test]
+fn failed_durable_commit_keeps_the_old_generation_file_and_usable_artifact() {
+    use model_roots::{RootError, RootResult, RootStorage};
+    struct FailingStorage(FileStorage);
+    impl RootStorage for FailingStorage {
+        fn load(&self) -> RootResult<Option<Vec<u8>>> {
+            self.0.load()
+        }
+        fn commit(&self, _: &[u8]) -> RootResult<()> {
+            Err(RootError("model-root-persistence-failed"))
+        }
+    }
+    let fixture = Fixture::new();
+    let first = fixture.path.join("old");
+    let next = fixture.path.join("next");
+    std::fs::create_dir(&first).unwrap();
+    std::fs::create_dir(&next).unwrap();
+    std::fs::write(first.join("Q6.gguf"), b"abc").unwrap();
+    let initial = fixture.service("config.json");
+    let candidate = initial.validate(&first, "first", &|_, _| {}).unwrap();
+    initial.apply(&candidate.id, 0, || {}).unwrap();
+    let persisted = std::fs::read(fixture.path.join("config.json")).unwrap();
+    let service = RootService::open(
+        fixture.path.join("default"),
+        Arc::new(FailingStorage(FileStorage::new(
+            fixture.path.join("config.json"),
+        ))),
+        Arc::new(Filesystem::new(|_| false)),
+        vec![initial.artifacts()["fixture/speech/Q6.gguf"]
+            .descriptor
+            .clone()
+            .unwrap()],
+        None,
+    );
+    let old = service.snapshot();
+    let candidate = service.validate(&next, "next", &|_, _| {}).unwrap();
+    assert_eq!(
+        service
+            .apply(&candidate.id, candidate.revision, || panic!("invalidated"))
+            .unwrap_err()
+            .0,
+        "model-root-persistence-failed"
+    );
+    assert_eq!(service.snapshot().generation, old.generation);
+    assert_eq!(
+        std::fs::read(fixture.path.join("config.json")).unwrap(),
+        persisted
+    );
+    assert_eq!(
+        std::fs::read(
+            &service
+                .acquire("fixture/speech/Q6.gguf", &service.admit().unwrap())
+                .unwrap()
+                .path
+        )
+        .unwrap(),
+        b"abc"
+    );
+}
+
+#[test]
+fn read_only_selected_folder_loads_without_probe_files_and_refuses_mutation() {
+    let fixture = Fixture::new();
+    let folder = fixture.path.join("readonly");
+    std::fs::create_dir(&folder).unwrap();
+    std::fs::write(folder.join("Q6.gguf"), b"abc").unwrap();
+    let original = std::fs::metadata(&folder).unwrap().permissions();
+    let mut readonly = original.clone();
+    readonly.set_readonly(true);
+    std::fs::set_permissions(&folder, readonly).unwrap();
+    let service = fixture.service("config.json");
+    let candidate = service.validate(&folder, "readonly", &|_, _| {}).unwrap();
+    let writable = candidate.projection.writable;
+    service
+        .apply(&candidate.id, candidate.revision, || {})
+        .unwrap();
+    let load = service.acquire("fixture/speech/Q6.gguf", &service.admit().unwrap());
+    let mutation = service
+        .admit_mutation("fixture/speech/Q6.gguf")
+        .err()
+        .unwrap()
+        .0;
+    let entries = std::fs::read_dir(&folder).unwrap().count();
+    std::fs::set_permissions(&folder, original).unwrap();
+    assert!(!writable);
+    assert!(load.is_ok());
+    assert_eq!(mutation, "model-root-readonly");
+    assert_eq!(entries, 1);
+}
+
+#[test]
+fn default_legacy_cache_is_read_only_and_never_fills_an_explicit_root() {
+    let fixture = Fixture::new();
+    let legacy = fixture.path.join("legacy");
+    let snapshot = legacy.join("models--fixture--speech/snapshots/pin");
+    std::fs::create_dir_all(&snapshot).unwrap();
+    std::fs::write(snapshot.join("Q6.gguf"), b"abc").unwrap();
+    let descriptor = fixture.service("unused.json").artifacts()["fixture/speech/Q6.gguf"]
+        .descriptor
+        .clone()
+        .unwrap();
+    let service = RootService::open(
+        fixture.path.join("default"),
+        Arc::new(FileStorage::new(fixture.path.join("config.json"))),
+        Arc::new(Filesystem::new(|_| false)),
+        vec![descriptor],
+        Some(legacy),
+    );
+    let record = service.artifacts()["fixture/speech/Q6.gguf"].clone();
+    assert!(record.legacy && !record.owned);
+    assert!(service
+        .acquire(&record.key.model_id, &service.admit().unwrap())
+        .is_ok());
+    assert!(service
+        .delete_owned(&record, &service.admit_write().unwrap())
+        .is_err());
+    let selected = fixture.path.join("selected");
+    std::fs::create_dir(&selected).unwrap();
+    let candidate = service.validate(&selected, "explicit", &|_, _| {}).unwrap();
+    service
+        .apply(&candidate.id, candidate.revision, || {})
+        .unwrap();
+    assert!(!service.artifacts()[&record.key.model_id].status.loadable());
+    assert!(snapshot.join("Q6.gguf").exists());
+    assert_eq!(std::fs::read_dir(selected).unwrap().count(), 0);
+}
+
+#[test]
+fn directory_engine_without_member_hash_contract_stays_visible_unavailable() {
+    let fixture = Fixture::new();
+    let folder = fixture.path.join("imported");
+    std::fs::create_dir_all(folder.join("engine")).unwrap();
+    std::fs::write(folder.join("engine/weights.bin"), b"retain").unwrap();
+    let service = RootService::open(
+        fixture.path.join("default"),
+        Arc::new(FileStorage::new(fixture.path.join("config.json"))),
+        Arc::new(Filesystem::new(|_| false)),
+        vec![ArtifactDescriptor {
+            model_id: "legacy-engine".into(),
+            filename: "engine".into(),
+            size: None,
+            sha256: None,
+            repo: None,
+            revision: None,
+            directory: true,
+        }],
+        None,
+    );
+    let candidate = service.validate(&folder, "import", &|_, _| {}).unwrap();
+    let record = &candidate.projection.artifacts["legacy-engine"];
+    assert!(record.present);
+    assert_eq!(record.status, ArtifactStatus::Unavailable);
+    assert!(!record.owned);
+    assert_eq!(
+        std::fs::read(folder.join("engine/weights.bin")).unwrap(),
+        b"retain"
+    );
+}
+
+#[test]
+fn cancellation_from_real_scan_progress_never_publishes_the_candidate() {
+    let fixture = Fixture::new();
+    let folder = fixture.path.join("cancelled");
+    std::fs::create_dir(&folder).unwrap();
+    std::fs::write(folder.join("Q6.gguf"), b"abc").unwrap();
+    let service = fixture.service("config.json");
+    let work = service.prepare_validation(&folder, "cancel").unwrap();
+    assert_eq!(
+        service
+            .run_validation(work, &|_, _| service.cancel_scan("cancel"))
+            .err()
+            .unwrap()
+            .0,
+        "model-root-cancelled"
+    );
+    assert!(!service.busy());
+    assert!(!fixture.path.join("config.json").exists());
+    assert_eq!(std::fs::read(folder.join("Q6.gguf")).unwrap(), b"abc");
+}
+
+#[test]
+fn root_local_hf_snapshot_requires_the_catalog_hash_and_is_never_claimed_as_owned() {
+    let fixture = Fixture::new();
+    let folder = fixture.path.join("hf");
+    let snapshot = folder.join(".hf-cache/hub/models--fixture--speech/snapshots/pin");
+    std::fs::create_dir_all(&snapshot).unwrap();
+    std::fs::write(snapshot.join("Q6.gguf"), b"abc").unwrap();
+    let service = fixture.service("config.json");
+    let candidate = service.validate(&folder, "hf", &|_, _| {}).unwrap();
+    let record = &candidate.projection.artifacts["fixture/speech/Q6.gguf"];
+    assert_eq!(record.status, ArtifactStatus::Verified);
+    assert!(record.hf_binding.is_some() && !record.legacy && !record.owned);
+    service
+        .apply(&candidate.id, candidate.revision, || {})
+        .unwrap();
+    assert_eq!(
+        std::fs::read(
+            &service
+                .acquire(&record.key.model_id, &service.admit().unwrap())
+                .unwrap()
+                .path
+        )
+        .unwrap(),
+        b"abc"
+    );
+    std::fs::write(snapshot.join("Q6.gguf"), b"bad").unwrap();
+    service.rescan("bad_hash", &|_, _| {}).unwrap();
+    assert_eq!(
+        service.artifacts()[&record.key.model_id].status,
+        ArtifactStatus::Invalid
+    );
+    assert_eq!(std::fs::read(snapshot.join("Q6.gguf")).unwrap(), b"bad");
+}
+
+#[test]
+fn explicit_hf_write_preparation_preserves_unknown_bytes_and_owns_directory_lifetime() {
+    let fixture = Fixture::new();
+    let service = fixture.service("config.json");
+    let mut owner = service.admit_mutation("fixture/speech/Q6.gguf").unwrap();
+    service
+        .prepare_hf_write("fixture/speech/Q6.gguf", &mut owner)
+        .unwrap();
+    let blob = owner.root.root.join(".hf-cache/hub/models--fixture--speech/blobs/ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+    std::fs::write(&blob, b"unowned").unwrap();
+    let worker = owner.clone();
+    drop(owner);
+    assert!(service.admit_mutation("fixture/speech/Q6.gguf").is_err());
+    drop(worker);
+    let mut retry = service.admit_mutation("fixture/speech/Q6.gguf").unwrap();
+    assert_eq!(
+        service
+            .prepare_hf_write("fixture/speech/Q6.gguf", &mut retry)
+            .err()
+            .unwrap()
+            .0,
+        "model-artifact-invalid"
+    );
+    assert_eq!(std::fs::read(blob).unwrap(), b"unowned");
+}
+
+#[cfg(unix)]
+#[test]
+fn hf_single_relative_blob_link_is_accepted_and_an_escape_is_rejected_without_touching_target() {
+    use std::os::unix::fs::symlink;
+    let fixture = Fixture::new();
+    let folder = fixture.path.join("hf");
+    let repo = folder.join(".hf-cache/hub/models--fixture--speech");
+    let snapshot = repo.join("snapshots/pin");
+    std::fs::create_dir_all(&snapshot).unwrap();
+    std::fs::create_dir(repo.join("blobs")).unwrap();
+    std::fs::write(repo.join("blobs/abc"), b"abc").unwrap();
+    let pointer = snapshot.join("Q6.gguf");
+    symlink("../../blobs/abc", &pointer).unwrap();
+    let service = fixture.service("config.json");
+    let candidate = service.validate(&folder, "safe", &|_, _| {}).unwrap();
+    assert_eq!(candidate.projection.count(), 1);
+    std::fs::remove_file(&pointer).unwrap();
+    let outside = fixture.path.join("outside");
+    std::fs::write(&outside, b"abc").unwrap();
+    symlink(&outside, &pointer).unwrap();
+    assert!(service.validate(&folder, "escape", &|_, _| {}).is_err());
+    assert_eq!(std::fs::read(outside).unwrap(), b"abc");
 }

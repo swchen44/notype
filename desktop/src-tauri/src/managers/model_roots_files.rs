@@ -161,7 +161,8 @@ fn reparse(metadata: &fs::Metadata) -> bool {
     false
 }
 pub fn plain_ancestors(path: &Path) -> RootResult<()> {
-    for component in path.ancestors() {
+    let ancestors: Vec<_> = path.ancestors().collect();
+    for component in ancestors.into_iter().rev() {
         match fs::symlink_metadata(component) {
             Ok(metadata) if reparse(&metadata) => return Err(RootError("model-root-invalid")),
             Ok(_) => {}
@@ -275,6 +276,24 @@ fn name_ok(name: &str) -> bool {
         && !name.contains(['/', '\\', ':'])
         && !name.chars().any(|c| c.is_control())
 }
+fn root_entries(root: &Path) -> RootResult<Vec<std::ffi::OsString>> {
+    let mut names = Vec::new();
+    for (seen, entry) in fs::read_dir(root)
+        .map_err(|_| RootError("model-root-unavailable"))?
+        .enumerate()
+    {
+        if seen >= MAX_ENTRIES {
+            return Err(RootError("model-root-limit"));
+        }
+        names.push(
+            entry
+                .map_err(|_| RootError("model-root-unavailable"))?
+                .file_name(),
+        );
+    }
+    names.sort();
+    Ok(names)
+}
 fn hash(file: &mut File, cancel: &AtomicBool) -> RootResult<String> {
     let mut hasher = Sha256::new();
     let mut buffer = [0_u8; 65_536];
@@ -307,6 +326,18 @@ pub struct Filesystem {
     custom: Arc<Prober>,
 }
 impl Filesystem {
+    pub fn verify_download(&self, path: &Path, expected: Option<&str>) -> RootResult<()> {
+        let Some(expected) = expected else {
+            return Ok(());
+        };
+        let _one_hash_worker = self.hashing.lock().unwrap_or_else(|e| e.into_inner());
+        let mut file = open_plain(path, false, true)?;
+        let before = identity(&file)?;
+        if hash(&mut file, &AtomicBool::new(false))? != expected || identity(&file)? != before {
+            return Err(RootError("model-artifact-invalid"));
+        }
+        Ok(())
+    }
     pub fn new(prober: impl Fn(&Path) -> bool + Send + Sync + 'static) -> Self {
         Self {
             hashing: Mutex::new(()),
@@ -365,6 +396,7 @@ impl Filesystem {
         hub: &Path,
         descriptor: &ArtifactDescriptor,
     ) -> RootResult<Option<PathBuf>> {
+        plain_ancestors(hub)?;
         let Some(repo) = descriptor.repo.as_deref() else {
             return Ok(None);
         };
@@ -401,10 +433,30 @@ impl Filesystem {
             plain_ancestors(pointer.parent().ok_or(RootError("model-root-invalid"))?)?;
             if metadata.file_type().is_symlink() {
                 let link = fs::read_link(&pointer).map_err(|_| RootError("model-root-invalid"))?;
-                let target = pointer.parent().unwrap().join(link);
+                if link.is_absolute() {
+                    return Err(RootError("model-root-invalid"));
+                }
+                let mut target = PathBuf::new();
+                for component in pointer.parent().unwrap().join(link).components() {
+                    match component {
+                        std::path::Component::ParentDir => {
+                            if !target.pop() {
+                                return Err(RootError("model-root-invalid"));
+                            }
+                        }
+                        std::path::Component::CurDir => {}
+                        other => target.push(other.as_os_str()),
+                    }
+                }
+                if target.parent() != Some(repo.join("blobs").as_path()) {
+                    return Err(RootError("model-root-invalid"));
+                }
                 plain_ancestors(&target)?;
-                let target =
-                    fs::canonicalize(target).map_err(|_| RootError("model-artifact-invalid"))?;
+                let target = match fs::canonicalize(target) {
+                    Ok(target) => target,
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+                    Err(_) => return Err(RootError("model-artifact-invalid")),
+                };
                 let blobs = fs::canonicalize(repo.join("blobs"))
                     .map_err(|_| RootError("model-root-invalid"))?;
                 if target.parent() != Some(blobs.as_path()) {
@@ -435,19 +487,14 @@ impl Filesystem {
         cancelled(cancel)?;
         let directory = open_plain(&root.root, true, false)?;
         let root_identity = identity(&directory)?;
-        let mut entries = Vec::new();
-        for entry in fs::read_dir(&root.root).map_err(|_| RootError("model-root-unavailable"))? {
-            cancelled(cancel)?;
-            if entries.len() >= MAX_ENTRIES {
-                return Err(RootError("model-root-limit"));
-            }
-            let entry = entry.map_err(|_| RootError("model-root-unavailable"))?;
-            if let Some(name) = entry.file_name().to_str().filter(|s| name_ok(s)) {
-                entries.push(name.to_owned());
-            }
-        }
+        let inventory = root_entries(&root.root)?;
+        let entries: Vec<String> = inventory
+            .iter()
+            .filter_map(|entry| entry.to_str().filter(|s| name_ok(s)).map(str::to_owned))
+            .collect();
         let mut projection = Projection {
             root_identity: Some(root_identity),
+            entries: inventory,
             artifacts: BTreeMap::new(),
             writable: self.writable(&root.root)?,
             status: RootStatus::NoModels,
@@ -494,7 +541,11 @@ impl Filesystem {
             if let Some(candidate) = &path {
                 if descriptor.directory {
                     // Archive hashes are not required-member hash contracts.
-                    status = ArtifactStatus::Unavailable;
+                    status = if open_plain(candidate, true, false).is_ok() {
+                        ArtifactStatus::Unavailable
+                    } else {
+                        ArtifactStatus::Invalid
+                    };
                 } else {
                     match open_plain(candidate, false, true) {
                         Ok(mut file) => {
@@ -533,6 +584,7 @@ impl Filesystem {
                     custom: false,
                     owned: false,
                     hf_binding,
+                    descriptor: Some(descriptor.clone()),
                 },
             );
             checked += 1;
@@ -583,6 +635,7 @@ impl Filesystem {
                     owned: false,
                     present: true,
                     hf_binding: None,
+                    descriptor: None,
                 },
             );
         }
@@ -602,6 +655,30 @@ impl Filesystem {
     }
     pub fn revalidate(&self, root: &RootSnapshot, projection: &Projection) -> RootResult<()> {
         self.check_root_identity(root, projection)?;
+        if root_entries(&root.root)? != projection.entries {
+            return Err(RootError("model-root-stale"));
+        }
+        for record in projection
+            .artifacts
+            .values()
+            .filter(|record| !record.present)
+        {
+            if let Some(descriptor) = &record.descriptor {
+                if self
+                    .resolve_hf(&root.root.join(".hf-cache/hub"), descriptor)?
+                    .is_some()
+                    || root
+                        .legacy_cache
+                        .as_ref()
+                        .map(|hub| self.resolve_hf(hub, descriptor))
+                        .transpose()?
+                        .flatten()
+                        .is_some()
+                {
+                    return Err(RootError("model-root-stale"));
+                }
+            }
+        }
         for record in projection
             .artifacts
             .values()
@@ -661,6 +738,79 @@ impl Filesystem {
             held._handles.extend(artifact._handles);
         }
         self.revalidate(root, projection)?;
+        Ok(held)
+    }
+    pub fn prepare_hf_write(
+        &self,
+        root: &RootSnapshot,
+        projection: &Projection,
+        descriptor: &ArtifactDescriptor,
+    ) -> RootResult<RootUse> {
+        let repo = descriptor
+            .repo
+            .as_deref()
+            .filter(|r| r.split('/').all(name_ok))
+            .ok_or(RootError("model-root-invalid"))?;
+        let revision = descriptor
+            .revision
+            .as_deref()
+            .filter(|r| name_ok(r))
+            .ok_or(RootError("model-root-invalid"))?;
+        let digest = descriptor
+            .sha256
+            .as_deref()
+            .filter(|s| s.len() == 64 && s.bytes().all(|b| b.is_ascii_hexdigit()))
+            .ok_or(RootError("model-artifact-unavailable"))?;
+        if !name_ok(&descriptor.filename) || descriptor.directory {
+            return Err(RootError("model-artifact-unavailable"));
+        }
+        let mut held = self.hold_root(root, projection)?;
+        let cache = root.root.join(".hf-cache");
+        let hub = cache.join("hub");
+        let repo = hub.join(format!("models--{}", repo.replace('/', "--")));
+        for path in [
+            &cache,
+            &hub,
+            &repo,
+            &repo.join("blobs"),
+            &repo.join("refs"),
+            &repo.join("snapshots"),
+            &repo.join("snapshots").join(revision),
+        ] {
+            plain_ancestors(path)?;
+            match fs::create_dir(path) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+                Err(_) => return Err(RootError("model-root-readonly")),
+            }
+            held._handles.push(open_plain(path, true, true)?);
+        }
+        // A new operation never claims pre-existing bytes or resume markers.
+        for path in [
+            repo.join("blobs").join(digest),
+            repo.join("blobs").join(format!("{digest}.sync.part")),
+            repo.join("snapshots")
+                .join(revision)
+                .join(&descriptor.filename),
+        ] {
+            if fs::symlink_metadata(path).is_ok() {
+                return Err(RootError("model-artifact-invalid"));
+            }
+        }
+        let reference = repo.join("refs").join(revision);
+        if fs::symlink_metadata(&reference).is_ok() {
+            let mut existing = String::new();
+            open_plain(&reference, false, false)?
+                .take(129)
+                .read_to_string(&mut existing)
+                .map_err(|_| RootError("model-root-invalid"))?;
+            if existing.trim() != revision {
+                return Err(RootError("model-root-invalid"));
+            }
+        }
+        if fs::symlink_metadata(cache.join("token")).is_ok() {
+            return Err(RootError("model-root-invalid"));
+        }
         Ok(held)
     }
     pub fn acquire(&self, root: &RootSnapshot, record: &ArtifactRecord) -> RootResult<ArtifactUse> {

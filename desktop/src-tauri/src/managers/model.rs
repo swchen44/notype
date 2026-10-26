@@ -1363,6 +1363,7 @@ impl ModelManager {
                             && projection.writable,
                         can_download: !record.custom
                             && record.status == ArtifactStatus::Unavailable
+                            && !record.present
                             && projection.writable
                             && !models
                                 .iter()
@@ -1893,10 +1894,15 @@ impl ModelManager {
 
         // Register a cancellation token so `cancel_download` can abort this
         // transfer promptly. The guard removes it on every exit path.
-        let cancel_token = CancellationToken::new();
-        {
-            let mut flags = self.cancel_flags.lock().unwrap();
-            flags.insert(model_id.clone(), cancel_token.clone());
+        let cancel_token = self
+            .cancel_flags
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&model_id)
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("model-root-cancelled"))?;
+        if cancel_token.is_cancelled() {
+            return Ok(());
         }
 
         let mut cleanup = DownloadCleanup {
@@ -2163,36 +2169,85 @@ impl ModelManager {
             HttpDownloadOutcome::Cancelled => Ok(false),
             HttpDownloadOutcome::Completed => {
                 fs::rename(&partial_path, &model_path)?;
-                info!(
-                    "Mirror download of {} completed and verified ({:?})",
-                    model_id, model_path
-                );
+                info!("Mirror model download completed and verified");
                 Ok(true)
             }
         }
     }
 
-    pub async fn download_model(&self, model_id: &str) -> Result<()> {
-        let activity = self.roots.admit_mutation(model_id)?;
-        let model_info = {
-            let models = self.available_models.lock().unwrap();
-            models.get(model_id).cloned()
-        };
+    pub async fn download_model(self: &Arc<Self>, model_id: &str) -> Result<()> {
+        let mut activity = self.roots.admit_mutation(model_id)?;
+        let info = self
+            .get_model_info(model_id)
+            .ok_or_else(|| anyhow::anyhow!("model-artifact-unavailable"))?;
+        if !info.is_downloaded && matches!(info.source, ModelSource::HuggingFace { .. }) {
+            if self
+                .roots
+                .artifacts()
+                .get(model_id)
+                .is_some_and(|record| record.present)
+            {
+                return Err(anyhow::anyhow!("model-artifact-invalid"));
+            }
+            self.roots.prepare_hf_write(model_id, &mut activity)?;
+        }
+        let generation = activity.root.generation;
+        self.cancel_flags
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(model_id.to_owned(), CancellationToken::new());
+        let manager = self.clone();
+        let finished = self.clone();
+        let id = model_id.to_owned();
+        let finished_id = id.clone();
+        super::model_transfer_worker::run_owned(
+            activity,
+            move |activity| async move { manager.download_model_inner(&id, activity).await },
+            move || {
+                // Runs after every opaque filesystem job drains and while mutation
+                // admission still excludes a same-model successor.
+                finished
+                    .cancel_flags
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .remove(&finished_id);
+                let _ = finished.app_handle.emit(
+                    "models-updated",
+                    serde_json::json!({"generation":generation}),
+                );
+            },
+        )
+        .await
+        .map_err(|_| anyhow::anyhow!(super::model_roots::RootError("model-operation-failed")))?
+    }
 
-        let model_info =
-            model_info.ok_or_else(|| anyhow::anyhow!("Model not found: {}", model_id))?;
+    async fn download_model_inner(&self, model_id: &str, activity: RootActivity) -> Result<()> {
+        if self
+            .cancel_flags
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(model_id)
+            .is_some_and(CancellationToken::is_cancelled)
+        {
+            return Ok(());
+        }
+        let model_info = self
+            .get_model_info(model_id)
+            .ok_or_else(|| anyhow::anyhow!("model-artifact-unavailable"))?;
 
         if model_info.is_downloaded {
+            self.roots.acquire(model_id, &activity)?;
             return Ok(());
         }
         if model_info.is_directory {
             return Err(anyhow::anyhow!("model-artifact-unavailable"));
         }
         if self.roots.artifacts().get(model_id).is_some_and(|r| {
-            matches!(
-                r.status,
-                ArtifactStatus::Invalid | ArtifactStatus::Incomplete
-            )
+            r.present
+                || matches!(
+                    r.status,
+                    ArtifactStatus::Invalid | ArtifactStatus::Incomplete
+                )
         }) {
             return Err(anyhow::anyhow!("model-artifact-invalid"));
         }
@@ -2217,14 +2272,10 @@ impl ModelManager {
             .root_path()
             .join(format!("{}.partial", &model_info.filename));
 
-        // Don't download if complete version already exists
-        if model_path.exists() {
-            // Clean up any partial file that might exist
-            if partial_path.exists() {
-                let _ = fs::remove_file(&partial_path);
-            }
-            self.update_download_status()?;
-            return Ok(());
+        // Pre-existing bytes are never claimed or cleaned by a new transfer.
+        if fs::symlink_metadata(&model_path).is_ok() || fs::symlink_metadata(&partial_path).is_ok()
+        {
+            return Err(anyhow::anyhow!("model-artifact-invalid"));
         }
 
         // Mark as downloading
@@ -2236,10 +2287,15 @@ impl ModelManager {
         }
 
         // Create cancellation token for this download
-        let cancel_token = CancellationToken::new();
-        {
-            let mut flags = self.cancel_flags.lock().unwrap();
-            flags.insert(model_id.to_string(), cancel_token.clone());
+        let cancel_token = self
+            .cancel_flags
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(model_id)
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("model-root-cancelled"))?;
+        if cancel_token.is_cancelled() {
+            return Ok(());
         }
 
         // Guard ensures is_downloading and cancel_flags are cleaned up on every
@@ -2404,14 +2460,6 @@ impl ModelManager {
         Ok(())
     }
 
-    /// Reconcile a model that was advertised as downloaded but whose path has
-    /// since disappeared. This is deliberately narrower than a full rescan: it
-    /// only runs after a definitive missing-path check and cannot disturb an
-    /// unrelated in-flight download.
-    fn mark_model_unavailable(&self, model_id: &str) {
-        self.roots.mark_unavailable(model_id);
-    }
-
     fn storage_for_model(&self, model_id: &str) -> Result<ModelStorage> {
         let activity = self.activity()?;
         let artifact = self.acquire_artifact(model_id, &activity)?;
@@ -2438,9 +2486,9 @@ impl ModelPathAccess for ModelManager {
     fn storage_snapshot(&self, model_id: &str) -> Result<ModelStorage> {
         self.storage_for_model(model_id)
     }
-    fn reconcile_missing(&self, model_id: &str) {
-        self.mark_model_unavailable(model_id);
-    }
+    // RootService owns full-key reconciliation; the ID-only legacy hook is
+    // never used for this adapter's SelectedRoot snapshots.
+    fn reconcile_missing(&self, _model_id: &str) {}
 }
 
 #[cfg(test)]

@@ -48,13 +48,17 @@ pub fn show_model_root(
 
 #[tauri::command]
 #[specta::specta]
-pub fn get_model_root(model_manager: State<'_, Arc<ModelManager>>) -> ModelRootView {
-    model_manager.root_view()
+pub fn get_model_root(
+    model_manager: State<'_, Arc<ModelManager>>,
+) -> Result<ModelRootView, String> {
+    Ok(model_manager.root_view())
 }
 #[tauri::command]
 #[specta::specta]
-pub fn get_model_catalog(model_manager: State<'_, Arc<ModelManager>>) -> ModelCatalogView {
-    model_manager.catalog_view()
+pub fn get_model_catalog(
+    model_manager: State<'_, Arc<ModelManager>>,
+) -> Result<ModelCatalogView, String> {
+    Ok(model_manager.catalog_view())
 }
 #[tauri::command]
 #[specta::specta]
@@ -114,8 +118,12 @@ pub fn apply_model_root(
 }
 #[tauri::command]
 #[specta::specta]
-pub fn cancel_model_root_scan(model_manager: State<'_, Arc<ModelManager>>, request_id: String) {
+pub fn cancel_model_root_scan(
+    model_manager: State<'_, Arc<ModelManager>>,
+    request_id: String,
+) -> Result<(), String> {
     model_manager.roots.cancel_scan(&request_id);
+    Ok(())
 }
 
 /// Displays a completed model's actual resolved file/directory in the UI.

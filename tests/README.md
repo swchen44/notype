@@ -211,3 +211,34 @@ SQLite tests currently link existing Release rlibs read-only, documented in the
 or run Cargo concurrently with its lease holder. Shared harness registration,
 native console adapter and full production/live acceptance remain pending the
 complete #22 gate. See [public contract](../docs/deepseek-probe-offline.md).
+
+## Selectable model roots (#28)
+
+Approved [P28-v1](https://github.com/swchen44/notype/issues/28#issuecomment-6405356803)
+and [Astra approval / zero unresolved](https://github.com/swchen44/notype/issues/28#issuecomment-6405400881).
+
+- `model-roots-policy` runs the production activity gate and single-owner engine
+  policy, including cancellation versus actual worker exit and delayed same-model
+  returns/load results/panics after a successor takes ownership.
+- `model-roots` runs the actual root authority, atomic preference adapter, bounded
+  scanner, SHA-256 and bounded GGUF prober against tiny owned files/directories.
+  It covers manual whole-folder move/reinstall/restart, read-only reuse, corrupt
+  preferences, storage failure, invalid bytes, legacy provenance, imported
+  directories, HF snapshots and cancellation/publication fences. Unix also
+  exercises the one permitted relative HF blob link and an escaping link.
+- `model-transfer-worker` drops an actual IPC waiter while a Tokio blocking file
+  job is held, proving root admission remains busy until owned runtime shutdown
+  drains the worker. Its terminal callback also runs before admission release.
+- `model-storage` retains existing P20 behavior and checks selected-root queries
+  cannot perform legacy cleanup or ID-only reconciliation of a successor.
+- `model-roots.ui.mjs` renders the actual store/components/App/onboarding with
+  IPC-only mocks. It checks chooser/recovery, explicit Busy retry, provenance,
+  availability and generation/request ownership for late actions/events.
+- `model-roots-launcher.test.mjs` and existing portable package tests exercise the
+  actual schema-2 launcher with tiny owned App/runtime/model package fixtures.
+  Base startup reaches the launch seam without copying or requiring ASR weights;
+  explicit full inspection remains strict for a declared optional model pin.
+
+These targets are registered in `core-contracts.yml`. Native Tauri compilation,
+actual Windows race/permission/App/Explorer behavior and real model inference
+remain separate P14 acceptance gates; portable checks do not certify them.

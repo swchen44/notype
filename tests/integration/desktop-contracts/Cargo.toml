@@ -150,3 +150,7 @@ path = "../../unittest/model_roots.rs"
 [[test]]
 name = "model-roots"
 path = "../model_roots.rs"
+
+[[test]]
+name = "model-transfer-worker"
+path = "../../unittest/model_transfer_worker.rs"

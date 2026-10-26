@@ -3,16 +3,15 @@
 //! Both legacy URL models and Hugging Face mirror fallbacks use this module;
 //! source-specific orchestration and finalization remain in the parent module.
 
-use super::{DownloadProgress, ModelManager, RootActivity};
+use super::{DownloadProgress, ModelManager, RootActivity, RootService};
 use anyhow::Result;
 use futures_util::StreamExt;
 use hf_hub::api::tokio::CancellationToken;
-use log::{info, warn};
-use sha2::{Digest, Sha256};
+use log::info;
 use std::fs;
-use std::fs::File;
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::Path;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tauri::Emitter;
 
@@ -49,56 +48,6 @@ enum HttpDownloadEvent<'a> {
 }
 
 impl ModelManager {
-    /// Verifies the SHA256 of `path` against `expected_sha256` (if provided).
-    /// On mismatch or read error the partial file is deleted and an error is returned,
-    /// so the next download attempt always starts from a clean state.
-    /// When `expected_sha256` is `None` (custom user models) verification is skipped.
-    fn verify_sha256(path: &Path, expected_sha256: Option<&str>, model_id: &str) -> Result<()> {
-        let Some(expected) = expected_sha256 else {
-            return Ok(());
-        };
-        match Self::compute_sha256(path) {
-            Ok(actual) if actual == expected => {
-                info!("SHA256 verified for model {}", model_id);
-                Ok(())
-            }
-            Ok(actual) => {
-                warn!(
-                    "SHA256 mismatch for model {}: expected {}, got {}",
-                    model_id, expected, actual
-                );
-                let _ = fs::remove_file(path);
-                Err(anyhow::anyhow!(
-                    "Download verification failed for model {}: file is corrupt. Please retry.",
-                    model_id
-                ))
-            }
-            Err(e) => {
-                let _ = fs::remove_file(path);
-                Err(anyhow::anyhow!(
-                    "Failed to verify download for model {}: {}. Please retry.",
-                    model_id,
-                    e
-                ))
-            }
-        }
-    }
-
-    /// Computes the SHA256 hex digest of a file, reading in 64KB chunks to handle large models.
-    fn compute_sha256(path: &Path) -> Result<String> {
-        let mut file = File::open(path)?;
-        let mut hasher = Sha256::new();
-        let mut buffer = [0u8; 65536];
-        loop {
-            let n = file.read(&mut buffer)?;
-            if n == 0 {
-                break;
-            }
-            hasher.update(&buffer[..n]);
-        }
-        Ok(format!("{:x}", hasher.finalize()))
-    }
-
     /// Emit verification events around a blocking sha256 check of `path`.
     /// On mismatch `verify_sha256` deletes the file, so the next attempt (or
     /// next source) starts clean. A `None` hash skips checking (custom models).
@@ -108,15 +57,21 @@ impl ModelManager {
         expected_sha256: Option<&str>,
         emit: &(dyn Fn(HttpDownloadEvent<'_>) + Send + Sync),
         activity: &RootActivity,
+        roots: &Arc<RootService>,
     ) -> Result<()> {
         emit(HttpDownloadEvent::VerificationStarted);
         let path = path.to_path_buf();
         let expected = expected_sha256.map(str::to_string);
-        let id = model_id.to_string();
+        let _id = model_id.to_string();
         let worker = activity.clone();
+        let roots = roots.clone();
         tokio::task::spawn_blocking(move || {
             let _worker = worker;
-            Self::verify_sha256(&path, expected.as_deref(), &id)
+            let result = roots.verify_download(&path, expected.as_deref(), &_worker);
+            if result.is_err() {
+                let _ = fs::remove_file(&path);
+            }
+            result.map_err(anyhow::Error::new)
         })
         .await
         .map_err(|e| anyhow::anyhow!("SHA256 task panicked: {}", e))??;
@@ -166,6 +121,7 @@ impl ModelManager {
                 };
             },
             activity,
+            &self.roots,
         )
         .await
     }
@@ -204,6 +160,7 @@ impl ModelManager {
         cancel_token: &CancellationToken,
         emit: &(dyn Fn(HttpDownloadEvent<'_>) + Send + Sync),
         activity: &RootActivity,
+        roots: &Arc<RootService>,
     ) -> Result<HttpDownloadOutcome> {
         let mut resume_from = partial_path.metadata().map(|m| m.len()).unwrap_or(0);
 
@@ -222,6 +179,7 @@ impl ModelManager {
                     expected_sha256,
                     emit,
                     activity,
+                    roots,
                 )
                 .await?;
                 return Ok(HttpDownloadOutcome::Completed);
@@ -267,8 +225,15 @@ impl ModelManager {
                     "server object ends before the expected size (HTTP 416)"
                 ));
             }
-            Self::verify_file_with_events(model_id, partial_path, expected_sha256, emit, activity)
-                .await?;
+            Self::verify_file_with_events(
+                model_id,
+                partial_path,
+                expected_sha256,
+                emit,
+                activity,
+                roots,
+            )
+            .await?;
             return Ok(HttpDownloadOutcome::Completed);
         }
         // A 200 to a Range request means the server ignored it and is sending
@@ -398,8 +363,15 @@ impl ModelManager {
 
         // The catalog hash is the trust anchor: for a mirror (an untrusted
         // host) this verification is what makes the fallback safe at all.
-        Self::verify_file_with_events(model_id, partial_path, expected_sha256, emit, activity)
-            .await?;
+        Self::verify_file_with_events(
+            model_id,
+            partial_path,
+            expected_sha256,
+            emit,
+            activity,
+            roots,
+        )
+        .await?;
         Ok(HttpDownloadOutcome::Completed)
     }
 }

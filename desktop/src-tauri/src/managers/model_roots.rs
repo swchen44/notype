@@ -113,6 +113,7 @@ pub struct ArtifactRecord {
     pub owned: bool,
     pub present: bool,
     pub hf_binding: Option<(PathBuf, ArtifactDescriptor)>,
+    pub descriptor: Option<ArtifactDescriptor>,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RootStatus {
@@ -124,6 +125,7 @@ pub enum RootStatus {
 #[derive(Clone, Debug)]
 pub struct Projection {
     pub root_identity: Option<Fingerprint>,
+    pub entries: Vec<std::ffi::OsString>,
     pub artifacts: BTreeMap<String, ArtifactRecord>,
     pub writable: bool,
     pub status: RootStatus,
@@ -132,6 +134,7 @@ impl Projection {
     pub fn unavailable() -> Self {
         Self {
             root_identity: None,
+            entries: Vec::new(),
             artifacts: BTreeMap::new(),
             writable: false,
             status: RootStatus::Unavailable,
@@ -249,6 +252,8 @@ impl RootService {
             root,
             legacy_cache: if kind == RootKind::Default {
                 legacy_cache
+                    .filter(|path| files.valid_input(path))
+                    .and_then(|path| files.canonical_root(&path).ok())
             } else {
                 None
             },
@@ -646,6 +651,19 @@ impl RootService {
             .check_root_identity(&activity.root, &self.projection())?;
         Ok(activity.root.root.clone())
     }
+    pub fn verify_download(
+        &self,
+        path: &Path,
+        expected: Option<&str>,
+        activity: &RootActivity,
+    ) -> RootResult<()> {
+        if !path.starts_with(&activity.root.root)
+            || self.snapshot().generation != activity.root.generation
+        {
+            return Err(RootError("model-root-stale"));
+        }
+        self.files.verify_download(path, expected)
+    }
     pub fn admit_write(&self) -> RootResult<RootActivity> {
         let mut activity = self.admit()?;
         self.writable(&activity)?;
@@ -670,10 +688,35 @@ impl RootService {
         }));
         Ok(activity)
     }
-    pub fn mark_unavailable(&self, id: &str) {
+    /// Explicit transfer preparation only. Scan/choose/load never create cache
+    /// directories. These handles stay with the operation's terminal owner.
+    pub fn prepare_hf_write(&self, model_id: &str, activity: &mut RootActivity) -> RootResult<()> {
+        let descriptor = self
+            .catalog
+            .iter()
+            .find(|d| d.model_id == model_id)
+            .ok_or(RootError("model-artifact-unavailable"))?;
+        self.writable(activity)?;
+        activity.directory = Some(Arc::new(self.files.prepare_hf_write(
+            &activity.root,
+            &self.projection(),
+            descriptor,
+        )?));
+        Ok(())
+    }
+    pub fn mark_unavailable(&self, key: &ArtifactKey) {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        if state.root.generation != key.generation
+            || !state
+                .projection
+                .artifacts
+                .get(&key.model_id)
+                .is_some_and(|r| r.key == *key)
+        {
+            return;
+        }
         let mut projection = (*state.projection).clone();
-        if let Some(record) = projection.artifacts.get_mut(id) {
+        if let Some(record) = projection.artifacts.get_mut(&key.model_id) {
             record.status = ArtifactStatus::Unavailable;
         }
         projection.status = if projection.count() == 0 {
@@ -689,7 +732,7 @@ impl RootService {
             return Err(RootError("model-root-readonly"));
         }
         self.files.delete_owned(record)?;
-        self.mark_unavailable(&record.key.model_id);
+        self.mark_unavailable(&record.key);
         Ok(())
     }
     pub fn snapshot_projection(&self) -> (Arc<RootSnapshot>, Arc<Projection>) {
