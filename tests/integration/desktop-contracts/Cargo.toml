@@ -8,6 +8,10 @@ publish = false
 name = "provider-bootstrap"
 path = "../../unittest/provider_bootstrap.rs"
 
+[[test]]
+name = "offline-bootstrap-store"
+path = "../provider_bootstrap.rs"
+
 [workspace]
 
 [[bin]]
