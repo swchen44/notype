@@ -16,7 +16,8 @@ run. US$2 remains wholly unspent. P23 source41/artifact/ledger/round are untouch
 |429 header lost behind stalled-body cancellation | [40254445859](https://github.com/swchen44/notype/actions/runs/40254445859) | `e6b9b59`, [ALL40254850660](https://github.com/swchen44/notype/actions/runs/40254850660), including OFF before request |
 | Wrong target script accepted | [40266739768](https://github.com/swchen44/notype/actions/runs/40266739768) | `f3a7765`, [ALL40267350224](https://github.com/swchen44/notype/actions/runs/40267350224) |
 | Positive1e-999 cost rounded to accepted zero | [Windows40269136565](https://github.com/swchen44/notype/actions/runs/40269136565),14 other integration passes | `d1e39cf`, [ALL40270473220](https://github.com/swchen44/notype/actions/runs/40270473220), [Windows40270472394](https://github.com/swchen44/notype/actions/runs/40270472394) |
-| Documented26B comparison model accepted as31B result | [Windows40272529608](https://github.com/swchen44/notype/actions/runs/40272529608),15 other integration passes | Fix `2147d2b`; subsequent exact-source result pending |
+| Documented26B comparison model accepted as31B result | [Windows40272529608](https://github.com/swchen44/notype/actions/runs/40272529608),15 other integration passes | `65cae31`, [Windows40273357104](https://github.com/swchen44/notype/actions/runs/40273357104):7 unit/18 integration plus Clippy |
+| Completion-winning7 skipped fixed Chinese quality | [Windows40273991825](https://github.com/swchen44/notype/actions/runs/40273991825):18 other integration passes; timer already joined | Minimal outcome-based exception only for explicitly expected cancellation; final source CI pending |
 
 Compile/import/Clippy failures are not behavioral RED. The original duplicate
 test-module imports were removed using dedicated targets, without lint suppression.

@@ -440,6 +440,13 @@ fn allocated(root: &Path) -> Result<u64, Failure> {
             total = total.checked_add(65_536).ok_or(Failure::Resource)?;
             for entry in fs::read_dir(&path).map_err(|_| Failure::Resource)? {
                 pending.push(entry.map_err(|_| Failure::Resource)?.path());
+                if pending
+                    .len()
+                    .checked_add(count)
+                    .is_none_or(|total| total > 64)
+                {
+                    return Err(Failure::Resource);
+                }
             }
         } else if meta.is_file() {
             total = total

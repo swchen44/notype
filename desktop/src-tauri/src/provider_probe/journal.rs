@@ -348,6 +348,7 @@ impl Journal {
         if !fresh {
             let entries = fs::read_dir(directory)
                 .map_err(|_| Failure::Storage)?
+                .take(4)
                 .collect::<Result<Vec<_>, _>>()
                 .map_err(|_| Failure::Storage)?;
             if entries.len() > 3 {

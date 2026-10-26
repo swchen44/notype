@@ -3,7 +3,7 @@
 use super::{
     bridge::{BudgetProcessor, Coordinator, ResourceGate},
     configuration::{self, LiveConfigurations},
-    journal::{Failure, Identity, Journal, Snapshot},
+    journal::{Failure, Identity, Journal, Outcome, Snapshot},
     policy::{quality, schedule, Purpose, MAX_CALLS},
 };
 use crate::{
@@ -312,7 +312,9 @@ impl ProbeRunner {
         } else {
             slot.number
         };
-        if slot.number != 7
+        let expected_cancellation = slot.number == 7
+            && self.snapshot()?.records[6].outcome == Some(Outcome::ExpectedCancellation);
+        if !expected_cancellation
             && (history.error.is_some()
                 || history
                     .result
