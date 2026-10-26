@@ -2,41 +2,69 @@ import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
 import { produce } from "immer";
 import { listen } from "@tauri-apps/api/event";
-import { commands, type ModelInfo } from "@/bindings";
-import { toast } from "sonner";
+import {
+  commands,
+  type ModelInfo,
+  type ModelArtifactView,
+  type ModelRootView,
+  type ModelRootScanProgress,
+  type ModelGenerationEvent,
+} from "@/bindings";
 
 interface DownloadProgress {
+  generation: number;
   model_id: string;
   downloaded: number;
   total: number;
   percentage: number;
 }
-
 interface DownloadStats {
   startTime: number;
   lastUpdate: number;
   totalDownloaded: number;
-  speed: number; // MB/s
+  speed: number;
 }
 
-// Using Record instead of Set/Map for Immer compatibility
+/** Native errors are finite codes; raw paths and transport rejections stay out of UI. */
+export function modelRootError(error: unknown): string {
+  const codes = [
+    "busy",
+    "invalid",
+    "stale",
+    "cancelled",
+    "unavailable",
+    "persistence-failed",
+    "readonly",
+    "limit",
+  ];
+  return typeof error === "string" &&
+    codes.some((code) => error === `model-root-${code}`)
+    ? error.slice("model-root-".length)
+    : "unavailable";
+}
+
 interface ModelsStore {
   models: ModelInfo[];
   currentModel: string;
+  generation: number;
+  root: ModelRootView | null;
+  artifacts: Record<string, ModelArtifactView>;
   downloadingModels: Record<string, true>;
   verifyingModels: Record<string, true>;
   extractingModels: Record<string, true>;
   downloadProgress: Record<string, DownloadProgress>;
   downloadStats: Record<string, DownloadStats>;
+  scanProgress: ModelRootScanProgress | null;
+  beginRootValidation: (requestId: string) => void;
+  finishRootValidation: (requestId: string) => void;
   loading: boolean;
   error: string | null;
   initialized: boolean;
   isRescanning: boolean;
-
-  // Actions
   initialize: () => Promise<void>;
   loadModels: () => Promise<void>;
   loadCurrentModel: () => Promise<void>;
+  rootApplied: (root: ModelRootView) => Promise<void>;
   rescanLocalModels: () => Promise<void>;
   selectModel: (modelId: string) => Promise<boolean>;
   downloadModel: (modelId: string) => Promise<boolean>;
@@ -47,8 +75,6 @@ interface ModelsStore {
   isModelVerifying: (modelId: string) => boolean;
   isModelExtracting: (modelId: string) => boolean;
   getDownloadProgress: (modelId: string) => DownloadProgress | undefined;
-
-  // Internal setters
   setModels: (models: ModelInfo[]) => void;
   setCurrentModel: (modelId: string) => void;
   setError: (error: string | null) => void;
@@ -56,116 +82,71 @@ interface ModelsStore {
 }
 
 export const useModelStore = create<ModelsStore>()(
-  subscribeWithSelector((set, get) => ({
-    models: [],
-    currentModel: "",
-    downloadingModels: {},
-    verifyingModels: {},
-    extractingModels: {},
-    downloadProgress: {},
-    downloadStats: {},
-    loading: true,
-    error: null,
-    initialized: false,
-    isRescanning: false,
-
-    // Internal setters
-    setModels: (models) => set({ models }),
-    setCurrentModel: (currentModel) => set({ currentModel }),
-    setError: (error) => set({ error }),
-    setLoading: (loading) => set({ loading }),
-
-    loadModels: async () => {
-      try {
-        const result = await commands.getAvailableModels();
-        if (result.status === "ok") {
-          set({ models: result.data, error: null });
-
-          // Sync downloading state from backend
-          set(
-            produce((state) => {
-              const backendDownloading: Record<string, true> = {};
-              result.data
-                .filter((m) => m.is_downloading)
-                .forEach((m) => {
-                  backendDownloading[m.id] = true;
-                });
-
-              // Merge: keep frontend state if downloading, add backend state
-              Object.keys(backendDownloading).forEach((id) => {
-                state.downloadingModels[id] = true;
-              });
-
-              // Remove models that backend says are NOT downloading AND
-              // frontend doesn't have progress for (completed/cancelled)
-              Object.keys(state.downloadingModels).forEach((id) => {
-                if (!backendDownloading[id] && !state.downloadProgress[id]) {
-                  delete state.downloadingModels[id];
-                }
-              });
-            }),
-          );
-        } else {
-          set({ error: `Failed to load models: ${result.error}` });
-        }
-      } catch (err) {
-        set({ error: `Failed to load models: ${err}` });
-      } finally {
-        set({ loading: false });
-      }
-    },
-
-    loadCurrentModel: async () => {
-      try {
-        const result = await commands.getCurrentModel();
-        if (result.status === "ok") {
-          set({ currentModel: result.data });
-        }
-      } catch (err) {
-        console.error("Failed to load current model:", err);
-      }
-    },
-
-    rescanLocalModels: async () => {
-      set({ isRescanning: true });
-      try {
-        const result = await commands.rescanLocalModels();
-        if (result.status !== "ok") {
-          set({ error: `Failed to rescan models: ${result.error}` });
-        }
-        // On success the backend emits `models-updated`, which reloads the list
-        // via the listener registered in initialize().
-      } catch (err) {
-        set({ error: `Failed to rescan models: ${err}` });
-      } finally {
-        set({ isRescanning: false });
-      }
-    },
-
-    selectModel: async (modelId: string) => {
-      try {
-        set({ error: null });
-        const result = await commands.setActiveModel(modelId);
-        if (result.status === "ok") {
-          set({ currentModel: modelId });
-          return true;
-        } else {
-          set({ error: `Failed to switch to model: ${result.error}` });
-          return false;
-        }
-      } catch (err) {
-        set({ error: `Failed to switch to model: ${err}` });
+  subscribeWithSelector((set, get) => {
+    let catalogRequest = 0;
+    let rescanRequest = 0;
+    let selectionRequest = 0;
+    let validationRequest: string | null = null;
+    const operations = new Map<string, symbol>();
+    let initializing: Promise<void> | null = null;
+    const transient = () => ({
+      downloadingModels: {},
+      verifyingModels: {},
+      extractingModels: {},
+      downloadProgress: {},
+      downloadStats: {},
+      scanProgress: null,
+      isRescanning: false,
+    });
+    const advance = (generation: number) => {
+      if (generation <= get().generation) return;
+      ++catalogRequest;
+      ++rescanRequest;
+      ++selectionRequest;
+      validationRequest = null;
+      operations.clear();
+      set({ generation, models: [], artifacts: {}, ...transient() });
+    };
+    const clearDownload = (modelId: string) =>
+      set(
+        produce((state: ModelsStore) => {
+          delete state.downloadingModels[modelId];
+          delete state.verifyingModels[modelId];
+          delete state.extractingModels[modelId];
+          delete state.downloadProgress[modelId];
+          delete state.downloadStats[modelId];
+        }),
+      );
+    const ownsEvent = (event: ModelGenerationEvent) =>
+      event.generation === get().generation;
+    const operation = async (
+      kind: "download" | "cancel" | "delete",
+      modelId: string,
+    ): Promise<boolean> => {
+      const generation = get().generation;
+      const token = Symbol();
+      const key = `${kind}:${modelId}`;
+      operations.set(key, token);
+      const owns = () =>
+        get().generation === generation && operations.get(key) === token;
+      if (
+        kind !== "cancel" &&
+        (!get().root?.writable ||
+          !get().artifacts[modelId]?.[
+            kind === "delete" ? "can_delete" : "can_download"
+          ])
+      ) {
+        if (owns()) set({ error: "readonly" });
+        operations.delete(key);
         return false;
       }
-    },
-
-    downloadModel: async (modelId: string) => {
-      try {
-        set({ error: null });
+      set({ error: null });
+      if (kind === "download")
         set(
-          produce((state) => {
+          produce((state: ModelsStore) => {
             state.downloadingModels[modelId] = true;
             state.downloadProgress[modelId] = {
+              generation,
               model_id: modelId,
               downloaded: 0,
               total: 0,
@@ -173,260 +154,260 @@ export const useModelStore = create<ModelsStore>()(
             };
           }),
         );
-        const result = await commands.downloadModel(modelId);
-        if (result.status !== "ok") {
-          // Fallback cleanup in case the model-download-failed event was not received
-          // (e.g. listener not yet registered). The event handler is a no-op if it
-          // arrives after this cleanup since deleting missing keys is safe.
-          set(
-            produce((state) => {
-              delete state.downloadingModels[modelId];
-              delete state.downloadProgress[modelId];
-              delete state.downloadStats[modelId];
-            }),
-          );
+      try {
+        const result = await (kind === "download"
+          ? commands.downloadModel(modelId, generation)
+          : kind === "cancel"
+            ? commands.cancelDownload(modelId, generation)
+            : commands.deleteModel(modelId, generation));
+        if (!owns()) return false;
+        if (result.status === "error") {
+          set({ error: modelRootError(result.error) });
+          if (kind === "download") clearDownload(modelId);
+          return false;
         }
-        return result.status === "ok";
+        // Cancellation acknowledgement is not worker completion. Terminal events
+        // or a coherent catalog, rather than this Promise, clear its progress.
+        await get().loadModels();
+        return owns();
       } catch {
-        // model-download-failed event won't fire for JS exceptions (e.g. IPC error),
-        // so clean up state here to avoid a stuck progress spinner.
-        set(
-          produce((state) => {
-            delete state.downloadingModels[modelId];
-            delete state.downloadProgress[modelId];
-            delete state.downloadStats[modelId];
-          }),
-        );
+        if (owns()) {
+          set({ error: "unavailable" });
+          if (kind === "download") clearDownload(modelId);
+        }
         return false;
+      } finally {
+        if (owns()) operations.delete(key);
       }
-    },
-
-    cancelDownload: async (modelId: string) => {
-      try {
+    };
+    return {
+      models: [],
+      currentModel: "",
+      generation: 0,
+      root: null,
+      artifacts: {},
+      ...transient(),
+      loading: true,
+      error: null,
+      initialized: false,
+      setModels: (models) => set({ models }),
+      setCurrentModel: (currentModel) => set({ currentModel }),
+      setError: (error) => set({ error }),
+      setLoading: (loading) => set({ loading }),
+      beginRootValidation: (requestId) => {
+        validationRequest = requestId;
+        set({ scanProgress: null });
+      },
+      finishRootValidation: (requestId) => {
+        if (validationRequest === requestId) {
+          validationRequest = null;
+          set({ scanProgress: null });
+        }
+      },
+      loadModels: async () => {
+        const request = ++catalogRequest;
+        const generation = get().generation;
+        const owns = () =>
+          request === catalogRequest && generation === get().generation;
+        try {
+          const result = await commands.getModelCatalog();
+          if (!owns()) return;
+          if (result.status === "error") {
+            set({ error: modelRootError(result.error) });
+            return;
+          }
+          const catalog = result.data;
+          if (
+            catalog.generation < generation ||
+            catalog.root.generation !== catalog.generation
+          )
+            return;
+          if (catalog.generation > generation) advance(catalog.generation);
+          const downloads: Record<string, true> = {};
+          catalog.models
+            .filter((model) => model.is_downloading)
+            .forEach((model) => {
+              downloads[model.id] = true;
+            });
+          set({
+            generation: catalog.generation,
+            root: catalog.root,
+            models: catalog.models,
+            currentModel: catalog.current_model,
+            artifacts: catalog.artifacts,
+            downloadingModels: downloads,
+            error: null,
+            loading: false,
+          });
+        } catch {
+          if (owns()) set({ error: "unavailable" });
+        } finally {
+          if (owns()) set({ loading: false });
+        }
+      },
+      // One catalog response owns the root, preference and artifact projection.
+      loadCurrentModel: async () => get().loadModels(),
+      rootApplied: async (root) => {
+        if (root.generation < get().generation) return;
+        advance(root.generation);
+        set({ root });
+        await get().loadModels();
+      },
+      rescanLocalModels: async () => {
+        const request = ++rescanRequest;
+        const generation = get().generation;
+        const owns = () =>
+          request === rescanRequest && generation === get().generation;
+        set({ isRescanning: true, error: null });
+        try {
+          const result = await commands.rescanLocalModels();
+          if (!owns()) return;
+          if (result.status === "error")
+            set({ error: modelRootError(result.error) });
+          else if (result.data.generation === generation)
+            await get().loadModels();
+        } catch {
+          if (owns()) set({ error: "unavailable" });
+        } finally {
+          if (owns()) set({ isRescanning: false });
+        }
+      },
+      selectModel: async (modelId) => {
+        const request = ++selectionRequest;
+        const generation = get().generation;
+        const owns = () =>
+          request === selectionRequest && generation === get().generation;
+        if (
+          !get().models.some(
+            (model) => model.id === modelId && model.is_downloaded,
+          ) ||
+          !["verified", "custom_unverified"].includes(
+            get().artifacts[modelId]?.status ?? "unavailable",
+          )
+        )
+          return false;
         set({ error: null });
-        const result = await commands.cancelDownload(modelId);
-        if (result.status === "ok") {
-          set(
-            produce((state) => {
-              delete state.downloadingModels[modelId];
-              delete state.downloadProgress[modelId];
-              delete state.downloadStats[modelId];
-            }),
-          );
-
-          // Reload models to sync with backend state
+        try {
+          const result = await commands.setActiveModel(modelId, generation);
+          if (!owns()) return false;
+          if (result.status === "error") {
+            set({ error: modelRootError(result.error) });
+            return false;
+          }
           await get().loadModels();
-          return true;
-        } else {
-          set({ error: `Failed to cancel download: ${result.error}` });
+          return owns() && get().currentModel === modelId;
+        } catch {
+          if (owns()) set({ error: "unavailable" });
           return false;
         }
-      } catch (err) {
-        set({ error: `Failed to cancel download: ${err}` });
-        return false;
-      }
-    },
-
-    deleteModel: async (modelId: string) => {
-      try {
-        set({ error: null });
-        const result = await commands.deleteModel(modelId);
-        if (result.status === "ok") {
+      },
+      downloadModel: (modelId) => operation("download", modelId),
+      cancelDownload: (modelId) => operation("cancel", modelId),
+      deleteModel: (modelId) => operation("delete", modelId),
+      getModelInfo: (modelId) =>
+        get().models.find((model) => model.id === modelId),
+      isModelDownloading: (modelId) => modelId in get().downloadingModels,
+      isModelVerifying: (modelId) => modelId in get().verifyingModels,
+      isModelExtracting: (modelId) => modelId in get().extractingModels,
+      getDownloadProgress: (modelId) => get().downloadProgress[modelId],
+      initialize: async () => {
+        if (initializing) return initializing;
+        if (get().initialized) return;
+        initializing = (async () => {
+          const on = <T>(name: string, handler: (payload: T) => void) =>
+            listen<T>(name, (event) => handler(event.payload));
+          const refresh = (event: ModelGenerationEvent) => {
+            if (event.generation < get().generation) return;
+            advance(event.generation);
+            void get().loadModels();
+          };
+          await Promise.all([
+            on<ModelGenerationEvent>("model-root-changed", refresh),
+            on<ModelGenerationEvent>("models-updated", refresh),
+            on<ModelGenerationEvent>("model-state-changed", refresh),
+            on<ModelGenerationEvent>("model-deleted", refresh),
+            on<ModelRootScanProgress>(
+              "model-root-scan-progress",
+              (progress) => {
+                if (
+                  progress.generation === get().generation &&
+                  progress.request_id === validationRequest
+                )
+                  set({ scanProgress: progress });
+              },
+            ),
+            on<DownloadProgress>("model-download-progress", (progress) => {
+              if (!ownsEvent(progress)) return;
+              const now = Date.now();
+              set(
+                produce((state: ModelsStore) => {
+                  state.downloadProgress[progress.model_id] = progress;
+                  state.downloadingModels[progress.model_id] = true;
+                  const current = state.downloadStats[progress.model_id];
+                  const elapsed = current
+                    ? (now - current.lastUpdate) / 1000
+                    : 0;
+                  const speed =
+                    current && elapsed > 0.5
+                      ? Math.max(
+                          0,
+                          (progress.downloaded - current.totalDownloaded) /
+                            1048576 /
+                            elapsed,
+                        )
+                      : (current?.speed ?? 0);
+                  state.downloadStats[progress.model_id] = {
+                    startTime: current?.startTime ?? now,
+                    lastUpdate: now,
+                    totalDownloaded: progress.downloaded,
+                    speed,
+                  };
+                }),
+              );
+            }),
+            ...[
+              "model-download-complete",
+              "model-download-cancelled",
+              "model-download-failed",
+              "model-extraction-failed",
+            ].map((name) =>
+              on<ModelGenerationEvent>(name, (event) => {
+                if (!ownsEvent(event) || !event.model_id) return;
+                clearDownload(event.model_id);
+                if (event.error) set({ error: modelRootError(event.error) });
+                else void get().loadModels();
+              }),
+            ),
+            ...(
+              [
+                ["model-verification-started", "verifyingModels", true],
+                ["model-verification-completed", "verifyingModels", false],
+                ["model-extraction-started", "extractingModels", true],
+                ["model-extraction-completed", "extractingModels", false],
+              ] as const
+            ).map(([name, field, started]) =>
+              on<ModelGenerationEvent>(name, (event) => {
+                if (!ownsEvent(event) || !event.model_id) return;
+                const id = event.model_id;
+                set(
+                  produce((state: ModelsStore) => {
+                    if (started) state[field][id] = true;
+                    else delete state[field][id];
+                  }),
+                );
+                if (!started) void get().loadModels();
+              }),
+            ),
+          ]);
+          set({ initialized: true });
           await get().loadModels();
-          await get().loadCurrentModel();
-          return true;
-        } else {
-          set({ error: `Failed to delete model: ${result.error}` });
-          return false;
+        })();
+        try {
+          await initializing;
+        } finally {
+          initializing = null;
         }
-      } catch (err) {
-        set({ error: `Failed to delete model: ${err}` });
-        return false;
-      }
-    },
-
-    getModelInfo: (modelId: string) => {
-      return get().models.find((model) => model.id === modelId);
-    },
-
-    isModelDownloading: (modelId: string) => {
-      return modelId in get().downloadingModels;
-    },
-
-    isModelVerifying: (modelId: string) => {
-      return modelId in get().verifyingModels;
-    },
-
-    isModelExtracting: (modelId: string) => {
-      return modelId in get().extractingModels;
-    },
-
-    getDownloadProgress: (modelId: string) => {
-      return get().downloadProgress[modelId];
-    },
-
-    initialize: async () => {
-      if (get().initialized) return;
-
-      const { loadModels, loadCurrentModel } = get();
-
-      // Load initial data
-      await Promise.all([loadModels(), loadCurrentModel()]);
-
-      // Set up event listeners
-      listen<DownloadProgress>("model-download-progress", (event) => {
-        const progress = event.payload;
-        set(
-          produce((state) => {
-            state.downloadProgress[progress.model_id] = progress;
-          }),
-        );
-
-        // Update download stats for speed calculation
-        const now = Date.now();
-        set(
-          produce((state) => {
-            const current = state.downloadStats[progress.model_id];
-
-            if (!current) {
-              state.downloadStats[progress.model_id] = {
-                startTime: now,
-                lastUpdate: now,
-                totalDownloaded: progress.downloaded,
-                speed: 0,
-              };
-            } else {
-              const timeDiff = (now - current.lastUpdate) / 1000;
-              const bytesDiff = progress.downloaded - current.totalDownloaded;
-
-              if (timeDiff > 0.5) {
-                const currentSpeed = bytesDiff / (1024 * 1024) / timeDiff;
-                const validCurrentSpeed = Math.max(0, currentSpeed);
-                const smoothedSpeed =
-                  current.speed > 0
-                    ? current.speed * 0.8 + validCurrentSpeed * 0.2
-                    : validCurrentSpeed;
-
-                state.downloadStats[progress.model_id] = {
-                  startTime: current.startTime,
-                  lastUpdate: now,
-                  totalDownloaded: progress.downloaded,
-                  speed: Math.max(0, smoothedSpeed),
-                };
-              }
-            }
-          }),
-        );
-      });
-
-      listen<string>("model-download-complete", (event) => {
-        const modelId = event.payload;
-        set(
-          produce((state) => {
-            delete state.downloadingModels[modelId];
-            delete state.verifyingModels[modelId];
-            delete state.downloadProgress[modelId];
-            delete state.downloadStats[modelId];
-          }),
-        );
-        get().loadModels();
-      });
-
-      listen<{ model_id: string; error: string }>(
-        "model-download-failed",
-        (event) => {
-          const { model_id: modelId, error } = event.payload;
-          set(
-            produce((state) => {
-              delete state.downloadingModels[modelId];
-              delete state.verifyingModels[modelId];
-              delete state.downloadProgress[modelId];
-              delete state.downloadStats[modelId];
-              state.error = error;
-            }),
-          );
-          toast.error(error);
-        },
-      );
-
-      listen<string>("model-verification-started", (event) => {
-        const modelId = event.payload;
-        set(
-          produce((state) => {
-            state.verifyingModels[modelId] = true;
-          }),
-        );
-      });
-
-      listen<string>("model-verification-completed", (event) => {
-        const modelId = event.payload;
-        set(
-          produce((state) => {
-            delete state.verifyingModels[modelId];
-          }),
-        );
-      });
-
-      listen<string>("model-extraction-started", (event) => {
-        const modelId = event.payload;
-        set(
-          produce((state) => {
-            state.extractingModels[modelId] = true;
-          }),
-        );
-      });
-
-      listen<string>("model-extraction-completed", (event) => {
-        const modelId = event.payload;
-        set(
-          produce((state) => {
-            delete state.extractingModels[modelId];
-          }),
-        );
-        get().loadModels();
-      });
-
-      listen<{ model_id: string; error: string }>(
-        "model-extraction-failed",
-        (event) => {
-          const modelId = event.payload.model_id;
-          set(
-            produce((state) => {
-              delete state.extractingModels[modelId];
-              state.error = `Failed to extract model: ${event.payload.error}`;
-            }),
-          );
-        },
-      );
-
-      listen<string>("model-download-cancelled", (event) => {
-        const modelId = event.payload;
-        set(
-          produce((state) => {
-            delete state.downloadingModels[modelId];
-            delete state.verifyingModels[modelId];
-            delete state.downloadProgress[modelId];
-            delete state.downloadStats[modelId];
-          }),
-        );
-      });
-
-      listen<string>("model-deleted", () => {
-        get().loadModels();
-        get().loadCurrentModel();
-      });
-
-      listen("model-state-changed", () => {
-        get().loadModels();
-        get().loadCurrentModel();
-      });
-
-      listen("models-updated", () => {
-        get().loadModels();
-        get().loadCurrentModel();
-      });
-
-      set({ initialized: true });
-    },
-  })),
+      },
+    };
+  }),
 );

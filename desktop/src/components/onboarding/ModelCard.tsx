@@ -3,7 +3,8 @@ import { useTranslation } from "react-i18next";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { invoke } from "@tauri-apps/api/core";
 import { Check, Download, Loader2, Trash2 } from "lucide-react";
-import type { ModelInfo } from "@/bindings";
+import type { ModelInfo, ModelArtifactView } from "@/bindings";
+import { useModelStore } from "@/stores/modelStore";
 import { formatModelSize } from "../../lib/utils/format";
 import {
   getTranslatedModelDescription,
@@ -30,6 +31,7 @@ export type ModelCardStatus =
   | "available";
 interface ModelCardProps {
   model: ModelInfo;
+  artifact?: ModelArtifactView;
   variant?: "default" | "featured";
   status?: ModelCardStatus;
   disabled?: boolean;
@@ -47,6 +49,7 @@ interface ModelCardProps {
 
 const ModelCard: React.FC<ModelCardProps> = ({
   model,
+  artifact,
   variant = "default",
   status = "downloadable",
   disabled = false,
@@ -62,6 +65,7 @@ const ModelCard: React.FC<ModelCardProps> = ({
   showRecommended = true,
 }) => {
   const { t, i18n } = useTranslation();
+  const generation = useModelStore((state) => state.generation);
   const mode = useSettingsStore(
     (state) => state.settings?.recognition_mode ?? "traditional_english",
   );
@@ -106,18 +110,25 @@ const ModelCard: React.FC<ModelCardProps> = ({
     setPathState("loading");
     invoke<string>("get_model_path", { modelId: model.id })
       .then((resolved) => {
-        if (!cancelled) {
+        if (!cancelled && useModelStore.getState().generation === generation) {
           setModelPath(resolved || null);
           setPathState(resolved ? "ready" : "error");
         }
       })
       .catch(() => {
-        if (!cancelled) setPathState("error");
+        if (!cancelled && useModelStore.getState().generation === generation)
+          setPathState("error");
       });
     return () => {
       cancelled = true;
     };
-  }, [expanded, model.id, model.is_downloaded, model.is_downloading]);
+  }, [
+    expanded,
+    model.id,
+    model.is_downloaded,
+    model.is_downloading,
+    generation,
+  ]);
   const formatBytes = (bytes: number) =>
     `${(bytes / (1024 * 1024)).toLocaleString(i18n.language, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} MiB`;
   return (
@@ -164,6 +175,9 @@ const ModelCard: React.FC<ModelCardProps> = ({
           <span>{t("modelSelector.streaming")}</span>
         )}
         {model.is_custom && <span>{t("modelSelector.custom")}</span>}
+        {artifact && (
+          <span>{t(`notype.modelFolder.artifacts.${artifact.status}`)}</span>
+        )}
         {isLegacySource(model) && <span>{t("modelSelector.legacy")}</span>}
       </div>
       <p className={`text-xs ${compatible ? "text-text/70" : "text-warning"}`}>
@@ -201,39 +215,48 @@ const ModelCard: React.FC<ModelCardProps> = ({
         </dl>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        {status === "downloadable" && onDownload && (
-          <Button
-            size="sm"
-            disabled={disabled}
-            onClick={() => onDownload(model.id)}
-          >
-            <Download className="w-3.5 h-3.5 inline mr-1" />
-            {t("notype.modelExplorer.download")}
-          </Button>
-        )}
+        {status === "downloadable" &&
+          onDownload &&
+          artifact?.can_download !== false && (
+            <Button
+              size="sm"
+              disabled={disabled}
+              onClick={() => onDownload(model.id)}
+            >
+              <Download className="w-3.5 h-3.5 inline mr-1" />
+              {t("notype.modelExplorer.download")}
+            </Button>
+          )}
         {status === "available" && (
           <Button
             size="sm"
-            disabled={disabled}
+            disabled={
+              disabled ||
+              (artifact !== undefined &&
+                !["verified", "custom_unverified"].includes(artifact.status))
+            }
             onClick={() => onSelect(model.id)}
           >
             {t("notype.modelExplorer.useModel")}
           </Button>
         )}
         {status === "switching" && <Loader2 className="w-4 h-4 animate-spin" />}
-        {(status === "available" || status === "active") && onDelete && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onDelete(model.id)}
-            aria-label={t("modelSelector.deleteModel", {
-              modelName: displayName,
-            })}
-          >
-            <Trash2 className="w-3.5 h-3.5 inline mr-1" />
-            {t("common.delete")}
-          </Button>
-        )}
+        {(status === "available" || status === "active") &&
+          onDelete &&
+          artifact?.can_delete !== false && (
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={disabled}
+              onClick={() => onDelete(model.id)}
+              aria-label={t("modelSelector.deleteModel", {
+                modelName: displayName,
+              })}
+            >
+              <Trash2 className="w-3.5 h-3.5 inline mr-1" />
+              {t("common.delete")}
+            </Button>
+          )}
       </div>
       {status === "downloading" && (
         <div className="space-y-1" aria-live="polite">

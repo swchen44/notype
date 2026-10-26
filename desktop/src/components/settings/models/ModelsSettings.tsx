@@ -18,6 +18,7 @@ import {
   supportsLanguageCode,
 } from "@/lib/constants/languages.ts";
 import type { ModelInfo } from "@/bindings";
+import { ModelFolderControl } from "./ModelFolderControl";
 
 // check if model supports a language based on its supported_languages list
 const modelSupportsLanguage = (model: ModelInfo, langCode: string): boolean => {
@@ -44,8 +45,12 @@ export const ModelsSettings: React.FC = () => {
   const [languageSearch, setLanguageSearch] = useState("");
   const languageDropdownRef = useRef<HTMLDivElement>(null);
   const languageSearchInputRef = useRef<HTMLInputElement>(null);
+  const selectionRequest = useRef(0);
   const {
     models,
+    artifacts,
+    generation,
+    error,
     currentModel,
     downloadingModels,
     downloadProgress,
@@ -60,6 +65,10 @@ export const ModelsSettings: React.FC = () => {
     deleteModel,
     rescanLocalModels,
   } = useModelStore();
+  useEffect(() => {
+    ++selectionRequest.current;
+    setSwitchingModelId(null);
+  }, [generation]);
 
   // click outside handler for language dropdown
   useEffect(() => {
@@ -134,11 +143,17 @@ export const ModelsSettings: React.FC = () => {
   };
 
   const handleModelSelect = async (modelId: string) => {
+    const request = ++selectionRequest.current;
+    const expected = generation;
     setSwitchingModelId(modelId);
     try {
       await selectModel(modelId);
     } finally {
-      setSwitchingModelId(null);
+      if (
+        request === selectionRequest.current &&
+        useModelStore.getState().generation === expected
+      )
+        setSwitchingModelId(null);
     }
   };
 
@@ -147,6 +162,7 @@ export const ModelsSettings: React.FC = () => {
   };
 
   const handleModelDelete = async (modelId: string) => {
+    const expected = generation;
     const model = models.find((m: ModelInfo) => m.id === modelId);
     const modelName = model?.name || modelId;
     const isActive = modelId === currentModel;
@@ -161,7 +177,7 @@ export const ModelsSettings: React.FC = () => {
       },
     );
 
-    if (confirmed) {
+    if (confirmed && useModelStore.getState().generation === expected) {
       try {
         await deleteModel(modelId);
       } catch (err) {
@@ -267,6 +283,12 @@ export const ModelsSettings: React.FC = () => {
         </p>
       </div>
 
+      <ModelFolderControl />
+      {error && (
+        <p role="alert" className="text-sm text-warning">
+          {t(`notype.modelFolder.errors.${error}`)}
+        </p>
+      )}
       <div
         className="flex flex-wrap gap-2"
         role="group"
@@ -457,8 +479,15 @@ export const ModelsSettings: React.FC = () => {
               model={model}
               status={getModelStatus(model.id)}
               onSelect={handleModelSelect}
-              onDownload={handleModelDownload}
-              onDelete={handleModelDelete}
+              artifact={artifacts[model.id]}
+              onDownload={
+                artifacts[model.id]?.can_download
+                  ? handleModelDownload
+                  : undefined
+              }
+              onDelete={
+                artifacts[model.id]?.can_delete ? handleModelDelete : undefined
+              }
               onCancel={handleModelCancel}
               downloadedBytes={downloadProgress[model.id]?.downloaded}
               totalBytes={downloadProgress[model.id]?.total}
@@ -473,7 +502,7 @@ export const ModelsSettings: React.FC = () => {
         {availableModels.length > 0 && (
           <div className="space-y-3">
             <h2 className="text-sm font-medium text-text/60">
-              {t("settings.models.availableModels")}
+              {t("notype.modelFolder.otherModels")}
             </h2>
             {availableModels.map((model: ModelInfo) => (
               <ModelCard
@@ -481,8 +510,17 @@ export const ModelsSettings: React.FC = () => {
                 model={model}
                 status={getModelStatus(model.id)}
                 onSelect={handleModelSelect}
-                onDownload={handleModelDownload}
-                onDelete={handleModelDelete}
+                artifact={artifacts[model.id]}
+                onDownload={
+                  artifacts[model.id]?.can_download
+                    ? handleModelDownload
+                    : undefined
+                }
+                onDelete={
+                  artifacts[model.id]?.can_delete
+                    ? handleModelDelete
+                    : undefined
+                }
                 onCancel={handleModelCancel}
                 downloadedBytes={downloadProgress[model.id]?.downloaded}
                 totalBytes={downloadProgress[model.id]?.total}
