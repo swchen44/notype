@@ -11,7 +11,7 @@ path = "../../unittest/provider_probe_policy.rs"
 [[test]]
 name = "provider-probe-runtime"
 path = "../provider_probe_contracts.rs"
- 
+
 [[test]]
 name = "provider-bootstrap"
 path = "../../unittest/provider_bootstrap.rs"
