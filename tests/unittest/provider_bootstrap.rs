@@ -1,4 +1,7 @@
 #[allow(dead_code)]
+#[path = "../../desktop/src-tauri/src/bootstrap_selection.rs"]
+mod bootstrap_selection;
+#[allow(dead_code)]
 #[path = "../../desktop/src-tauri/src/capture_startup.rs"]
 mod capture_startup;
 #[allow(dead_code)]
@@ -33,23 +36,78 @@ fn preset() -> ConnectionPreset {
         "capability_declaration":{"kind":"non_reasoning","minimum_effort":null,
           "supported_efforts":[],"temperature_supported":true,"top_p_supported":true},
         "temperature":null,"top_p":null,"max_output_tokens":null
-    })).unwrap()
+    }))
+    .unwrap()
 }
 
 #[test]
 fn first_use_import_is_one_durable_no_key_selection_and_restart_never_duplicates_it() {
     let storage = Arc::new(Storage::default());
     let store = ConnectionStore::open(storage.clone()).unwrap();
-    assert_eq!(store.bootstrap_if_empty(preset(), "synthetic-v1").unwrap(), BootstrapImport::Applied);
+    assert_eq!(
+        store.bootstrap_if_empty(preset(), "synthetic-v1").unwrap(),
+        BootstrapImport::Applied
+    );
     let view = store.view().unwrap();
     assert_eq!(view.revision, 1);
     assert_eq!(view.connections.len(), 1);
-    assert_eq!(view.active_connection_id.as_deref(), Some(view.connections[0].connection.id.as_str()));
+    assert_eq!(
+        view.active_connection_id.as_deref(),
+        Some(view.connections[0].connection.id.as_str())
+    );
     assert_eq!(view.connections[0].connection.model, "synthetic-model");
     assert!(!view.connections[0].app_key_present);
     let before = storage.0.lock().unwrap().clone();
     let reopened = ConnectionStore::open(storage.clone()).unwrap();
-    assert_eq!(reopened.bootstrap_if_empty(preset(), "synthetic-v2").unwrap(), BootstrapImport::SkippedExisting);
+    assert_eq!(
+        reopened
+            .bootstrap_if_empty(preset(), "synthetic-v2")
+            .unwrap(),
+        BootstrapImport::SkippedExisting
+    );
     assert_eq!(*storage.0.lock().unwrap(), before);
     assert_eq!(reopened.view().unwrap().connections.len(), 1);
+}
+
+#[test]
+fn selection_commits_to_original_settings_authority_and_preserves_existing_blank_choice() {
+    let storage = Arc::new(Storage::default());
+    let selection = bootstrap_selection::SelectionStore::new(storage.clone());
+    assert!(selection.pending().unwrap());
+    assert!(selection
+        .initialize_if_absent(
+            serde_json::json!({"onboarding_completed":false}),
+            "synthetic-stt",
+            "synthetic-v1"
+        )
+        .unwrap());
+    assert_eq!(
+        selection.read().unwrap().unwrap()["selected_model"],
+        "synthetic-stt"
+    );
+    assert_eq!(
+        selection.read().unwrap().unwrap()["onboarding_completed"],
+        false
+    );
+    *storage.0.lock().unwrap() =
+        Some(br#"{"settings":{"selected_model":"","theme":"dark"}}"#.to_vec());
+    let before = storage.0.lock().unwrap().clone();
+    assert!(!selection
+        .initialize_if_absent(serde_json::json!({}), "replacement", "synthetic-v2")
+        .unwrap());
+    assert_eq!(*storage.0.lock().unwrap(), before);
+}
+
+#[test]
+fn invalid_or_secret_preset_is_rejected_without_creating_settings() {
+    let storage = Arc::new(Storage::default());
+    let store = ConnectionStore::open(storage.clone()).unwrap();
+    let mut unknown = preset();
+    unknown.capability_declaration = None;
+    assert!(store.bootstrap_if_empty(unknown, "synthetic-v1").is_err());
+    assert_eq!(store.view().unwrap().revision, 0);
+    assert!(storage.0.lock().unwrap().is_none());
+    let mut value = serde_json::to_value(preset()).unwrap();
+    value["api_key"] = "SYNTHETIC-SECRET".into();
+    assert!(serde_json::from_value::<ConnectionPreset>(value).is_err());
 }
