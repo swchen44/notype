@@ -450,6 +450,214 @@ async fn cooldown_uses_the_production_monotonic_clock_without_waiting_or_automat
     assert_eq!(count.load(std::sync::atomic::Ordering::SeqCst), 2);
 }
 
+async fn shared_route_credential_cooldown(status: u16, mutate_globals: bool) {
+    struct Clock(Mutex<std::time::Instant>);
+    impl capture_startup::CaptureClock for Clock {
+        fn now(&self) -> std::time::Instant {
+            *self.0.lock().unwrap()
+        }
+    }
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base = format!("http://{}/v1", listener.local_addr().unwrap());
+    let count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let accepted = count.clone();
+    let server = tokio::spawn(async move {
+        let mut requests = vec![];
+        for index in 0..4 {
+            let (mut stream, _) = tokio::time::timeout(Duration::from_secs(3), listener.accept())
+                .await
+                .unwrap()
+                .unwrap();
+            let mut bytes = vec![];
+            let mut chunk = [0; 4096];
+            while !bytes.windows(4).any(|part| part == b"\r\n\r\n") {
+                let n = stream.read(&mut chunk).await.unwrap();
+                assert!(n > 0);
+                bytes.extend_from_slice(&chunk[..n]);
+            }
+            requests.push(String::from_utf8(bytes).unwrap());
+            accepted.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            let response = if index == 0 {
+                wire(
+                    status,
+                    r#"{"data":[{"id":"owned-model"}]}"#,
+                    if status == 429 {
+                        "Retry-After: 120\r\n"
+                    } else {
+                        ""
+                    },
+                )
+            } else {
+                wire(200, r#"{"data":[{"id":"owned-model"}]}"#, "")
+            };
+            stream.write_all(response.as_bytes()).await.unwrap();
+        }
+        assert!(
+            tokio::time::timeout(Duration::from_millis(75), listener.accept())
+                .await
+                .is_err()
+        );
+        requests
+    });
+    let (store, draft, revision) = configured(base.clone());
+    let view = store
+        .create(
+            revision,
+            "Other record".into(),
+            ConnectionKind::Local,
+            ProviderDialect::Generic,
+        )
+        .unwrap();
+    let mut other = draft.clone();
+    other.id = view.connections[1].connection.id.clone();
+    other.display_name = "Other record".into();
+    let view = store
+        .save(
+            view.revision,
+            other.clone(),
+            KeyAction::Replace {
+                value: "OWNED_KEY_SENTINEL".into(),
+            },
+        )
+        .unwrap();
+    let clock = Arc::new(Clock(Mutex::new(std::time::Instant::now())));
+    let discovery = ModelDiscovery::with_clock(clock.clone());
+    let first = discovery
+        .query(
+            store.clone(),
+            request(&draft, view.revision, "first"),
+            &NeverHome,
+        )
+        .await
+        .unwrap();
+    assert_eq!(first.status, if status == 200 { "ok" } else { "error" });
+    let mut revision = view.revision;
+    if mutate_globals {
+        let view = store
+            .prompt(
+                revision,
+                notype_core::Scenario::Ask,
+                Some("unrelated prompt".into()),
+            )
+            .unwrap();
+        other.display_name = "Renamed unrelated record".into();
+        let view = store
+            .save(view.revision, other.clone(), KeyAction::Keep)
+            .unwrap();
+        let view = store
+            .activate(view.revision, Some(other.id.clone()))
+            .unwrap();
+        let view = store
+            .create(
+                view.revision,
+                "New unrelated".into(),
+                ConnectionKind::Custom,
+                ProviderDialect::Generic,
+            )
+            .unwrap();
+        revision = view.revision;
+    }
+    let same = if mutate_globals { &draft } else { &other };
+    let blocked = discovery
+        .query(
+            store.clone(),
+            request(same, revision, "blocked"),
+            &NeverHome,
+        )
+        .await
+        .unwrap();
+    assert_eq!(blocked.status, "throttled");
+    assert_eq!(blocked.error_code.as_deref(), Some("model-list-cooldown"));
+    assert_eq!(count.load(std::sync::atomic::Ordering::SeqCst), 1);
+    let mut different_key = request(&draft, revision, "different-key");
+    different_key.key_action = KeyAction::Replace {
+        value: "DIFFERENT_OWNED_KEY".into(),
+    };
+    assert_eq!(
+        discovery
+            .query(store.clone(), different_key, &NeverHome)
+            .await
+            .unwrap()
+            .status,
+        "ok"
+    );
+    let mut different_route = request(&draft, revision, "different-route");
+    different_route.connection.api_address = format!("{base}/other");
+    different_route.key_action = KeyAction::Replace {
+        value: "OWNED_KEY_SENTINEL".into(),
+    };
+    assert_eq!(
+        discovery
+            .query(store.clone(), different_route, &NeverHome)
+            .await
+            .unwrap()
+            .status,
+        "ok"
+    );
+    *clock.0.lock().unwrap() += Duration::from_secs(59);
+    assert_eq!(
+        discovery
+            .query(
+                store.clone(),
+                request(same, revision, "before-minimum"),
+                &NeverHome
+            )
+            .await
+            .unwrap()
+            .status,
+        "throttled"
+    );
+    *clock.0.lock().unwrap() += Duration::from_secs(2);
+    if status == 429 {
+        assert_eq!(
+            discovery
+                .query(
+                    store.clone(),
+                    request(same, revision, "retry-after"),
+                    &NeverHome
+                )
+                .await
+                .unwrap()
+                .status,
+            "throttled"
+        );
+        assert_eq!(count.load(std::sync::atomic::Ordering::SeqCst), 3);
+        *clock.0.lock().unwrap() += Duration::from_secs(60);
+    }
+    assert_eq!(
+        discovery
+            .query(
+                store.clone(),
+                request(same, revision, "expired"),
+                &NeverHome
+            )
+            .await
+            .unwrap()
+            .status,
+        "ok"
+    );
+    assert_eq!(store.view().unwrap().revision, revision);
+    let requests = server.await.unwrap();
+    assert_eq!(count.load(std::sync::atomic::Ordering::SeqCst), 4);
+    assert!(requests[1]
+        .to_ascii_lowercase()
+        .contains("authorization: bearer different_owned_key"));
+    assert!(requests[2].starts_with("GET /v1/other/models "));
+    assert!(requests[3]
+        .to_ascii_lowercase()
+        .contains("authorization: bearer owned_key_sentinel"));
+}
+
+#[tokio::test]
+async fn unrelated_collection_edits_cannot_reset_route_credential_retry_after() {
+    shared_route_credential_cooldown(429, true).await;
+}
+
+#[tokio::test]
+async fn another_record_cannot_reset_the_same_route_credential_cooldown() {
+    shared_route_credential_cooldown(200, false).await;
+}
+
 #[tokio::test]
 async fn model_get_uses_the_real_typed_service_and_exact_owned_report_export() {
     use diagnostics::{
