@@ -281,6 +281,23 @@ impl ExperimentContract {
     pub(super) fn contract_failed(&self, status: Option<u16>) {
         self.latch.mark(AdverseCategory::Contract, status);
     }
+    pub(super) fn headers(&self, status: u16) {
+        if !(200..300).contains(&status) {
+            self.latch.mark(AdverseCategory::Http, Some(status));
+        }
+    }
+    pub(super) fn failed(&self, error: TextFailure, status: Option<u16>) {
+        let category = match error {
+            TextFailure::Cancelled => return,
+            TextFailure::Timeout
+            | TextFailure::Provider(GatewayError::Transport | GatewayError::ProviderTimeout) => {
+                AdverseCategory::Transport
+            }
+            TextFailure::HistoryStorage => AdverseCategory::Storage,
+            _ => AdverseCategory::Contract,
+        };
+        self.latch.mark(category, status);
+    }
 }
 impl ExperimentProcessor {
     /// Read shared monotonic status without a marking/reset capability.
@@ -315,6 +332,9 @@ pub fn experiment_processor(
     tracing: diagnostic::TraceContext,
 ) -> Result<ExperimentProcessor, TextFailure> {
     let (endpoint, kind, latch) = policy.parts();
+    if latch.observed().is_some() {
+        return Err(TextFailure::ConfigurationRequired);
+    }
     let fixture = matches!(policy, ExperimentPolicy::OwnedLoopback(..));
     let expected_profile = if kind == ExperimentKind::DeepSeekFlash {
         TextProviderProfile::DeepSeek

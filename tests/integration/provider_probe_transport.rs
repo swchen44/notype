@@ -136,13 +136,12 @@ async fn owned_openrouter_response(
     (result, server.await.unwrap(), latch)
 }
 
-#[tokio::test]
-async fn adverse_http_headers_survive_stalled_body_cancellation_and_diagnostics_clear_off() {
+async fn adverse_headers_case(off_before: bool) {
     use diagnostics::{api::*, service::*};
-    struct Storage;
+    struct Storage(bool);
     impl DiagnosticStorage for Storage {
         fn load_preference(&self) -> Result<Option<bool>, &'static str> {
-            Ok(Some(true))
+            Ok(Some(!self.0))
         }
         fn save_preference(&self, _: bool) -> Result<(), &'static str> {
             Ok(())
@@ -177,6 +176,7 @@ async fn adverse_http_headers_survive_stalled_body_cancellation_and_diagnostics_
     listener.set_nonblocking(true).unwrap();
     let listener = TcpListener::from_std(listener).unwrap();
     let (release, held) = oneshot::channel();
+    let (written, headers_written) = oneshot::channel();
     let server = tokio::spawn(async move {
         let (mut stream, _) = listener.accept().await.unwrap();
         let mut bytes = vec![];
@@ -187,10 +187,11 @@ async fn adverse_http_headers_survive_stalled_body_cancellation_and_diagnostics_
             bytes.extend_from_slice(&buffer[..n]);
         }
         stream.write_all(b"HTTP/1.1 429 Too Many Requests\r\nContent-Length: 9999\r\nConnection: close\r\n\r\n{\"error\":").await.unwrap();
+        written.send(()).unwrap();
         let _ = held.await;
     });
     let service = Arc::new(DiagnosticService::new());
-    service.initialize(Arc::new(Storage));
+    service.initialize(Arc::new(Storage(off_before)));
     let (sender, seen) = oneshot::channel();
     let trace = TraceContext::new(
         None,
@@ -223,13 +224,27 @@ async fn adverse_http_headers_survive_stalled_body_cancellation_and_diagnostics_
             .process(&id, vec![], Arc::new(ObservedOnly(processor)))
             .await
     });
-    assert_eq!(
-        tokio::time::timeout(Duration::from_secs(2), seen)
+    if off_before {
+        assert!(!service.status().effective_enabled);
+        tokio::time::timeout(Duration::from_secs(2), headers_written)
             .await
             .unwrap()
-            .unwrap(),
-        429
-    );
+            .unwrap();
+        let _ = tokio::time::timeout(Duration::from_secs(2), async {
+            while latch.observed().is_none() {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await;
+    } else {
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(2), seen)
+                .await
+                .unwrap()
+                .unwrap(),
+            429
+        );
+    }
     let observed = latch.observed();
     service.clear();
     service.set_enabled(false);
@@ -258,6 +273,15 @@ async fn adverse_http_headers_survive_stalled_body_cancellation_and_diagnostics_
         TraceContext::global(None)
     )
     .is_err());
+}
+
+#[tokio::test]
+async fn adverse_http_headers_survive_stalled_body_cancellation_and_diagnostics_clear_off() {
+    adverse_headers_case(false).await;
+}
+#[tokio::test]
+async fn adverse_http_headers_are_recorded_with_diagnostics_off_before_request_allocation() {
+    adverse_headers_case(true).await;
 }
 #[tokio::test]
 async fn sealed_openrouter_sends_only_the_reviewed_zero_price_google_route() {

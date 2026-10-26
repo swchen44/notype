@@ -846,6 +846,7 @@ impl ChatProcessor {
             if let Some(authorization) = authorization {
                 request = request.header(reqwest::header::AUTHORIZATION, authorization);
             }
+            let mut observed_status = None;
             let operation = async {
                 if let Some(guard) = &mut guard {
                     if let Err(error) = guard.mark_sent() {
@@ -869,6 +870,10 @@ impl ChatProcessor {
                     .map_err(|error| trace_transport(&mut trace, error))?;
                 let success = response.status().is_success();
                 let status = response.status().as_u16();
+                observed_status = Some(status);
+                if let Some(policy) = &experiment {
+                    policy.headers(status);
+                }
                 if let Some(event) = trace.metadata() {
                     event.http_status = Some(status);
                 }
@@ -975,6 +980,9 @@ impl ChatProcessor {
                 Ok(output)
             };
             let result = tokio::select! {biased; _=cancellation.cancelled()=>Err(TextFailure::Cancelled),result=tokio::time::timeout(deadline,operation)=>result.unwrap_or(Err(TextFailure::Timeout))};
+            if let (Some(policy), Err(error)) = (&experiment, &result) {
+                policy.failed(*error, observed_status);
+            }
             let (trace_result, category) = result
                 .as_ref()
                 .map(|_| {
