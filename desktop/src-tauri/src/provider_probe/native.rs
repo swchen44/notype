@@ -364,7 +364,8 @@ impl Verified {
         })
     }
 }
-/// Actual runtime resource guard, preserving pending P14/P28 coexisting budgets.
+/// Actual runtime resource guard, preserving the complete approved deferred-npm
+/// P14 delivery reservation and the helper's own remaining allocations.
 pub struct QuotaGate {
     root: PathBuf,
     budget: ResourceBudget,
@@ -409,11 +410,26 @@ impl ResourceBudget {
         if high >= 24 * MIB || self.c_hwm > 112 * MIB || self.d_launcher > MIB {
             return Err(Failure::Resource);
         }
-        let c_remaining = 128 * MIB - self.c_hwm;
-        let d_remaining = 32 * MIB - high.saturating_add(self.d_launcher).min(32 * MIB);
-        let c_required =
-            2 * 1024 * MIB + 32 * MIB + 4257 * MIB + 32 * MIB + 32 * MIB + 16 * MIB + c_remaining;
-        let d_required = 1024 * MIB + 32 * MIB + 2817 * MIB + MIB + d_remaining;
+        // P14-v5 deferral #14comment6409002692, reviewed amendment
+        // #25comment6409393018 / Astra0 #25comment6409496675. The fixed
+        // C2049/D2368MiB totals INCLUDE the shared 32MiB guards and all native,
+        // ZIP, extraction and QA work. Completed P28/preparation allocations
+        // are already reflected in current availability. No dynamic delivery
+        // credit or runtime scope/budget override is permitted.
+        let c_remaining = (128 * MIB)
+            .checked_sub(self.c_hwm)
+            .ok_or(Failure::Resource)?;
+        let d_remaining = (32 * MIB).checked_sub(high).ok_or(Failure::Resource)?;
+        let launcher_remaining = MIB.checked_sub(self.d_launcher).ok_or(Failure::Resource)?;
+        let c_required = (2 * 1024 * MIB)
+            .checked_add(2049 * MIB)
+            .and_then(|value| value.checked_add(c_remaining))
+            .ok_or(Failure::Resource)?;
+        let d_required = (1024 * MIB)
+            .checked_add(2368 * MIB)
+            .and_then(|value| value.checked_add(launcher_remaining))
+            .and_then(|value| value.checked_add(d_remaining))
+            .ok_or(Failure::Resource)?;
         Ok((c_required, d_required))
     }
     /// Admit actual allocation/availability observations. Retain combined

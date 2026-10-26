@@ -99,3 +99,43 @@ harness targets, CI steps/filters and test documentation. The private Windows
 workflow bytes remain identical to the original reviewed helper candidate.
 No core, wire/parser, CLI, credential, schedule, fee or activation change is part
 of these review fixes. Exact final CI/source rechecks remain separate gates.
+
+## Fixed deferred-npm coexistence amendment
+
+[P25-coexistence-v1](https://github.com/swchen44/notype/issues/25#issuecomment-6409393018)
+has actual [GPT-6-Astra APPROVED / zero unresolved](https://github.com/swchen44/notype/issues/25#issuecomment-6409496675).
+It binds admission to root's explicit [P14 npm deferral](https://github.com/swchen44/notype/issues/14#issuecomment-6409002692).
+The entire remaining P14 native/ZIP/extraction/QA reservation is retained:
+C2049MiB/D2368MiB, including the existing shared32MiB guard once. Runtime
+floors remain C2GiB/D1GiB. Own remaining reserves are C128MiB staging,
+D32MiB combined smoke/live runtime and D1MiB launcher. Zero-consumption
+requirements are C4,430,233,600/D3,591,372,800 bytes. There is no runtime scope
+override, new readiness field, native completion credit or cleanup credit.
+
+The pure ResourceBudget ledger is called by the actual QuotaGate checkpoint
+with unchanged Windows allocation and availability adapters. Root unit tests
+inject owned byte observations through that same public admission boundary;
+they do not lower real disk space or substitute availability during execution.
+They check exact and one-byte-short boundaries, worked retained-helper totals,
+unavailable/shrinking probes, monotonic peaks after failed/cancelled writes and
+invalid/extreme marks. C112MiB stop, runtime24MiB stop and launcher1MiB cap
+remain unchanged; invalid marks fail closed before subtracting reserves.
+
+Test source `74b432d` retained the original formula behind the extracted
+production admission seam. [Windows40278940625](https://github.com/swchen44/notype/actions/runs/40278940625)
+was actual runtime RED:8 policy tests and21 existing integration tests passed;
+`deferred_npm_resource_admission_accepts_exact_reviewed_space` failed with
+`Err(Resource)` instead of `Ok(())` at the exact reviewed initial boundary.
+The fix changes only the fixed coexistence arithmetic, using checked operations.
+The portable resource tests live in `tests/unittest/provider_probe_resources.rs`
+and are loaded by the existing headless production-helper contract harness.
+
+The earlier quality source `8195bb9` passed
+[Windows40277905369](https://github.com/swchen44/notype/actions/runs/40277905369).
+Its [ALL40277906369](https://github.com/swchen44/notype/actions/runs/40277906369)
+passed the Rust/core job but failed the existing About log-level UI
+acknowledgement assertion at `about-settings.ui.mjs:176`. This is retained as
+a failed full run, not represented as complete quality acceptance. Final exact
+amendment Linux/Windows results and independent source rechecks are separate
+gates. No local Cargo/native build, artifact operation, key read, public metadata
+fetch, provider request or inference is part of this amendment; spend remains0.

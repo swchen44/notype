@@ -1,19 +1,6 @@
 //! Literal public CLI policy. No mode here reads paths or resolves credentials.
 use super::probe::cli::Mode;
 #[test]
-fn deferred_npm_resource_admission_accepts_exact_reviewed_space() {
-    let budget = super::probe::native::ResourceBudget::new(0, 0, 0);
-    assert_eq!(
-        budget.admit(Ok(0), Ok(4_430_233_600), Ok(3_591_372_800)),
-        Ok(()),
-        "fixed deferred-npm delivery and helper must fit the reviewed exact boundary"
-    );
-    assert_eq!(
-        budget.requirements().unwrap(),
-        (4_430_233_600, 3_591_372_800)
-    );
-}
-#[test]
 fn literal_modes_reject_all_overrides_without_echoing_rejected_values() {
     for mode in ["check", "run", "report"] {
         assert!(Mode::parse(&[mode.into()]).is_ok());
