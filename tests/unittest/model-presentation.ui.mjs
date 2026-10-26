@@ -56,3 +56,37 @@ test("model presentation falls back to real metadata with the app missing-key ha
     "目錄說明",
   );
 });
+
+test("Simplified Chinese recovery has direct resources without Traditional Chinese fallback", async () => {
+  const resources = {};
+  for (const language of ["zh-CN", "zh-TW"]) {
+    resources[language] = {
+      translation: JSON.parse(
+        await readFile(
+          new URL(
+            `../../desktop/src/i18n/locales/${language}/translation.json`,
+            import.meta.url,
+          ),
+          "utf8",
+        ),
+      ),
+    };
+  }
+  const i18n = createInstance();
+  await i18n.init({ lng: "zh-CN", fallbackLng: "zh-TW", resources });
+  for (const [key, expected] of Object.entries({
+    title: "首次设置尚未完成",
+    description:
+      "离线包默认设置尚未完整保存，录音与 API 操作暂停。仍可查看文字历史、安全设置及模型文件夹；如有需要，请选择有效的模型文件夹后重试。",
+    retry: "重试设置",
+    retrying: "重试中…",
+  })) {
+    const path = `notype.bootstrap.${key}`;
+    assert.equal(
+      i18n.getResource("zh-CN", "translation", path),
+      expected,
+      path,
+    );
+    assert.equal(i18n.t(path), expected);
+  }
+});
