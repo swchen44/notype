@@ -1376,7 +1376,7 @@ impl ModelManager {
                             && !record.legacy
                             && !record.custom
                             && projection.writable,
-                        can_download: !record.custom
+                        can_download: record.supports_download()
                             && record.status == ArtifactStatus::Unavailable
                             && !record.present
                             && projection.writable
@@ -2189,6 +2189,14 @@ impl ModelManager {
 
     pub async fn download_model(self: &Arc<Self>, model_id: &str) -> Result<()> {
         let mut activity = self.roots.admit_mutation(model_id)?;
+        if !self
+            .roots
+            .artifacts()
+            .get(model_id)
+            .is_some_and(|record| record.supports_download())
+        {
+            return Err(anyhow::anyhow!("model-artifact-unavailable"));
+        }
         let info = self
             .get_model_info(model_id)
             .ok_or_else(|| anyhow::anyhow!("model-artifact-unavailable"))?;

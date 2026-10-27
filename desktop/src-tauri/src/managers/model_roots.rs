@@ -116,6 +116,16 @@ pub struct ArtifactRecord {
     pub hf_binding: Option<(PathBuf, ArtifactDescriptor)>,
     pub descriptor: Option<ArtifactDescriptor>,
 }
+impl ArtifactRecord {
+    /// Source capability shared by catalog presentation and download admission.
+    /// Availability/presence and root writability are checked by their callers.
+    pub fn supports_download(&self) -> bool {
+        !self.custom
+            && self.descriptor.as_ref().is_some_and(|descriptor| {
+                !descriptor.directory && super::model_roots_files::name_ok(&descriptor.filename)
+            })
+    }
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RootStatus {
     Ready,

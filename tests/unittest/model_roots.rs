@@ -5,7 +5,84 @@ use activity::ActivityGate;
 #[allow(dead_code)]
 #[path = "../../desktop/src-tauri/src/managers/model_engine_state.rs"]
 mod engine_state;
+use activity as model_root_activity;
 use engine_state::EngineState;
+#[allow(dead_code)]
+#[path = "../../desktop/src-tauri/src/managers/model_roots.rs"]
+mod model_roots;
+#[allow(dead_code)]
+#[path = "../../desktop/src-tauri/src/managers/model_roots_files.rs"]
+mod model_roots_files;
+
+#[test]
+fn flat_catalog_filename_policy_rejects_paths_before_filesystem_access() {
+    for name in ["Qwen3-ASR-Q6_K.gguf", "model.bin", "模型.gguf"] {
+        assert!(model_roots_files::name_ok(name), "{name:?}");
+    }
+    for name in [
+        "",
+        ".",
+        "..",
+        "bundle/model.gguf",
+        "bundle\\model.gguf",
+        "../model.gguf",
+        "/model.gguf",
+        "C:\\model.gguf",
+        "\\\\server\\model.gguf",
+        "model\n.gguf",
+        "model\0.gguf",
+        "stream:alternate",
+    ] {
+        assert!(!model_roots_files::name_ok(name), "{name:?}");
+    }
+    assert!(!model_roots_files::name_ok(&"x".repeat(513)));
+}
+
+#[test]
+fn unsupported_artifacts_never_advertise_download_capability() {
+    use model_roots::*;
+    let mut record = ArtifactRecord {
+        key: ArtifactKey {
+            generation: 1,
+            model_id: "fixture/model.gguf".into(),
+            content_identity: String::new(),
+            fingerprint: Fingerprint {
+                volume: 0,
+                file: 0,
+                size: 0,
+                modified: 0,
+            },
+        },
+        filename: "model.gguf".into(),
+        path: "unused".into(),
+        status: ArtifactStatus::Unavailable,
+        legacy: false,
+        custom: false,
+        owned: false,
+        present: false,
+        hf_binding: None,
+        descriptor: None,
+    };
+    assert!(!record.supports_download());
+    record.descriptor = Some(ArtifactDescriptor {
+        model_id: record.key.model_id.clone(),
+        filename: "model.gguf".into(),
+        size: None,
+        sha256: None,
+        repo: None,
+        revision: None,
+        directory: false,
+    });
+    assert!(record.supports_download());
+    record.descriptor.as_mut().unwrap().filename = "bundle/model.gguf".into();
+    assert!(!record.supports_download());
+    record.descriptor.as_mut().unwrap().filename = "model.gguf".into();
+    record.descriptor.as_mut().unwrap().directory = true;
+    assert!(!record.supports_download());
+    record.descriptor.as_mut().unwrap().directory = false;
+    record.custom = true;
+    assert!(!record.supports_download());
+}
 
 #[test]
 fn cancelling_the_caller_cannot_apply_until_the_actual_worker_exits() {
