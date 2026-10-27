@@ -1,9 +1,10 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { commands } from "@/bindings";
 import { useSettings } from "@/hooks/useSettings";
 import {
   dictionaryCsv,
+  dictionaryPage,
   mergeWords,
   normalizeWord,
   parseDictionaryCsv,
@@ -18,6 +19,7 @@ export function DictionarySettings() {
   const { getSetting, refreshSettings, isLoading } = useSettings();
   const words = getSetting("custom_words") ?? [];
   const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
   const [selected, setSelected] = useState(new Set<string>());
   const [editor, setEditor] = useState<{
     original: string | null;
@@ -27,9 +29,11 @@ export function DictionarySettings() {
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
   const file = useRef<HTMLInputElement>(null);
-  const visible = words.filter((word) =>
-    wordIdentity(word).includes(query.trim().toLowerCase()),
-  );
+  const pagination = dictionaryPage(words, query, page);
+  const visible = pagination.items;
+  useEffect(() => {
+    if (page !== pagination.page) setPage(pagination.page);
+  }, [page, pagination.page]);
   const persist = async (next: string[]) => {
     const result = await commands.updateCustomWords(next);
     if (result.status !== "ok") throw new Error("dictionary-save-failed");
@@ -154,8 +158,40 @@ export function DictionarySettings() {
         value={query}
         aria-label={t("notype.usability.searchWords")}
         placeholder={t("notype.usability.searchWords")}
-        onChange={(event) => setQuery(event.target.value)}
+        onChange={(event) => {
+          setQuery(event.target.value);
+          setPage(1);
+        }}
       />
+      <nav
+        className="flex flex-wrap items-center gap-2"
+        aria-label={t("notype.usability.wordPages")}
+      >
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={busy || pagination.page === 1}
+          onClick={() => setPage(pagination.page - 1)}
+        >
+          {t("notype.usability.previousPage")}
+        </Button>
+        <p className="text-sm" role="status">
+          {t("notype.usability.wordPage", {
+            page: pagination.page,
+            pages: pagination.pages,
+            count: pagination.matched,
+            total: pagination.total,
+          })}
+        </p>
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={busy || pagination.page === pagination.pages}
+          onClick={() => setPage(pagination.page + 1)}
+        >
+          {t("notype.usability.nextPage")}
+        </Button>
+      </nav>
       {selected.size > 0 && (
         <Button
           variant="danger-ghost"
@@ -166,83 +202,85 @@ export function DictionarySettings() {
         </Button>
       )}
       <p role="status">{message}</p>
-      <table className="w-full text-left border-collapse">
-        <thead>
-          <tr className="border-b border-mid-gray/30">
-            <th className="p-2">
-              <input
-                type="checkbox"
-                aria-label={t("notype.usability.selectVisible")}
-                checked={
-                  visible.length > 0 &&
-                  visible.every((word) => selected.has(word))
-                }
-                disabled={busy || !visible.length}
-                onChange={(event) =>
-                  setSelected((current) => {
-                    const next = new Set(current);
-                    for (const word of visible) {
-                      if (event.target.checked) next.add(word);
-                      else next.delete(word);
-                    }
-                    return next;
-                  })
-                }
-              />
-            </th>
-            <th className="p-2">{t("notype.usability.word")}</th>
-            <th className="p-2">{t("notype.usability.actions")}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {visible.map((word) => (
-            <tr key={word} className="border-b border-mid-gray/20">
-              <td className="p-2">
+      <div className="max-h-[60vh] overflow-auto">
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="border-b border-mid-gray/30">
+              <th className="p-2">
                 <input
                   type="checkbox"
-                  aria-label={t("notype.usability.selectWord", { word })}
-                  checked={selected.has(word)}
-                  disabled={busy}
+                  aria-label={t("notype.usability.selectVisible")}
+                  checked={
+                    visible.length > 0 &&
+                    visible.every((word) => selected.has(word))
+                  }
+                  disabled={busy || !visible.length}
                   onChange={(event) =>
                     setSelected((current) => {
                       const next = new Set(current);
-                      if (event.target.checked) next.add(word);
-                      else next.delete(word);
+                      for (const word of visible) {
+                        if (event.target.checked) next.add(word);
+                        else next.delete(word);
+                      }
                       return next;
                     })
                   }
                 />
-              </td>
-              <td className="p-2 break-all">{word}</td>
-              <td className="p-2">
-                <div className="flex gap-2">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    disabled={busy}
-                    onClick={() => {
-                      setEditor({ original: word, value: word });
-                      setMessage("");
-                    }}
-                  >
-                    {t("notype.connections.edit")}
-                  </Button>
-                  <Button
-                    variant="danger-ghost"
-                    size="sm"
-                    disabled={busy}
-                    onClick={() =>
-                      void save(words.filter((value) => value !== word))
-                    }
-                  >
-                    {t("notype.history.delete")}
-                  </Button>
-                </div>
-              </td>
+              </th>
+              <th className="p-2">{t("notype.usability.word")}</th>
+              <th className="p-2">{t("notype.usability.actions")}</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {visible.map((word) => (
+              <tr key={word} className="border-b border-mid-gray/20">
+                <td className="p-2">
+                  <input
+                    type="checkbox"
+                    aria-label={t("notype.usability.selectWord", { word })}
+                    checked={selected.has(word)}
+                    disabled={busy}
+                    onChange={(event) =>
+                      setSelected((current) => {
+                        const next = new Set(current);
+                        if (event.target.checked) next.add(word);
+                        else next.delete(word);
+                        return next;
+                      })
+                    }
+                  />
+                </td>
+                <td className="p-2 break-all">{word}</td>
+                <td className="p-2">
+                  <div className="flex gap-2">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      disabled={busy}
+                      onClick={() => {
+                        setEditor({ original: word, value: word });
+                        setMessage("");
+                      }}
+                    >
+                      {t("notype.connections.edit")}
+                    </Button>
+                    <Button
+                      variant="danger-ghost"
+                      size="sm"
+                      disabled={busy}
+                      onClick={() =>
+                        void save(words.filter((value) => value !== word))
+                      }
+                    >
+                      {t("notype.history.delete")}
+                    </Button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
       {!visible.length && (
         <p>
           {t(

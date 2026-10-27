@@ -8,7 +8,11 @@ import {
   savedConnection,
 } from "./fixtures/provider-connections.mjs";
 
-async function dictionaryFixture(t, language = "en") {
+async function dictionaryFixture(
+  t,
+  language = "en",
+  words = ["OpenAI", "繁體中文", "Docker"],
+) {
   const page = await uiFixture(t, {
     cacheName: "dictionary-usability",
     entry: `export {default as React} from 'react'; export {createRoot} from 'react-dom/client'; export {DictionarySettings} from '/src/components/settings/DictionarySettings.tsx'; export {Sidebar} from '/src/components/Sidebar.tsx'; export {default as i18n} from '/src/i18n/index.ts'; import '/src/App.css';`,
@@ -17,64 +21,68 @@ async function dictionaryFixture(t, language = "en") {
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
   t.after(() => assert.deepEqual(errors, []));
-  await page.evaluate(async (language) => {
-    window.calls = [];
-    window.settings = {
-      custom_words: ["OpenAI", "繁體中文", "Docker"],
-      app_language: language,
-      post_process_enabled: false,
-    };
-    window.mode = "ok";
-    window.__TAURI_EVENT_PLUGIN_INTERNALS__ = { unregisterListener() {} };
-    window.__TAURI_INTERNALS__ = {
-      transformCallback: () => 1,
-      invoke: async (cmd, args) => {
-        window.calls.push({ cmd, args });
-        if (cmd === "plugin:event|listen") return 1;
-        if (cmd === "plugin:event|unlisten") return null;
-        if (cmd === "get_app_settings" || cmd === "get_default_settings")
-          return window.settings;
-        if (cmd === "is_update_checks_locked") return false;
-        if (cmd === "check_custom_sounds") return { start: false, stop: false };
-        if (cmd === "get_text_configuration")
-          return {
-            schema_version: 2,
-            revision: 0,
-            connections: [],
-            active_connection_id: null,
-          };
-        if (cmd === "get_connection_activity") return [];
-        if (cmd === "update_custom_words") {
-          if (window.mode === "save-fail")
-            throw "Bearer SYNTHETIC_PRIVATE_REJECTION";
-          if (window.mode === "save-pending")
-            await new Promise((resolve) => (window.releaseSave = resolve));
-          window.settings = { ...window.settings, custom_words: args.words };
-          return null;
-        }
-        throw new Error("Unexpected fixture IPC: " + cmd);
-      },
-    };
-    const { React, createRoot, DictionarySettings, Sidebar, i18n } =
-      await import("/__ui_fixture.tsx");
-    await i18n.changeLanguage(language);
-    const root = createRoot(document.getElementById("root"));
-    root.render(
-      React.createElement(
-        "div",
-        { className: "flex min-h-screen" },
-        React.createElement(Sidebar, {
-          activeSection: "dictionary",
-          onSectionChange: () => {},
-        }),
+  await page.evaluate(
+    async ({ language, words }) => {
+      window.calls = [];
+      window.settings = {
+        custom_words: words,
+        app_language: language,
+        post_process_enabled: false,
+      };
+      window.mode = "ok";
+      window.__TAURI_EVENT_PLUGIN_INTERNALS__ = { unregisterListener() {} };
+      window.__TAURI_INTERNALS__ = {
+        transformCallback: () => 1,
+        invoke: async (cmd, args) => {
+          window.calls.push({ cmd, args });
+          if (cmd === "plugin:event|listen") return 1;
+          if (cmd === "plugin:event|unlisten") return null;
+          if (cmd === "get_app_settings" || cmd === "get_default_settings")
+            return window.settings;
+          if (cmd === "is_update_checks_locked") return false;
+          if (cmd === "check_custom_sounds")
+            return { start: false, stop: false };
+          if (cmd === "get_text_configuration")
+            return {
+              schema_version: 2,
+              revision: 0,
+              connections: [],
+              active_connection_id: null,
+            };
+          if (cmd === "get_connection_activity") return [];
+          if (cmd === "update_custom_words") {
+            if (window.mode === "save-fail")
+              throw "Bearer SYNTHETIC_PRIVATE_REJECTION";
+            if (window.mode === "save-pending")
+              await new Promise((resolve) => (window.releaseSave = resolve));
+            window.settings = { ...window.settings, custom_words: args.words };
+            return null;
+          }
+          throw new Error("Unexpected fixture IPC: " + cmd);
+        },
+      };
+      const { React, createRoot, DictionarySettings, Sidebar, i18n } =
+        await import("/__ui_fixture.tsx");
+      await i18n.changeLanguage(language);
+      const root = createRoot(document.getElementById("root"));
+      root.render(
         React.createElement(
-          "main",
-          { className: "p-4 min-w-0 flex-1" },
-          React.createElement(DictionarySettings),
+          "div",
+          { className: "flex min-h-screen" },
+          React.createElement(Sidebar, {
+            activeSection: "dictionary",
+            onSectionChange: () => {},
+          }),
+          React.createElement(
+            "main",
+            { className: "p-4 min-w-0 flex-1" },
+            React.createElement(DictionarySettings),
+          ),
         ),
-      ),
-    );
-  }, language);
+      );
+    },
+    { language, words },
+  );
   await page.getByRole("table").waitFor();
   return page;
 }
@@ -227,6 +235,73 @@ test("dictionary save failure keeps the editor and existing words, pending save 
   );
   await page.evaluate(() => window.releaseSave());
   await page.getByRole("cell", { name: "New word", exact: true }).waitFor();
+});
+
+test("large dictionaries page 100 rows, search all terms, deduplicate across pages and export all words", async (t) => {
+  const words = Array.from(
+    { length: 250 },
+    (_, i) => `term-${String(i + 1).padStart(3, "0")}`,
+  );
+  const page = await dictionaryFixture(t, "en", words);
+  assert.equal(await page.locator("tbody tr").count(), 100);
+  await page
+    .getByText("Page 1 of 3 · 250 matches / 250 words", { exact: true })
+    .waitFor();
+  const next = page.getByRole("button", { name: "Next page", exact: true });
+  await next.click();
+  await page.getByRole("cell", { name: "term-101", exact: true }).waitFor();
+  await page
+    .getByRole("checkbox", { name: "Select all visible words", exact: true })
+    .check();
+  await page
+    .getByRole("button", { name: "Delete 100 selected words", exact: true })
+    .waitFor();
+  await next.click();
+  assert.equal(await page.locator("tbody tr").count(), 50);
+  assert.equal(
+    await page
+      .getByRole("checkbox", { name: "Select all visible words", exact: true })
+      .isChecked(),
+    false,
+  );
+  await page.getByRole("button", { name: "Add word", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Word", { exact: true }).fill("TERM-001");
+  await dialog.getByRole("button", { name: "Save", exact: true }).click();
+  await dialog
+    .getByText("This word already exists (ignoring case).", { exact: true })
+    .waitFor();
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  await page
+    .getByRole("searchbox", { name: "Search words", exact: true })
+    .fill("TERM-250");
+  await page
+    .getByText("Page 1 of 1 · 1 matches / 250 words", { exact: true })
+    .waitFor();
+  await page.getByRole("cell", { name: "term-250", exact: true }).waitFor();
+  const waiting = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export CSV", exact: true }).click();
+  const download = await waiting;
+  const csv = (await readFile(await download.path())).toString("utf8");
+  assert.equal(csv.trim().split("\r\n").length, 251);
+  assert.match(csv, /"term-001"/);
+  assert.match(csv, /"term-250"/);
+  await page
+    .getByRole("searchbox", { name: "Search words", exact: true })
+    .fill("");
+  await page
+    .getByRole("button", { name: "Delete 100 selected words", exact: true })
+    .click();
+  await page
+    .getByText("Page 1 of 2 · 150 matches / 150 words", { exact: true })
+    .waitFor();
+  const remaining = await page.evaluate(() => window.settings.custom_words);
+  assert.equal(remaining.length, 150);
+  assert.ok(
+    remaining.includes("term-001") &&
+      remaining.includes("term-250") &&
+      !remaining.includes("term-101"),
+  );
 });
 
 test("history starts with timestamp and primary text, literal search hides originals and highlights matches", async (t) => {

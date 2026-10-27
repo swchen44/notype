@@ -16,9 +16,32 @@ const js = ts.transpileModule(source, {
     target: ts.ScriptTarget.ES2022,
   },
 }).outputText;
-const { dictionaryCsv, parseDictionaryCsv, mergeWords } = await import(
-  "data:text/javascript;base64," + Buffer.from(js).toString("base64")
-);
+const { dictionaryCsv, parseDictionaryCsv, mergeWords, dictionaryPage } =
+  await import(
+    "data:text/javascript;base64," + Buffer.from(js).toString("base64")
+  );
+
+test("dictionary pages bound the rendered rows, search all words and clamp deleted pages", () => {
+  const words = Array.from(
+    { length: 250 },
+    (_, i) => `term-${String(i + 1).padStart(3, "0")}`,
+  );
+  const first = dictionaryPage(words, "", 1);
+  assert.equal(first.items.length, 100);
+  assert.equal(first.items[0], "term-001");
+  assert.equal(first.pages, 3);
+  assert.equal(first.total, 250);
+  const last = dictionaryPage(words, "", 3);
+  assert.equal(last.items.length, 50);
+  assert.equal(last.items[49], "term-250");
+  const search = dictionaryPage(words, "TERM-250", 1);
+  assert.deepEqual(search.items, ["term-250"]);
+  assert.equal(search.pages, 1);
+  assert.equal(search.matched, 1);
+  const clamped = dictionaryPage(words.slice(0, 150), "", 3);
+  assert.equal(clamped.page, 2);
+  assert.equal(clamped.items[0], "term-101");
+});
 
 test("CSV is UTF-8 BOM and preserves Chinese, commas and quotes when reimported", () => {
   const words = ["繁體中文", "简体中文", "OpenAI", "name, value", 'a"b'];

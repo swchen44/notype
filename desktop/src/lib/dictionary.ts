@@ -4,6 +4,28 @@ export function normalizeWord(word: string) {
 export function wordIdentity(word: string) {
   return normalizeWord(word).toLowerCase();
 }
+export function dictionaryPage(
+  words: string[],
+  query: string,
+  requestedPage: number,
+) {
+  const needle = query.trim().toLowerCase();
+  const matching = needle
+    ? words.filter((word) => wordIdentity(word).includes(needle))
+    : words;
+  const pages = Math.max(1, Math.ceil(matching.length / 100));
+  const page = Math.min(
+    pages,
+    Math.max(1, Number.isFinite(requestedPage) ? Math.trunc(requestedPage) : 1),
+  );
+  return {
+    items: matching.slice((page - 1) * 100, page * 100),
+    page,
+    pages,
+    matched: matching.length,
+    total: words.length,
+  };
+}
 export function validWord(word: string) {
   return (
     word.length > 0 && Array.from(word).length <= 50 && !/\p{Cc}/u.test(word)
