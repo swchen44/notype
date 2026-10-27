@@ -1,5 +1,15 @@
 # notype 開發待辦
 
+## 目前待辦：V8 最終稽核與之後的人工驗收（2026-10-27）
+
+- [ ] 依 [V8計畫](https://github.com/swchen44/notype/issues/14#issuecomment-6433597289)／[Astra0](https://github.com/swchen44/notype/issues/14#issuecomment-6433619965) 沿用root已重播的新carry，完成程式／focused tests、獨立Spec0／Standards0與leases，root連同後續正向變化重新admit後僅執行一次d3 finalize。R10已通過；V7準備121/121與雙軸0不代表actual finalization，原d2 extract仍FAILED，gate／d3目錄仍不存在。
+- [ ] 實際新finalization／公開完整性check與所有terminal證據通過後，才更新交付結果並發布已授權的private prerelease；現在沒有已驗收下載。
+- [ ] 後續人工優先順序與完整tested／untested／failed矩陣看 [README](README.md#windows-11-測試版與驗證狀態)；原生GUI／人聲／公司服務／clean-host／CSV／五App等仍待驗收。詳情見 [目前驗證狀態](docs/verification/delivery-v8-preparation.md) 與 [HANDOFF](HANDOFF.md)。
+
+這是docs-only checkpoint；root來源T與runtime A、舊程式／gates／輸出及失敗均保留。以下待辦為歷史快照，時態以本節與README為準。
+
+## 歷史待辦（保留原文）
+
 2026-10-26 最新：#29簡體recovery四字串及實際resource/rendered tests已合入，candidate `f8c2dd8` Spec0／Standards0 → merge `f81f00f`。 [Frontend40292723964](https://github.com/swchen44/notype/actions/runs/40292723964)產品88f9527 unit4／rendered95＋lint/TS/Vite通過，portable skipped；不稱為candidate或new-S完整ALL。見 [receipt](docs/verification/bootstrap-zhcn.md)。所有文件一起凍結新 **S**，再由root做exact-S ALL＋Windows contracts(build_private_artifact=false)與雙軸delta repin0，之後才可native source/input/preflight，沒有trailing docs改SHA。
 
 既有APIartifact/live維持原6ddprovenance：[閉合HALTED結果](https://github.com/swchen44/notype/issues/25#issuecomment-6411081019) sixDS／fivehist，feesUNKNOWN，六reservations保留；CSV4列vsDB5hist，完整production export待驗收。無更多calls／retry／resume／新round，OpenRouter/Gemini未跑，不因localefix重建APIartifact。Native external [r3](https://github.com/swchen44/notype/issues/14#issuecomment-6411176335)／[Astra0](https://github.com/swchen44/notype/issues/14#issuecomment-6411205513)外部fixtures準備中，沒有compiler／operation baseline／native App或ZIP。#29/#25/#14/#8／公司／五App仍open，leases已交還，worktrees／舊cache/artifacts/receipts保留；本merger無key／API／native／模型／profile／cleanup操作。詳見 [HANDOFF](HANDOFF.md)，以下歷史時態以本段與live issues為準。

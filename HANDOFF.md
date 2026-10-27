@@ -1,5 +1,15 @@
 # Windows 11 開發接手
 
+## 目前 checkpoint：V8 計畫已核准，最終稽核尚未啟動（2026-10-27）
+
+使用者要求的完整 tested／untested／failed 清單以 [README](README.md#windows-11-測試版與驗證狀態) 為單一入口；準備與累計 C 阻塞見 [delivery-v8-preparation](docs/verification/delivery-v8-preparation.md)。R10 四階段／兩項原生 fixtures 已通過；原 d2 extract 仍 FAILED、沒有成功 audit。V7 準備121/121與完整Spec0／Standards0不是實際finalization，actual gate／d3目錄仍不存在。
+
+[V8計畫](https://github.com/swchen44/notype/issues/14#issuecomment-6433597289)／[Astra0](https://github.com/swchen44/notype/issues/14#issuecomment-6433619965) 核准一次明確C512MiB修訂；新carry已有root重播紀錄；下一步完成新程式／測試與獨立雙軸0、交還全部leases，再連同後續正向變化做fresh gate／admission及一次實際finalize。收到完整ZIP／extracted公開檢查、bundled-Node完整性check與terminal／資源證據後，才可公告交付。
+
+此文件commit僅更新狀態；root建置checkout仍凍結T=`a7fc1d79822544e6f4858cb32bcd809067367cc3`，App實編譯A=`a180a2360009448cdf6e2f4f8e7363e0eb2dbf30`不變。所有舊失敗與outputs保留；以下checkpoint是歷史，時態與下一步以本節及README為準。
+
+## 歷史 checkpoint（保留原文）
+
 ## 最新 checkpoint：簡體 recovery 來源合入，重新凍結完整 S；API 舊 round 已 HALTED
 
 2026-10-26：依 [P29-zhcn-recovery-v1](https://github.com/swchen44/notype/issues/29#issuecomment-6411382409)／[實際 Astra0](https://github.com/swchen44/notype/issues/29#issuecomment-6411399601)，candidate `f8c2dd8b56c47e06926e89ff663fe15cdb3b76f8` 的最終獨立 Spec0／Standards0 已正式完成，保留歷史 merge `f81f00f524ffe4b9da938a8bf3936f30a3b38d1d` 合入。唯一產品改動為 zh-CN 四個 bootstrap recovery 字串；實際 i18next direct-resource 與 rendered component／hook 測試先 RED 後 GREEN。[Frontend40292723964](https://github.com/swchen44/notype/actions/runs/40292723964) exact產品 `88f9527` unit4／rendered95、lint／TypeScript／Vite通過；portable job skipped，**不是f8／新merged S的完整ALL**。最終workflow diff為零。見 [來源receipt](docs/verification/bootstrap-zhcn.md)。

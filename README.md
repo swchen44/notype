@@ -8,33 +8,41 @@ notype 免安裝語音輸入 App 的研究、決策與實作追蹤；先交付 W
 
 ## Windows 11 測試版與驗證狀態
 
-目前尚未發布本輪完整離線 ZIP。R9 的 App 與平台 helper 已通過，list-tests 在編譯階段以 exit101 失敗；run-tests 未執行，失敗封存不完整。完整 ZIP、checksum、獨立解壓與逐檔驗證尚未完成。這是目前的驗證快照，不是成品下載或驗收成功公告；本輪證據見 [R9 原生回合紀錄](https://github.com/swchen44/notype/issues/14#issuecomment-6430655722)。後續修正須經計畫審查及驗證。
+目前尚未發布本輪完整離線 ZIP。R10 的 App 驗證／獨立封存、平台 helper、原生測試列舉及兩項錄音計量測試已通過，見 [R10 原生紀錄](https://github.com/swchen44/notype/issues/14#issuecomment-6431337535)。d2 的 count／stage／archive 已通過並留存候選 ZIP；原 extract 因 independent-monitor-stale 失敗，沒有成功的原 audit。V7 已完成準備與完整來源審查，但實際 gate 與 d3 操作目錄仍不存在，沒有執行 finalize、認養或 bundled-Node 公開檢查。R9、d1、d2 失敗均保留，現在沒有已驗收成品下載。
 
-目前已編譯 App 的產品來源為 `a180a2360009448cdf6e2f4f8e7363e0eb2dbf30`。App 在 R7 編譯，由 R9 驗證並獨立封存，不能稱為 R9 重新編譯。後續產品來源若改變，須重新綁定來源、CI、建置及交付檔；README 文件 commit 本身不代表重新編譯。
+目前阻塞是累計 C 用量，而非只看磁碟可用空間：已知正向累計下限至少為 2,245,115,904 bytes，超過原 1,985 MiB 上限 163,692,544 bytes，尚未加入完整稽核預留。計畫引用的約 C10GB／D2.38GB 可用空間能符合當時實體空間投影，不能抵銷累計超限。[V8 計畫](https://github.com/swchen44/notype/issues/14#issuecomment-6433597289)已獲[Astra 核准0](https://github.com/swchen44/notype/issues/14#issuecomment-6433619965)，只對這次尚未啟動的最終稽核明確增加 C512MiB（post-native 1985→2497MiB、aggregate 2241→2753MiB）；[新carry的root重播紀錄](https://github.com/swchen44/notype/issues/14#issuecomment-6433705942)已保留；V8程式／測試、完整審查、當下admission與實際驗收仍待完成。完整準備、失敗與來源邊界見[驗證狀態](docs/verification/delivery-v8-preparation.md)。
+
+App 實際編譯來源為 `a180a2360009448cdf6e2f4f8e7363e0eb2dbf30`（A），在 R7 編譯，由 R10 驗證並獨立封存；原生測試與組裝來源為 `a7fc1d79822544e6f4858cb32bcd809067367cc3`（T）。A→T 僅根目錄 README 與既有 cfg(test) 模組的一行 ReadySignal 匯入不同，不宣稱 App 由 T 重新編譯；文件 commit 亦不代表重新建置。
 
 預定完整包適用 Windows 11 x64／AVX2＋BMI2，內含 Node、Fixed WebView2、原生執行環境及 Qwen3-ASR 0.6B Q6_K。本機辨識不需 API key。只有完整 ZIP 實際驗證通過後，才提供 GitHub Release 下載位置、雜湊與對應紀錄；目前不提供未驗證下載連結。
 
+完整包實際交付後，先結束所有舊版 notype，完整解壓到新資料夾，再使用 `Start-notype.cmd`。已有實例時，第二次啟動會喚回既有程式，不能據此確認新版或新的資料目錄已啟動。若用 `NOTYPE_DATA_DIR` 隔離試用資料，每次都須用相同命令與同一絕對路徑啟動；直接雙擊不會記住前次命令視窗的環境變數。完整操作與下載位置須待實際最終驗收後發布。
+
 | 範圍 | 實際狀態 | 證據與限制 |
 | --- | --- | --- |
-| Rust 核心、桌面流程、診斷、Provider、模型資料夾與 bootstrap 契約 | a180來源CI已通過 | [ALL40294093867](https://github.com/swchen44/notype/actions/runs/40294093867)兩個Linux jobs成功；使用自有檔案、SQLite、本機HTTP及受控裝置替身，不是實體錄音或公司服務 |
-| 前端介面、語系與設定契約 | a180來源CI已通過 | 受控IPC rendered tests，不等於新版原生視窗與裝置驗收 |
-| Windows平台中立contracts | 已通過 | [Windows40294287716](https://github.com/swchen44/notype/actions/runs/40294287716)；artifact job skipped，不能作為App建置證據 |
-| Windows Release App | R7編譯／R9攜帶驗證通過 | 59,009,536 bytes；SHA-256 `1432e7fa897a4235a5fc2a0f492c45a0c6ce4b503cfb93eb72135c98121b5ef0`。不代表新版GUI／麥克風已啟動驗收 |
-| Windows平台helper | R9編譯／封存通過 | 146,944 bytes；SHA-256 `121bdc97e1c8d8e0b5fb633be4c5c998ab10eba0f088d477e67c46a4a70ac31b`。不等於全部native測試通過 |
-| 原生錄音計量library fixtures | R9 list-tests編譯失敗；run-tests未執行 | Cargo exit101／owned-root-nonzero-exit；失敗封存不完整，沒有nativeTests成功紀錄，不列為兩項測試通過；這些fixtures不開啟實體麥克風 |
-| 交付輸入清單 | 候選metadata已檢查，封裝前置門檻仍有阻塞 | 不代表已完成封裝；需先取得完整native及交付前置檢查的通過紀錄 |
-| 本輪完整ZIP、checksum、獨立解壓與逐檔核對 | 尚未建立／完成 | 四個實際native階段、交付前檢查及資源門檻未全數通過，不以清單／計畫代替實際ZIP |
+| Rust 核心、桌面流程、診斷、Provider、模型資料夾與 bootstrap 契約 | T來源CI已通過 | [ALL40427656120](https://github.com/swchen44/notype/actions/runs/40427656120)兩個Linux jobs成功；使用自有檔案、SQLite、本機HTTP及受控裝置替身，不是實體錄音或公司服務 |
+| 前端介面、語系與設定契約 | T來源CI已通過 | 受控IPC rendered tests，不等於新版原生視窗與裝置驗收 |
+| Windows平台中立contracts | 已通過 | [Windows40427656156](https://github.com/swchen44/notype/actions/runs/40427656156)；artifact job skipped，不能作為App建置證據 |
+| Windows Release App | R7/A編譯／R10攜帶驗證通過 | 59,009,536 bytes；SHA-256 `1432e7fa897a4235a5fc2a0f492c45a0c6ce4b503cfb93eb72135c98121b5ef0`。不代表新版GUI／麥克風已啟動驗收 |
+| Windows平台helper | R10/T編譯／封存通過 | 146,944 bytes；SHA-256 `121bdc97e1c8d8e0b5fb633be4c5c998ab10eba0f088d477e67c46a4a70ac31b`。不等於全部native測試通過 |
+| 原生錄音計量library fixtures | R10列舉及執行兩項均通過 | 2 passed／0 failed／0 ignored；驗證實收靜音與decoder padding計量，不開啟實體麥克風；R9失敗保留 |
+| 交付輸入清單 | T清單已審查；R10 native前置通過 | 原始模型／runtime／notices保留；輸入清單與fixtures不代替整包驗收 |
+| 本輪完整ZIP、checksum、獨立解壓與逐檔核對 | d2候選ZIP留存；原extract失敗，V8最終稽核尚未執行 | 原extract／audit不補造成功；V7準備與fixtures不代替實際驗收；目前不發布下載 |
+| V7準備／V8後續 | [V7準備121/121、完整Spec0／Standards0](https://github.com/swchen44/notype/issues/14#issuecomment-6433705942)；V8計畫核准、實作與驗收待完成 | 55個fixture Workers及owned children已terminal；actual gate／d3目錄不存在，未執行finalize或公開check；不當作產品驗收 |
 | 新版GUI、快捷鍵、秒數、系統匣及設定持久化 | 本輪未完成實機驗收 | 舊pilot及受控契約只作各自範圍的歷史證據 |
+| 介面語系與模型目錄 | 本輪原生GUI待測 | 繁中／簡中保存、卡片基本／進階資訊、相對評分排序、下載進度／失敗恢復、模型metadata宣告的全部語音語言；不宣稱固定30種語音或介面語言 |
+| 三場景提示詞、回譯確認與交付 | 本輪原生GUI與實際API待測 | 編輯／還原／保存、確認顯示版本後另行交付或複製；API失敗保留原稿 |
+| 已保存API連線、模型清單與thinking／effort | 本輪實際服務待測 | 啟用／切換連線、有效設定與實際行為；受控provider contracts不代替真實服務 |
 | 實體麥克風權限、裝置拔除、睡眠／喚醒 | 本輪未執行；建議人工驗收 | 裝置替身測試不代表實際OS／硬體事件通過，也不表示這些案例已失敗 |
 | 繁中＋英文／簡中＋英文品質、麥克風／噪音、session p95 | 尚未完成實機品質／效能驗收 | [既有模型測量](docs/verification/qwen3-quality.md)與10～20秒錄音停止至交付p95≤5秒目標分開，不以相對分數宣稱達標 |
 | 真實大模型搬移、重裝沿用、使用中切換 | 本輪實體操作待測 | 自有小檔案／worker契約已測；真實權重與檔案鎖另驗收，App不替使用者搬移／複製已有權重 |
 | 中文／空白／長路徑、唯讀資料夾與Windows權限 | 本輪實機未執行；建議人工驗收 | 既有路徑／檔案fixtures不代表實際OS組合已測過；不是已知失敗清單 |
-| 歷史CSV原生GUI匯出與完整API案例 | 本輪待實測 | SQLite／UTF-8 BOM契約已測；原生對話框與真實重試／回譯內容仍需核對 |
+| 歷史CSV原生GUI匯出與完整API案例 | 本輪待實測 | SQLite／UTF-8 BOM契約已測；原生對話框、取消／重試、回譯、筆數與部分／未知tokens／費用；UTF-8 BOM CSV須由Excel／研究工具實際開啟核對中文及欄位，不把未知當零，費用按幣別分開 |
 | DeepSeek真實API | 歷史專用helper回合未完整通過 | [#25實際紀錄](https://github.com/swchen44/notype/issues/25#issuecomment-6411081019)：6次請求、DB5筆／CSV4筆，回譯用詞檢查失敗後停止；取消／重試後續未執行，費用UNKNOWN。不是新版App API驗收 |
 | OpenRouter／Gemini真實請求 | 未執行 | 本機HTTP fixtures或免費模型標籤不代表供應商實測 |
 | 真實429／斷線、公司Custom API TLS／CA／Proxy | 本輪未執行；建議人工驗收 | 受控限流／錯誤／逾時／取消契約不代表公司環境已測，也不表示實機案例已失敗 |
-| 診斷OFF／Clear／匯出隱私的實際GUI操作 | 本輪未執行；建議人工驗收 | 偏好／清除／安全DTO／匯出契約不代替實際GUI及匯出檔人工檢視 |
-| 無Node/npm/開發工具的乾淨Windows11、首次離線／網路行為 | 未完成獨立環境驗收 | 無乾淨主機／斷線或封包證據，不宣稱clean-host或零網路通過 |
+| 診斷OFF／Clear／匯出隱私的實際GUI操作 | 本輪未執行；建議人工驗收 | 含重啟偏好及使用者在本機檢查實際key保護；合成秘密／安全DTO契約不代替GUI與匯出人工檢視，不附私人key或設定回報 |
+| 無Node/npm/開發工具的乾淨Windows11、首次離線／網路行為 | 未完成獨立環境驗收 | 含SmartScreen、Defender及公司執行政策的實際啟動；未證明通過或被擋，未取得斷線／封包證據，不宣稱clean-host或零網路通過 |
 | 瀏覽器、VS Code、Teams、Outlook、Windows Terminal自動輸入 | 未完成新版五App驗收 | 歷史標準Win32欄位不代表五App通過；新版錄音／辨識／歷史／複製需各自實機核對 |
 | macOS／Linux桌面App | 未交付／未測 | portable CI不等於桌面成品 |
 
@@ -45,9 +53,12 @@ notype 免安裝語音輸入 App 的研究、決策與實作追蹤；先交付 W
 3. 原稿／結果字數、耗時、模型與原生GUI CSV匯出，核對實際筆數及內容。
 4. 中文／空白／長路徑、唯讀模型資料夾、自行搬移整個模型資料夾後重新指定及重裝沿用。
 5. 明確設定自己的文字API後，測翻譯／回譯、429、取消／重試、斷線及公司TLS／Proxy。
-6. 在GUI關閉診斷、Clear、重新開啟／匯出，人工檢視匯出隱私與預期紀錄。
+6. 在GUI關閉診斷、Clear、重新開啟／匯出，核對偏好保存，並只在本機檢視實際key保護及預期紀錄。 Excel／研究工具另實際開啟UTF-8 BOM CSV核對中文、欄位及未知／部分費用。
+7. 介面語系保存、模型目錄基本／進階資訊、排序與下載進度；核對該模型宣告的全部語音語言。
+8. 三場景提示詞編輯／還原／保存、回譯顯示版本確認與另行交付／複製；已保存API連線切換、模型清單及thinking／effort有效設定。
+9. 在無開發工具的乾淨Windows11實測首次離線啟動、SmartScreen／Defender與公司執行政策；這些是待驗收項目，不是已知失敗。
 
-以上是待執行建議，不是測試結果。回報問題時手動檢視並附上診斷檔、版本及重現步驟；勿將個人key、錄音、歷史或私人設定加入通用安裝包。
+以上是待執行建議，不是測試結果或已知失敗清單。初次請在自有空白測試輸入框驗證；回譯「確認此顯示版本」不會自動交付，需要時另按「交付至原目標」或複製。回報問題時手動檢視並附上診斷檔、版本及重現步驟；勿將個人key、錄音、歷史或私人設定加入通用安裝包。
 
 先前 pilot 的歷史操作與證據見 [本機試用說明](docs/local-trial.md)及[兩軸審查與修正](docs/verification/local-code-review.md)，不作為本輪新版原生／封裝驗收。完整 #8、#14 尚未結案，見 [HANDOFF](HANDOFF.md)／[TODO](TODO.md)。
 
@@ -84,4 +95,4 @@ notype 免安裝語音輸入 App 的研究、決策與實作追蹤；先交付 W
 | [Agent skills](AGENTS.md) | Issue tracker、triage labels、domain docs 與測試目錄入口 |
 | [GitHub Issues](https://github.com/swchen44/notype/issues) | 待辦、驗收條件與後續 evidence receipt |
 
-此 repo 為 private。公司 endpoint、API key、token、實際工作錄音與逐字稿不屬於目前提交內容。通用產品包保留未來公開 npm 的方向；本輪新版完整包尚未完成，公司設定留本機；實際驗證通過後才更新 README 並發布 GitHub Release，不宣稱公司環境通過。
+此 repo 為 private。公司 endpoint、API key、token、實際工作錄音與逐字稿不屬於目前提交內容。通用產品包保留未來公開 npm 的方向；本輪ZIP候選已留存，但V8最終稽核尚未執行，不提供Release下載或宣稱公司環境通過。文件更新反映當前狀態，不代表重新編譯App；公司設定仍留本機。
