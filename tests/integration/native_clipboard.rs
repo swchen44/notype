@@ -23,11 +23,14 @@ mod windows {
 
     #[test]
     fn production_paste_preserves_formats_and_never_confirms_a_newer_clipboard() {
+        if std::env::var("NOTYPE_CLIPBOARD_ISOLATED_CHILD").as_deref() == Ok("1") {
+            isolated_clipboard_child();
+            return;
+        }
         let mut child = Command::new(std::env::current_exe().unwrap())
             .args([
                 "--exact",
-                "windows::isolated_clipboard_child",
-                "--ignored",
+                "windows::production_paste_preserves_formats_and_never_confirms_a_newer_clipboard",
                 "--nocapture",
                 "--test-threads=1",
             ])
@@ -69,8 +72,6 @@ mod windows {
     }
 
     /// Entry point invoked explicitly by the parent, never against the interactive clipboard.
-    #[test]
-    #[ignore = "owned child entry point, executed explicitly by the parent test"]
     fn isolated_clipboard_child() {
         assert_eq!(
             std::env::var("NOTYPE_CLIPBOARD_ISOLATED_CHILD").as_deref(),

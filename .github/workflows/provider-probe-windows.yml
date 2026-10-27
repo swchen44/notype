@@ -11,6 +11,9 @@ on:
       - desktop/src-tauri/src/native_input.rs
       - desktop/src-tauri/src/native_clipboard.rs
       - desktop/src-tauri/src/native_target_policy.rs
+      - desktop/src-tauri/src/native_clipboard_state.rs
+      - tests/integration/native_clipboard.rs
+      - tests/unittest/native_clipboard_state.rs
       - desktop/src-tauri/src/connection_activity.rs
       - desktop/src-tauri/src/shortcut/dictionary.rs
       - tests/integration/connection_activity.rs
@@ -44,9 +47,9 @@ jobs:
       - name: Install the pinned ordinary Rust toolchain
         run: rustup toolchain install 1.99.1 --profile minimal --component rustfmt --component clippy
       - name: Exercise real owned HTTP and SQLite contracts without credentials
-        run: cargo +1.99.1 test --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test provider-probe-policy --test provider-probe-runtime --test native-delivery --test native-target-policy --test dictionary-words --test connection-activity
+        run: cargo +1.99.1 test --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test provider-probe-policy --test provider-probe-runtime --test native-delivery --test native-target-policy --test native-clipboard-state --test native-clipboard --test dictionary-words --test connection-activity
       - name: Lint the same helper contracts
-        run: cargo +1.99.1 clippy --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test provider-probe-policy --test provider-probe-runtime --test native-target-policy --test dictionary-words --test connection-activity --bin notype-provider-probe -- -D warnings
+        run: cargo +1.99.1 clippy --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test provider-probe-policy --test provider-probe-runtime --test native-target-policy --test native-clipboard-state --test dictionary-words --test connection-activity --bin notype-provider-probe -- -D warnings
   artifact:
     if: github.event_name == 'workflow_dispatch' && inputs.build_private_artifact
     needs: contracts

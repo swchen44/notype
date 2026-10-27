@@ -194,3 +194,11 @@ path = "../../unittest/native_target_policy.rs"
 [[test]]
 name = "connection-activity"
 path = "../connection_activity.rs"
+
+[[test]]
+name = "native-clipboard-state"
+path = "../../unittest/native_clipboard_state.rs"
+
+[[test]]
+name = "native-clipboard"
+path = "../native_clipboard.rs"
