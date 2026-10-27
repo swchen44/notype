@@ -66,7 +66,7 @@ flowchart TB
 
 | 層 | 負責 | 邊界 |
 | --- | --- | --- |
-| React／Tauri IPC | 設定、歷史、語系、錄音提示與使用者動作 | 用安全 DTO 與 revision 處理回覆；不回傳已存／已解析的 key |
+| React／Tauri IPC | 設定、歷史、語系、錄音提示與使用者動作 | 用安全 DTO 與 revision 處理回覆；已存 key 僅回傳遮罩頭尾，實際值不回傳 |
 | 桌面協調層 | 音訊生命週期、辨識模式、當次設定、generation、結果通知 | 將外部事件接到核心；只有有效 generation 可建立當次工作結果 |
 | notype-core | 原稿與結果、session 狀態、重試／回譯／確認、交付及 SQLite | 不自行取得 OS 視窗、麥克風、憑證或介面語言 |
 | Provider adapter | 請求映射、提示詞、能力、HTTP、錯誤與用量 | 遠端內容與秘密不直接成為可公開診斷；目前文字請求採非串流回應 |
@@ -148,18 +148,21 @@ sequenceDiagram
     Core->>DB: 保存原稿
     DB-->>Core: 提交成功
     Core-->>Desktop: 已保存的 session
-    Desktop->>Core: process_with_stop
-    Core->>API: generate_observed
-    alt 沒有可用文字服務
-        API-->>Core: ConfigurationRequired，不發送 HTTP
-        Core->>DB: 保存服務未設定狀態，保留原稿
-        Core-->>Desktop: 原稿與狀態
-        Desktop-->>User: 顯示服務狀態，原稿可複製
-    else 使用文字服務
-        API-->>Core: 處理結果／可取得的用量
-        Core->>DB: 保存結果與觀測
+    alt AI 關閉
+        Desktop->>Core: original_for_delivery_with_stop
+        Core->>DB: 保存原稿選擇與可用耗時
+        Desktop->>Core: deliver：原目標安全檢查
+    else AI 啟用
+        Desktop->>Core: process_with_stop
+        Core->>API: generate_observed
+        API-->>Core: 處理結果／安全錯誤與實收觀測
+        Core->>DB: 保存結果或失敗
         Core-->>Desktop: 結果狀態
-        Desktop-->>User: 顯示結果；符合條件時嘗試受保護交付
+        alt 處理失敗或逾時
+            Desktop->>Core: 選原稿並受保護交付
+        else 成功
+            Desktop-->>User: 顯示結果；需審閱時先確認，否則嘗試交付
+        end
     end
 ```
 
@@ -188,9 +191,11 @@ sequenceDiagram
     else 逾時、限流或無效回覆
         API-->>Core: 有限錯誤與可用觀測
         Core->>DB: 保存失敗，保留原稿與已取得觀測
+        Core-->>Desktop: 失敗狀態
+        Desktop->>Core: 選擇原稿並受保護交付，保留失敗原因
     end
     Core-->>Desktop: 可恢復狀態
-    Desktop-->>User: 顯示錯誤／原稿，可選擇複製或重試
+    Desktop-->>User: 顯示錯誤與交付狀態，原稿仍可複製
     opt 使用者明確重試
         User->>Desktop: 重試歷史項目
         Desktop->>Core: 以已保存資料開始新 attempt
@@ -300,6 +305,9 @@ notype/
 | 模型生命週期 | [model.rs](desktop/src-tauri/src/managers/model.rs)、[model_roots.rs](desktop/src-tauri/src/managers/model_roots.rs)、[model_transfer_worker.rs](desktop/src-tauri/src/managers/model_transfer_worker.rs) | 模型選擇、資料夾政策及背景工作 |
 | 按鍵與提示 | [physical_gestures.rs](desktop/src-tauri/src/physical_gestures.rs)、[capture_startup.rs](desktop/src-tauri/src/capture_startup.rs)、[overlay_lifecycle.rs](desktop/src-tauri/src/overlay_lifecycle.rs) | 實體按鍵、收音 ready、提示生命週期 |
 | 交付與視窗 | [native_input.rs](desktop/src-tauri/src/native_input.rs)、[window_lifecycle.rs](desktop/src-tauri/src/window_lifecycle.rs)、[tray.rs](desktop/src-tauri/src/tray.rs) | 原目標保護、系統匣與還原 |
+| Notepad++ 貼上 | [native_clipboard.rs](desktop/src-tauri/src/native_clipboard.rs)、[native_target_policy.rs](desktop/src-tauri/src/native_target_policy.rs) | 原生定向貼上、剪貼簿備份／還原、編碼與控制項支援 |
+| 詞彙與簡易歷史 | [DictionarySettings.tsx](desktop/src/components/settings/DictionarySettings.tsx)、[HistorySettings.tsx](desktop/src/components/settings/history/HistorySettings.tsx) | 詞彙表、CSV、時間／文字與搜尋反白 |
+| 連線用量與狀態 | [connection_activity.rs](desktop/src-tauri/src/connection_activity.rs)、[useConnectionActivity.ts](desktop/src/hooks/useConnectionActivity.ts) | 獨立用量、測試 admission／結果、設定 revision 與 UI 刷新 |
 | 文字 API | [faithful_provider.rs](desktop/src-tauri/src/faithful_provider.rs)、[provider_config.rs](desktop/src-tauri/src/provider_config.rs) | ChatProcessor、場景提示詞、設定與映射 |
 | 能力／key／模型列表 | [provider_capabilities.rs](desktop/src-tauri/src/provider_capabilities.rs)、[provider_credentials.rs](desktop/src-tauri/src/provider_credentials.rs)、[provider_models.rs](desktop/src-tauri/src/provider_models.rs) | thinking／effort、憑證來源、模型列表 |
 | 診斷 | [diagnostic_service.rs](desktop/src-tauri/src/diagnostic_service.rs)、[diagnostic_privacy.rs](desktop/src-tauri/src/diagnostic_privacy.rs) | 收集偏好、可匯出內容及敏感資訊處理 |
