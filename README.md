@@ -8,9 +8,9 @@ notype 免安裝語音輸入 App 的研究、決策與實作追蹤；先交付 W
 
 ## Windows 11 測試版與驗證狀態
 
-目前尚未發布本輪完整離線 ZIP。R10 的 App 驗證／獨立封存、平台 helper、原生測試列舉及兩項錄音計量測試已通過，見 [R10 原生紀錄](https://github.com/swchen44/notype/issues/14#issuecomment-6431337535)。d2 的 count／stage／archive 已通過並留存候選 ZIP；原 extract 因 independent-monitor-stale 失敗，沒有成功的原 audit。V7 已完成準備與完整來源審查，但實際 gate 與 d3 操作目錄仍不存在，沒有執行 finalize、認養或 bundled-Node 公開檢查。R9、d1、d2 失敗均保留，現在沒有已驗收成品下載。
+目前尚未發布本輪完整離線 ZIP。R10 的 App 驗證／獨立封存、平台 helper、原生測試列舉及兩項錄音計量測試已通過，見 [R10 原生紀錄](https://github.com/swchen44/notype/issues/14#issuecomment-6431337535)。d2 的 count／stage／archive 已通過並留存候選 ZIP；原 extract 因 independent-monitor-stale 失敗，沒有成功的原 audit。V8 準備、完整來源審查與 root admission 已完成，但 [d3 唯一一次實際執行](https://github.com/swchen44/notype/issues/14#issuecomment-6433977441)於 2026-10-27 04:41 UTC 啟動後約4.4秒，在 predecessor-proof 以 v7-session-worker-rejected 失敗；未接受前置證明，未到達 ZIP／既有副本驗證或 bundled-Node 公開檢查。原因仍 UNKNOWN，目前僅唯讀診斷；修正或重試須新計畫與實際 Astra0，尚未核准。R9、d1、d2 及這次 d3 失敗均保留，現在沒有已驗收成品下載。
 
-目前阻塞是累計 C 用量，而非只看磁碟可用空間：已知正向累計下限至少為 2,245,115,904 bytes，超過原 1,985 MiB 上限 163,692,544 bytes，尚未加入完整稽核預留。計畫引用的約 C10GB／D2.38GB 可用空間能符合當時實體空間投影，不能抵銷累計超限。[V8 計畫](https://github.com/swchen44/notype/issues/14#issuecomment-6433597289)已獲[Astra 核准0](https://github.com/swchen44/notype/issues/14#issuecomment-6433619965)，只對這次尚未啟動的最終稽核明確增加 C512MiB（post-native 1985→2497MiB、aggregate 2241→2753MiB）；[新carry的root重播紀錄](https://github.com/swchen44/notype/issues/14#issuecomment-6433705942)已保留；V8程式／測試、完整審查、當下admission與實際驗收仍待完成。完整準備、失敗與來源邊界見[驗證狀態](docs/verification/delivery-v8-preparation.md)。
+先前累計 C 用量的已知下限至少為 2,245,115,904 bytes，超過原 1,985 MiB 上限 163,692,544 bytes，尚未加入完整稽核預留；可用空間回升不能抵銷此歷史超限。[V8 計畫](https://github.com/swchen44/notype/issues/14#issuecomment-6433597289)已獲[Astra 核准0](https://github.com/swchen44/notype/issues/14#issuecomment-6433619965)，明確增加有限 C512MiB（post-native 1985→2497MiB、aggregate 2241→2753MiB）；[root carry／當下 admission 重播](https://github.com/swchen44/notype/issues/14#issuecomment-6433907847)已通過。這不等於實際驗收：目前阻塞是上述 d3 前置證明失敗，完整準備、失敗與來源邊界見[驗證狀態](docs/verification/delivery-v8-preparation.md)。
 
 App 實際編譯來源為 `a180a2360009448cdf6e2f4f8e7363e0eb2dbf30`（A），在 R7 編譯，由 R10 驗證並獨立封存；原生測試與組裝來源為 `a7fc1d79822544e6f4858cb32bcd809067367cc3`（T）。A→T 僅根目錄 README 與既有 cfg(test) 模組的一行 ReadySignal 匯入不同，不宣稱 App 由 T 重新編譯；文件 commit 亦不代表重新建置。
 
@@ -27,8 +27,8 @@ App 實際編譯來源為 `a180a2360009448cdf6e2f4f8e7363e0eb2dbf30`（A），�
 | Windows平台helper | R10/T編譯／封存通過 | 146,944 bytes；SHA-256 `121bdc97e1c8d8e0b5fb633be4c5c998ab10eba0f088d477e67c46a4a70ac31b`。不等於全部native測試通過 |
 | 原生錄音計量library fixtures | R10列舉及執行兩項均通過 | 2 passed／0 failed／0 ignored；驗證實收靜音與decoder padding計量，不開啟實體麥克風；R9失敗保留 |
 | 交付輸入清單 | T清單已審查；R10 native前置通過 | 原始模型／runtime／notices保留；輸入清單與fixtures不代替整包驗收 |
-| 本輪完整ZIP、checksum、獨立解壓與逐檔核對 | d2候選ZIP留存；原extract失敗，V8最終稽核尚未執行 | 原extract／audit不補造成功；V7準備與fixtures不代替實際驗收；目前不發布下載 |
-| V7準備／V8後續 | [V7準備121/121、完整Spec0／Standards0](https://github.com/swchen44/notype/issues/14#issuecomment-6433705942)；V8計畫核准、實作與驗收待完成 | 55個fixture Workers及owned children已terminal；actual gate／d3目錄不存在，未執行finalize或公開check；不當作產品驗收 |
+| 本輪完整ZIP、checksum、獨立解壓與逐檔核對 | d2候選ZIP留存；原extract失敗，V8實際d3前置證明失敗 | 未到達ZIP／既有副本驗證及公開check；原extract／audit不補造成功，目前不發布下載 |
+| V7／V8準備與實際結果 | [V7準備121/121、完整Spec0／Standards0](https://github.com/swchen44/notype/issues/14#issuecomment-6433705942)；V8程式、86項current／64項retained證據與完整雙軸0、[root admission](https://github.com/swchen44/notype/issues/14#issuecomment-6433907847)已完成 | V7的55個fixture Workers及owned children已terminal；[實際d3 FAILED](https://github.com/swchen44/notype/issues/14#issuecomment-6433977441)，完整failure／state留存、accountingComplete及全部owned children／Workers terminal均true；fixtures與admission不代替產品驗收 |
 | 新版GUI、快捷鍵、秒數、系統匣及設定持久化 | 本輪未完成實機驗收 | 舊pilot及受控契約只作各自範圍的歷史證據 |
 | 介面語系與模型目錄 | 本輪原生GUI待測 | 繁中／簡中保存、卡片基本／進階資訊、相對評分排序、下載進度／失敗恢復、模型metadata宣告的全部語音語言；不宣稱固定30種語音或介面語言 |
 | 三場景提示詞、回譯確認與交付 | 本輪原生GUI與實際API待測 | 編輯／還原／保存、確認顯示版本後另行交付或複製；API失敗保留原稿 |
@@ -95,4 +95,4 @@ App 實際編譯來源為 `a180a2360009448cdf6e2f4f8e7363e0eb2dbf30`（A），�
 | [Agent skills](AGENTS.md) | Issue tracker、triage labels、domain docs 與測試目錄入口 |
 | [GitHub Issues](https://github.com/swchen44/notype/issues) | 待辦、驗收條件與後續 evidence receipt |
 
-此 repo 為 private。公司 endpoint、API key、token、實際工作錄音與逐字稿不屬於目前提交內容。通用產品包保留未來公開 npm 的方向；本輪ZIP候選已留存，但V8最終稽核尚未執行，不提供Release下載或宣稱公司環境通過。文件更新反映當前狀態，不代表重新編譯App；公司設定仍留本機。
+此 repo 為 private。公司 endpoint、API key、token、實際工作錄音與逐字稿不屬於目前提交內容。通用產品包保留未來公開 npm 的方向；本輪ZIP候選已留存，但V8實際d3失敗，未完成最終驗收，不提供Release下載或宣稱公司環境通過。文件更新反映當前狀態，不代表重新編譯App；公司設定仍留本機。

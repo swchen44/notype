@@ -1,10 +1,10 @@
 # Windows 11 開發接手
 
-## 目前 checkpoint：V8 計畫已核准，最終稽核尚未啟動（2026-10-27）
+## 目前 checkpoint：V8 實際 d3 前置證明失敗，僅唯讀診斷（2026-10-27）
 
-使用者要求的完整 tested／untested／failed 清單以 [README](README.md#windows-11-測試版與驗證狀態) 為單一入口；準備與累計 C 阻塞見 [delivery-v8-preparation](docs/verification/delivery-v8-preparation.md)。R10 四階段／兩項原生 fixtures 已通過；原 d2 extract 仍 FAILED、沒有成功 audit。V7 準備121/121與完整Spec0／Standards0不是實際finalization，actual gate／d3目錄仍不存在。
+使用者要求的完整 tested／untested／failed 清單以 [README](README.md#windows-11-測試版與驗證狀態) 為單一入口；詳細準備與失敗見 [delivery-v8-preparation](docs/verification/delivery-v8-preparation.md)。R10 四階段／兩項原生 fixtures 已通過；原 d2 extract 仍 FAILED、沒有成功 audit。V8 程式、86項current／64項retained證據、完整Spec0／Standards0及[root carry／admission](https://github.com/swchen44/notype/issues/14#issuecomment-6433907847)已完成。
 
-[V8計畫](https://github.com/swchen44/notype/issues/14#issuecomment-6433597289)／[Astra0](https://github.com/swchen44/notype/issues/14#issuecomment-6433619965) 核准一次明確C512MiB修訂；新carry已有root重播紀錄；下一步完成新程式／測試與獨立雙軸0、交還全部leases，再連同後續正向變化做fresh gate／admission及一次實際finalize。收到完整ZIP／extracted公開檢查、bundled-Node完整性check與terminal／資源證據後，才可公告交付。
+[V8計畫](https://github.com/swchen44/notype/issues/14#issuecomment-6433597289)／[Astra0](https://github.com/swchen44/notype/issues/14#issuecomment-6433619965) 的唯一一次實際d3於04:41 UTC啟動後約4.4秒在predecessor-proof以v7-session-worker-rejected失敗，未接受前置證明，未到達ZIP／既有副本驗證或公開Node check。[完整失敗紀錄](https://github.com/swchen44/notype/issues/14#issuecomment-6433977441)保留完整failure／state、accountingComplete及全部owned children／Workers terminal。原因UNKNOWN，現在只做唯讀診斷；修正或重試須新計畫與實際Astra0，目前未核准。沒有Release或已驗收下載。
 
 此文件commit僅更新狀態；root建置checkout仍凍結T=`a7fc1d79822544e6f4858cb32bcd809067367cc3`，App實編譯A=`a180a2360009448cdf6e2f4f8e7363e0eb2dbf30`不變。所有舊失敗與outputs保留；以下checkpoint是歷史，時態與下一步以本節及README為準。
 
