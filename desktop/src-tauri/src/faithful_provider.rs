@@ -13,6 +13,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{sync::Arc, time::Duration};
 
+/// Runtime composition for observers without exposing their implementation to callers.
+pub type ApiObserverWrapper =
+    Arc<dyn Fn(Arc<dyn ApiCallObserver>) -> Arc<dyn ApiCallObserver> + Send + Sync>;
+
 #[path = "provider_experiment.rs"]
 pub mod experiment;
 
@@ -82,8 +86,7 @@ pub struct TextConfiguration {
     /// Runtime composition for connection accounting; never serialized or logged.
     #[serde(skip)]
     #[specta(skip)]
-    pub observer_wrapper:
-        Option<Arc<dyn Fn(Arc<dyn ApiCallObserver>) -> Arc<dyn ApiCallObserver> + Send + Sync>>,
+    pub observer_wrapper: Option<ApiObserverWrapper>,
     /// Runtime source association only; absent from serialized views/reports.
     #[serde(skip)]
     #[specta(skip)]
@@ -437,8 +440,7 @@ impl TextConfiguration {
 }
 
 struct ChatProcessor {
-    observer_wrapper:
-        Option<Arc<dyn Fn(Arc<dyn ApiCallObserver>) -> Arc<dyn ApiCallObserver> + Send + Sync>>,
+    observer_wrapper: Option<ApiObserverWrapper>,
     experiment: Option<experiment::ExperimentContract>,
     credential: Option<RuntimeCredential>,
     request_parameters: Option<notype_core::observations::RequestParameters>,
