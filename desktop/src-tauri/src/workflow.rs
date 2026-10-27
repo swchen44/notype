@@ -414,7 +414,9 @@ impl DesktopWorkflow {
             return Ok(entry);
         }
         if !configuration.processing_enabled {
-            let raw = self.sessions.original_for_delivery(&entry.id)?;
+            let raw = self
+                .sessions
+                .original_for_delivery_with_stop(&entry.id, stopped_at)?;
             return tokio::select! {
                 biased;
                 _=cancellation.cancelled()=>self.sessions.cancel(&raw.id),
@@ -447,12 +449,13 @@ impl DesktopWorkflow {
         );
         let result = result?;
         let result = if result.status == SessionStatus::Failed && !cancellation.is_cancelled() {
-            self.sessions.original_for_delivery(&result.id)?
-        } else { result };
+            self.sessions
+                .original_for_delivery_with_stop(&result.id, stopped_at)?
+        } else {
+            result
+        };
         (self.notify)();
-        if result.status == SessionStatus::Pending
-            && !result.review_required
-        {
+        if result.status == SessionStatus::Pending && !result.review_required {
             tokio::select! {
                 biased;
                 _=cancellation.cancelled()=>self.sessions.cancel(&result.id),
@@ -522,6 +525,11 @@ impl DesktopWorkflow {
         if self.sessions.get(id)?.error.as_deref() == Some("recognition-script-failed") {
             return Err(CoreError::InvalidTransition);
         }
+        if !configuration.processing_enabled {
+            self.sessions.original_for_delivery(id)?;
+            (self.notify)();
+            return self.deliver(id).await;
+        }
         (self.notify)();
         let entry = self
             .sessions
@@ -536,11 +544,13 @@ impl DesktopWorkflow {
                 configuration.translation.back_translation,
             )
             .await?;
+        let entry = if entry.status == SessionStatus::Failed {
+            self.sessions.original_for_delivery(id)?
+        } else {
+            entry
+        };
         (self.notify)();
-        if entry.status == SessionStatus::Pending
-            && !entry.review_required
-            && entry.selection == notype_core::TextSelection::Polished
-        {
+        if entry.status == SessionStatus::Pending && !entry.review_required {
             self.deliver(id).await
         } else {
             Ok(entry)

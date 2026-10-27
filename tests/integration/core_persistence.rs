@@ -298,7 +298,11 @@ fn handy_import_is_read_only_text_only_and_idempotent_even_after_destination_del
     let service = SessionService::open(directory.path().join("notype.db")).unwrap();
     let report = service.import_handy_history(&source).unwrap();
     assert_eq!((report.imported, report.skipped), (2, 1));
-    let imported = service.search("API").unwrap().remove(0);
+    assert!(
+        service.search("API").unwrap().is_empty(),
+        "an imported edited record exposed its hidden original in search"
+    );
+    let imported = service.search("整理結果").unwrap().remove(0);
     assert_eq!(imported.transcript, "原稿 API 42");
     assert_eq!(imported.result.as_deref(), Some("整理結果"));
     assert_eq!(imported.created_at, "2023-11-14T22:13:20.000Z");
@@ -312,6 +316,7 @@ fn handy_import_is_read_only_text_only_and_idempotent_even_after_destination_del
     service.delete(&imported.id).unwrap();
     assert_eq!(service.import_handy_history(&source).unwrap().imported, 0);
     assert!(service.search("API").unwrap().is_empty());
+    assert!(service.search("整理結果").unwrap().is_empty());
     assert_eq!(std::fs::read(&source).unwrap(), before);
     assert_eq!(
         std::fs::read(&audio).unwrap(),
