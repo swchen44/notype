@@ -1,6 +1,6 @@
-# Delivery V8～V10 準備與實際失敗狀態（2026-10-27）
+# Delivery V8～V11實際驗證與保留的失敗紀錄（2026-10-27）
 
-這是來源／準備／實際失敗的狀態紀錄，不是成品驗收通過 receipt。完整人工待驗收矩陣以 [README](../../README.md#windows-11-測試版與驗證狀態) 為準。
+本紀錄區分來源／準備、保留的舊失敗與新d6完整成功；實際d6已通過並由root獨立核對，遠端發布另行完成。完整人工待驗收矩陣以[README](../../README.md#windows-11-測試版與驗證狀態)為準。
 
 ## 已有證據
 
@@ -37,16 +37,22 @@ V7 準備 receipt `p14-delivery-v7-final-receipt.json` 的狀態是 `PREPARATION
 
 但結束控制器在terminal-snapshot以v7-stale-space失敗，lastAcceptedProof為after-public-check，整體仍FAILED。最大space age為1,089.3846ms，超過原1,000ms界線；unobservedInterval=true、terminalUnproved=false。完整失敗report／full state與原操作已封存，四個內容證明不構成整體finalization成功，不發布Release，也不改標d2／d3／d4等舊失敗。
 
-## 唯讀退役Worker診斷與V11草案
+## 保留的d5唯讀退役Worker診斷
 
 [同一安全紀錄](https://github.com/swchen44/notype/issues/14#issuecomment-6435646399)記載：未變的parentTick／並行boundedWorkerEnd流程在6個實際owned Workers上重現stale-space；診斷副本僅對逐類已匹配terminal acknowledgement且觀測exit0的Worker停止freshness檢查時，關閉案例通過，仍活躍但停滯的案例仍被原guard拒絕。12個診斷Workers全部terminal。這確認drain-lifecycle機制，不重建實際d5逐類ack／exit時序；該歷史排序仍UNKNOWN。
 
-V11目前僅草案，尚無實際GPT-6-Astra APPROVED0，不能開始新實作或後續carry。任何新退役規則須保留活躍種類／parent freshness與所有既有界線，並要求綁定正確的最後sample／terminal acknowledgement及觀測exit0；目前沒有production修正或實際重試的新授權。所有舊code／gates／失敗state／ZIP／解壓副本不變。
+[V11計畫](https://github.com/swchen44/notype/issues/14#issuecomment-6435709828)已獲[實際GPT-6-Astra APPROVED0](https://github.com/swchen44/notype/issues/14#issuecomment-6435754992)，[root失敗lineage／carry前置重播](https://github.com/swchen44/notype/issues/14#issuecomment-6435857372)亦完成。新實作保留活躍種類／parent freshness與既有界線，只在正確綁定的最後sample／terminal acknowledgement及觀測exit0均通過後逐類退役；舊d5時序仍UNKNOWN，不回填為歷史控制器成功。全部舊code／gates／失敗state／ZIP／解壓副本保留。
+
+## 唯一一次實際d6整體PASSED／root獨立核對
+
+[實際安全紀錄](https://github.com/swchen44/notype/issues/14#issuecomment-6436494208)及root完整核對確認：predecessor、實際ZIP／獨立解壓副本、公開bundled-Node完整性檢查、after-public-check輸出未變證明四項全部重新通過，沒有沿用d5摘要跳過新檢查。Node exit0／95-byte stdout／空stderr；全部7個child attempts exit0、3個monitor正確驗證退役、所有Workers terminal、accountingComplete=true。最終space sample至final-free觀測handoff為13ms，原live／scan／resource界線未放寬，舊markers／unknowns及FAILED狀態保留。
+
+原始finalization report為13,987 bytes，SHA256 `3f1b970bbc9c4a002f5126ea70006b5fb66f227a2a25423cd62047ab205dd2a6`；full state為90,620 bytes，SHA256 `e0afa8be38c7eb52d0658f265dc3af93894cdc8da1cd5fe1d18a15d253359df2`。同一ZIP為1,062,634,288 bytes／SHA256 `f3f4711968eb11efcceefd6f8a11200e024b72d9a6895de507c7b93cd505628a`，1,721 files／1,581,238,542 expanded bytes。這次沒有啟動App。
 
 ## 實際完成與發布的界線
 
-未來驗收成功仍須完整現存 ZIP 與獨立解壓樹的公開 inspectors、strictModels、固定隨附 Node `--offline-bundle --check`、累計資源／freshness 與所有 owned child／Worker terminal 證據。既有副本驗證與完整性稽核不改寫原 d2 extract 的 FAILED，也不能補造成功的 v6 extract／audit；本段不是新執行授權。
+d6已重新完成現存ZIP／獨立解壓樹公開inspectors、strictModels、固定隨附Node `--offline-bundle --check`、after-check及live／terminal handoff／累計資源／ownership證明。這是新的完整成功，不改寫原d2 extract的FAILED，也不補造成功的原extract／audit。
 
-實際通過後才可公告已授權的 private GitHub prerelease、ZIP、外部 SHA256SUMS、Windows 11 guide 與安全驗證紀錄。目前沒有已驗收下載；clean-host／SmartScreen／Defender／公司執行政策、Excel／研究工具 CSV 開啟及 README 所列 GUI／人聲／品質／公司服務／五 App／跨 OS 驗收仍待實測。也不以套件完整性或計畫通過宣稱上述驗收完成。
+[private GitHub prerelease已發布](https://github.com/swchen44/notype/releases/tag/v0.1.1-local.1)，四個資產為同一ZIP、外部 `SHA256SUMS.txt`、`Windows11-README.md`與`VERIFICATION.md`；[root已在發布前後核對四個遠端資產大小與GitHub SHA-256](https://github.com/swchen44/notype/issues/14#issuecomment-6436789781)，全部吻合，repo維持private、tag指向T。clean-host／SmartScreen／Defender／公司執行政策、Excel／研究工具CSV開啟及README所列GUI／人聲／品質／公司服務／五App／跨OS驗收仍待實測，不以d6套件稽核成功替代。
 
-[R9 編譯失敗](https://github.com/swchen44/notype/issues/14#issuecomment-6430655722)、d1 授權 BAT 誤擋、d2 extract 失敗及未知觀測均保留；[舊 DeepSeek helper HALTED 回合](https://github.com/swchen44/notype/issues/25#issuecomment-6411081019) 仍為六次請求／DB 五筆／當時 CSV 四筆、費用 UNKNOWN，後續取消／重試未執行，不是本版 App API 驗收。本次文件更新沒有執行 runner／App／API、讀取 key／profile、操作模型或更動舊 gates／輸出。
+[R9 編譯失敗](https://github.com/swchen44/notype/issues/14#issuecomment-6430655722)、d1 授權 BAT 誤擋、d2 extract 失敗及未知觀測均保留；[舊 DeepSeek helper HALTED 回合](https://github.com/swchen44/notype/issues/25#issuecomment-6411081019) 仍為六次請求／DB 五筆／當時 CSV 四筆、費用 UNKNOWN，後續取消／重試未執行，不是本版 App API 驗收。本次文件更新沒有再執行 runner／App／文字API、讀取 key／profile、操作模型或更動舊 gates／輸出。

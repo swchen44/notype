@@ -1,10 +1,10 @@
 # notype 開發待辦
 
-## 目前待辦：d5整體FAILED，V11計畫審查與人工驗收待完成（2026-10-27）
+## 目前待辦：測試版已發布，接續Windows11人工驗收（2026-10-27）
 
-- [x] V10當輪236項測試、實際公開CLI元件檢查、完整Spec0／Standards0與root admission已完成；[唯一一次d5](https://github.com/swchen44/notype/issues/14#issuecomment-6435646399)接受四個內容證明、公開Node exit0，全部owned children／Workers terminal與accounting完整，但terminal-snapshot／v7-stale-space令整體FAILED，完整失敗report／state保留，不當作整包驗收成功。
-- [ ] V11目前僅草案，先完成版本化計畫與實際GPT-6-Astra APPROVED0，之後才可實作或建立後續carry。唯讀退役Worker診斷確認機制，未證明d5歷史ack／exit排序；沒有新實作／重試授權。
-- [ ] 未來整體實際驗收通過後，才更新交付結果並發布已授權的private prerelease；現在沒有已驗收下載，原d2／d3／d4／d5與其他舊失敗均保留。
+- [x] V11核准計畫、實作／測試、完整來源Spec0／Standards0與root admission完成；[唯一一次d6整體PASSED](https://github.com/swchen44/notype/issues/14#issuecomment-6436494208)及root獨立核對完成。四個內容證明重新通過、Node及7個children exit0、3個monitor驗證退役、所有Workers terminal、accounting完整；舊d2／d3／d4／d5仍FAILED。
+- [x] [private prerelease已發布](https://github.com/swchen44/notype/releases/tag/v0.1.1-local.1)，同一ZIP、`SHA256SUMS.txt`、`Windows11-README.md`、`VERIFICATION.md`四個遠端資產的大小與SHA-256[均核對通過](https://github.com/swchen44/notype/issues/14#issuecomment-6436789781)。
+- [x] README／HANDOFF／TODO／驗證紀錄已依實際發布狀態更新，保留完整待測清單；這些文件隨本次docs提交同步，不重建App或修改凍結T。
 - [ ] 後續人工優先順序與完整tested／untested／failed矩陣看 [README](README.md#windows-11-測試版與驗證狀態)；原生GUI／人聲／公司服務／clean-host／CSV／五App等仍待驗收。詳情見 [目前驗證狀態](docs/verification/delivery-v8-preparation.md) 與 [HANDOFF](HANDOFF.md)。
 
 這是docs-only checkpoint；root來源T與runtime A、舊程式／gates／輸出及失敗均保留。以下待辦為歷史快照，時態以本節與README為準。

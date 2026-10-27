@@ -1,10 +1,10 @@
 # Windows 11 開發接手
 
-## 目前 checkpoint：d5四個內容證明通過，結束控制器FAILED；V11僅草案（2026-10-27）
+## 目前 checkpoint：d6通過、private prerelease已發布，接續人工驗收（2026-10-27）
 
-使用者要求的完整 tested／untested／failed 清單以 [README](README.md#windows-11-測試版與驗證狀態) 為單一入口；詳細準備與失敗見 [delivery-v8-preparation](docs/verification/delivery-v8-preparation.md)。V10當輪236項測試、實際公開CLI元件檢查、完整Spec0／Standards0與root admission已完成。[實際d5](https://github.com/swchen44/notype/issues/14#issuecomment-6435646399)唯一一次執行接受四個內容證明、公開Node exit0，全部owned children／Workers terminal、accounting完整，但terminal-snapshot／v7-stale-space令整體FAILED；完整report／state及所有舊失敗保留，沒有Release。
+使用者要求的完整tested／untested／failed清單以[README](README.md#windows-11-測試版與驗證狀態)為單一入口；詳細來源與歷史見[驗證紀錄](docs/verification/delivery-v8-preparation.md)。[唯一一次d6整體PASSED](https://github.com/swchen44/notype/issues/14#issuecomment-6436494208)已由root獨立核對：四個內容證明全部重新通過、公開Node exit0、全部7個child attempts exit0、3個monitor驗證退役、所有Workers terminal、accounting完整，最終handoff為13ms。所有d2／d3／d4／d5舊失敗與未知歷史仍保留。
 
-唯讀退役Worker診斷已確認drain-lifecycle失敗機制，但d5逐類ack／exit時序未留存，歷史排序仍UNKNOWN。V11僅草案，須先取得實際GPT-6-Astra APPROVED0才能實作或建立後續carry；目前沒有修正／重試的新授權。README的人工、品質、公司服務與其他未測項目均持續適用。
+[private prerelease已發布](https://github.com/swchen44/notype/releases/tag/v0.1.1-local.1)，包含同一ZIP、`SHA256SUMS.txt`、`Windows11-README.md`、`VERIFICATION.md`；[四個遠端資產的大小與GitHub SHA-256均已核對](https://github.com/swchen44/notype/issues/14#issuecomment-6436789781)，repo維持private。接續由使用者在正式Windows11電腦依README人工清單驗收；GUI、人聲、品質、公司服務與其他未測項目持續保留。
 
 此文件commit僅更新狀態；root建置checkout仍凍結T=`a7fc1d79822544e6f4858cb32bcd809067367cc3`，App實編譯A=`a180a2360009448cdf6e2f4f8e7363e0eb2dbf30`不變。所有舊失敗與outputs保留；以下checkpoint是歷史，時態與下一步以本節及README為準。
 

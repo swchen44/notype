@@ -8,19 +8,19 @@ notype 免安裝語音輸入 App 的研究、決策與實作追蹤；先交付 W
 
 ## Windows 11 測試版與驗證狀態
 
-目前尚未發布本輪完整離線 ZIP。R10 的 App 驗證／獨立封存、平台 helper、原生測試列舉及兩項錄音計量測試已通過，見 [R10 原生紀錄](https://github.com/swchen44/notype/issues/14#issuecomment-6431337535)。d2 的 count／stage／archive 已通過並留存候選 ZIP；原 extract 因 independent-monitor-stale 失敗，沒有成功的原 audit。[d3 前置證明失敗](https://github.com/swchen44/notype/issues/14#issuecomment-6433977441)與[已證實的預設參數遺失](https://github.com/swchen44/notype/issues/14#issuecomment-6434068783)亦保留。
+Windows11 x64完整離線包已在[唯一一次d6整體稽核](https://github.com/swchen44/notype/issues/14#issuecomment-6436494208)通過，並由root獨立核對。ZIP、獨立解壓副本逐檔／模型檢查、隨附Node公開完整性檢查與檢查後輸出未變證明均重新完成；這次沒有啟動原生App，不代表GUI、實體麥克風、clean-host、真人品質或公司服務已通過。下表列出已測、失敗與仍待人工驗收項目。
 
-V10 已完成236項當輪測試、實際唯讀公開CLI元件檢查、完整來源Spec0／Standards0與root admission。[d5 唯一一次實際執行](https://github.com/swchen44/notype/issues/14#issuecomment-6435646399)已接受四個內容證明：predecessor、既有ZIP／獨立解壓副本檢查、公開bundled-Node完整性檢查，以及檢查後輸出未變證明。Node exit0、全部7個owned child attempts均exit0，所有owned children／Workers terminal且accountingComplete=true；但控制器在terminal-snapshot以v7-stale-space失敗，**整體仍 FAILED**，完整失敗report／state已保留，沒有Release或已驗收成品下載。
+Windows11測試版已發布：[下載v0.1.1-local.1 private prerelease](https://github.com/swchen44/notype/releases/tag/v0.1.1-local.1)。四個資產為 `notype-0.1.1-local.1-offline-win-x64.zip`、外部 `SHA256SUMS.txt`、`Windows11-README.md`、`VERIFICATION.md`。ZIP為1,062,634,288 bytes，SHA-256 `f3f4711968eb11efcceefd6f8a11200e024b72d9a6895de507c7b93cd505628a`；[四個遠端資產的大小與GitHub SHA-256均已核對](https://github.com/swchen44/notype/issues/14#issuecomment-6436789781)，repo維持private。
 
-[d4公開Node exit2失敗與其wrapper資料目錄診斷](https://github.com/swchen44/notype/issues/14#issuecomment-6434963906)保留；當時stderr已丟棄，不重建為已觀測錯誤碼。現在阻塞是[d5結束階段的stale-space](https://github.com/swchen44/notype/issues/14#issuecomment-6435646399)：唯讀退役Worker診斷重現機制，但d5各類Worker的terminal acknowledgement／exit時序未留存，不能宣稱已證明歷史排序。V11目前只是草案，須取得實際GPT-6-Astra APPROVED0後才可實作或建立後續carry；沒有修正、重試或整體成功的新授權。
+[R10原生四階段及兩項錄音計量測試](https://github.com/swchen44/notype/issues/14#issuecomment-6431337535)已通過。[d2原extract、d3前置證明、d4公開CLI及d5結束控制器失敗](docs/verification/delivery-v8-preparation.md)仍保留FAILED；d5雖內容證明與Node exit0通過，整體並未成功，其歷史ack／exit排序仍UNKNOWN。d6是新的完整成功證明，不改寫舊失敗。
 
-先前累計 C 用量的已知下限至少為 2,245,115,904 bytes，超過原 1,985 MiB 上限 163,692,544 bytes，尚未加入完整稽核預留；可用空間回升不能抵銷此歷史超限。[V8 計畫](https://github.com/swchen44/notype/issues/14#issuecomment-6433597289)已獲[Astra 核准0](https://github.com/swchen44/notype/issues/14#issuecomment-6433619965)，明確增加有限 C512MiB（post-native 1985→2497MiB、aggregate 2241→2753MiB）；[當時root carry／admission重播](https://github.com/swchen44/notype/issues/14#issuecomment-6433907847)已通過。V10不再增加上限；後續仍須累計既有失敗與新增已知用量，完整準備、失敗與來源邊界見[驗證狀態](docs/verification/delivery-v8-preparation.md)。
+來源、核准計畫、累計資源與保留的未知觀測見[驗證紀錄](docs/verification/delivery-v8-preparation.md)。本輪先供Windows11本人試用；本機辨識不需API key，公司文字服務與其他App自動輸入仍按下列人工驗收邊界處理。
 
 App 實際編譯來源為 `a180a2360009448cdf6e2f4f8e7363e0eb2dbf30`（A），在 R7 編譯，由 R10 驗證並獨立封存；原生測試與組裝來源為 `a7fc1d79822544e6f4858cb32bcd809067367cc3`（T）。A→T 僅根目錄 README 與既有 cfg(test) 模組的一行 ReadySignal 匯入不同，不宣稱 App 由 T 重新編譯；文件 commit 亦不代表重新建置。
 
-預定完整包適用 Windows 11 x64／AVX2＋BMI2，內含 Node、Fixed WebView2、原生執行環境及 Qwen3-ASR 0.6B Q6_K。本機辨識不需 API key。只有完整 ZIP 實際驗證通過後，才提供 GitHub Release 下載位置、雜湊與對應紀錄；目前不提供未驗證下載連結。
+完整包目標為Windows11 x64／AVX2＋BMI2，內含Node、Fixed WebView2、原生執行環境及Qwen3-ASR 0.6B Q6_K。包內完整性稽核通過不等於每台主機的執行政策、裝置、網路或真人品質驗收通過。
 
-完整包實際交付後，先結束所有舊版 notype，完整解壓到新資料夾，再使用 `Start-notype.cmd`。已有實例時，第二次啟動會喚回既有程式，不能據此確認新版或新的資料目錄已啟動。若用 `NOTYPE_DATA_DIR` 隔離試用資料，每次都須用相同命令與同一絕對路徑啟動；直接雙擊不會記住前次命令視窗的環境變數。完整操作與下載位置須待實際最終驗收後發布。
+取得完整包後，先從所有舊版notype系統匣選「結束」，完整解壓到新資料夾，再使用 `Start-notype.cmd`。已有實例時，第二次啟動會喚回既有程式，不能據此確認新版或新的資料目錄已啟動。若用 `NOTYPE_DATA_DIR` 隔離試用資料，每次都須用相同命令與同一絕對路徑啟動；直接雙擊不會記住前次命令視窗的環境變數。完整兩行CMD操作、既有模型沿用與資料保留方式見Release的 `Windows11-README.md`；不需刪除舊模型、歷史或自己的 `.env`。
 
 | 範圍 | 實際狀態 | 證據與限制 |
 | --- | --- | --- |
@@ -31,8 +31,8 @@ App 實際編譯來源為 `a180a2360009448cdf6e2f4f8e7363e0eb2dbf30`（A），�
 | Windows平台helper | R10/T編譯／封存通過 | 146,944 bytes；SHA-256 `121bdc97e1c8d8e0b5fb633be4c5c998ab10eba0f088d477e67c46a4a70ac31b`。不等於全部native測試通過 |
 | 原生錄音計量library fixtures | R10列舉及執行兩項均通過 | 2 passed／0 failed／0 ignored；驗證實收靜音與decoder padding計量，不開啟實體麥克風；R9失敗保留 |
 | 交付輸入清單 | T清單已審查；R10 native前置通過 | 原始模型／runtime／notices保留；輸入清單與fixtures不代替整包驗收 |
-| 本輪完整ZIP、checksum、獨立解壓與逐檔核對 | [d5四個實際內容證明與公開Node exit0通過](https://github.com/swchen44/notype/issues/14#issuecomment-6435646399)，結束控制器terminal-snapshot／v7-stale-space失敗，整體FAILED | 全部owned children／Workers terminal且accounting完整，不等於整體finalization成功；d2／d3／d4等舊失敗保留，目前不發布下載 |
-| V7～V11準備與實際結果 | V7準備121/121；V8當輪86項／保留64項；V9當輪228項；V10當輪236項、實際公開CLI元件檢查、完整Spec0／Standards0與admission已完成 | [d5 FAILED及唯讀診斷](https://github.com/swchen44/notype/issues/14#issuecomment-6435646399)保留；診斷證實機制、不重建歷史時序；V11僅草案，實作／後續carry須先取得實際Astra0，fixtures不代替產品驗收 |
+| 本輪完整ZIP、checksum、獨立解壓與逐檔核對 | [實際d6整體PASSED／root獨立核對通過](https://github.com/swchen44/notype/issues/14#issuecomment-6436494208) | 四個內容證明全部重新通過、Node exit0、owned children／Workers全數terminal、accounting完整；遠端四資產已核對並發布，舊d2／d3／d4／d5仍FAILED |
+| V7～V11準備與實際結果 | V7準備121/121；V8當輪86項／保留64項；V9當輪228項；V10當輪236項；V11完整來源Spec0／Standards0、root admission與實際d6已完成 | [d6完整成功紀錄](https://github.com/swchen44/notype/issues/14#issuecomment-6436494208)不取代GUI／硬體／服務人工驗收，也不回填舊失敗的未知觀測 |
 | 新版GUI、快捷鍵、秒數、系統匣及設定持久化 | 本輪未完成實機驗收 | 舊pilot及受控契約只作各自範圍的歷史證據 |
 | 介面語系與模型目錄 | 本輪原生GUI待測 | 繁中／簡中保存、卡片基本／進階資訊、相對評分排序、下載進度／失敗恢復、模型metadata宣告的全部語音語言；不宣稱固定30種語音或介面語言 |
 | 三場景提示詞、回譯確認與交付 | 本輪原生GUI與實際API待測 | 編輯／還原／保存、確認顯示版本後另行交付或複製；API失敗保留原稿 |
@@ -99,4 +99,4 @@ App 實際編譯來源為 `a180a2360009448cdf6e2f4f8e7363e0eb2dbf30`（A），�
 | [Agent skills](AGENTS.md) | Issue tracker、triage labels、domain docs 與測試目錄入口 |
 | [GitHub Issues](https://github.com/swchen44/notype/issues) | 待辦、驗收條件與後續 evidence receipt |
 
-此 repo 為 private。公司 endpoint、API key、token、實際工作錄音與逐字稿不屬於目前提交內容。通用產品包保留未來公開 npm 的方向；本輪ZIP候選已留存，d5四個內容證明與Node exit0通過，但結束控制器失敗、整體仍FAILED，不提供Release下載或宣稱公司環境通過。文件更新反映當前狀態，不代表重新編譯App；公司設定仍留本機。
+此 repo 為 private。公司endpoint、API key、token、實際工作錄音與逐字稿不屬於提交內容。通用產品包保留未來公開npm方向；本輪d6完整稽核已通過，測試版已核對遠端資產並發布，公司環境仍待實機驗收。文件更新不代表重新編譯App；公司設定仍留本機。
