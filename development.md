@@ -88,11 +88,12 @@ flowchart TD
     ASR -->|是| Save["先保存原稿與計量到 SQLite"]
     Save --> Saved{"保存成功？"}
     Saved -->|否| Storage["回報保存失敗，不呼叫文字服務"]
-    Saved -->|是| Config{"文字服務可用？"}
-    Config -->|否| Original["原稿可查看／複製／手動選擇"]
+    Saved -->|是| Config{"AI 開關啟用？"}
+    Config -->|否| Original["選擇已保存原稿"]
     Config -->|是| Process["依口述／翻譯／隨便問呼叫文字服務"]
     Process --> Result{"有效結果？"}
-    Result -->|失敗或取消| Original
+    Result -->|失敗或逾時| Original
+    Result -->|取消| Cancelled["保存取消狀態，不交付"]
     Result -->|成功| Review{"翻譯且啟用回譯？"}
     Review -->|是| Primary["先保存主要譯文"]
     Primary --> SourceKnown{"來源語言 metadata 可用？"}
@@ -106,12 +107,27 @@ flowchart TD
     Review -->|否| Pending["保存處理結果；未審閱結果可嘗試受保護交付"]
     Explicit --> Guard["核對原目標及可交付狀態"]
     Pending --> Guard
+    Original --> Guard
     Guard --> Outcome["Delivered／Pending／DeliveryUnknown"]
 ```
 
 來源：[DesktopWorkflow](desktop/src-tauri/src/workflow.rs)、[辨識協調](desktop/src-tauri/src/transcription_coordinator.rs)、[SessionService](crates/notype-core/src/lib.rs)。辨識未產生文字不應假造原稿；已有原始文字但字形正規化失敗時，可透過 `finish_recognition_failure` 保存失敗原稿，不呼叫文字服務或自動交付。
 
-複製原稿是本機版主要使用路徑。成功且不需審閱的 Polished 結果，在現有 `DesktopWorkflow.finish` 中可嘗試受保護交付；這項程式行為不代表所有目標 App 的相容性已通過。
+目前開發版本的 `DesktopWorkflow.finish`／`retry` 在 AI 關閉時直接選擇原稿；AI 處理失敗或逾時也會選擇原稿，保留錯誤原因並嘗試受保護交付。取消不進入此路徑，辨識字形失敗也不自動交付。成功且不需審閱的處理結果會交付；回譯審閱仍需確認。已交付或不確定寫入不會重送。這些行為不代表所有目標 App 的相容性已通過。
+
+### 原輸入目標與剪貼簿
+
+標準 Windows Edit／RichEdit 使用定向 Unicode 插入；Notepad++ Scintilla 使用定向 `WM_PASTE`。兩者保留原程序建立身分、文件、焦點、游標與選取範圍檢查，原生 handle 只留記憶體。Scintilla 使用 UTF-8 byte 位置，並依文件換行設定檢查結果；不讀取既有文件文字。其他 App 尚未被這個 adapter 自動涵蓋。
+
+剪貼簿貼上先不透明備份可保存的格式，完成後還原；新的使用者複製優先保留。暫存文字附 Windows 剪貼簿歷史／雲端排除格式。呼叫端等待上限為兩秒；超時後可能已寫入，保留不確定狀態且不重送，清理 worker 等接收端完成後才還原。完整限制與實測見 [#31 receipt](docs/verification/usability.md)。
+
+### 設定與連線用量
+
+詞彙表是獨立設定頁；前端與後端共同驗證長度、控制字元、前後空白及大小寫重複，後端確認保存成功才回覆。CSV 為單欄 `word`、UTF-8 BOM；匯入先解析整份，格式錯誤不部分套用。
+
+連線設定保留多筆、僅一筆 active，全域 AI 開關套用三個場景。只有遮罩 key 預覽可傳到 UI；實際 key 仍依既有 app 設定優先於家目錄 `.env`。測試連線是明確、短限時的實際請求，不更改 active、不建立語音歷史。
+
+`connection_activity_v1.db` 獨立記錄每筆連線的安全呼叫描述與 provider receipt，不包含提示詞、原稿、端點或 key。正式生成、重試、回譯與測試均使用相同 observer。統計不依賴歷史是否刪除；清除使用量刪該連線 ledger，遲到回覆只更新既有 row，不能復活清除前資料。費用採確切十進位、各幣別分開；缺資料保留未知。UI 最近測試狀態須符合目前設定 revision，不能用已填設定推論連線成功。
 
 ## 時序圖
 
