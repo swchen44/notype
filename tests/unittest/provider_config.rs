@@ -349,6 +349,86 @@ fn active_app_priority_and_anonymous_no_active_custom_local_never_read_home() {
 }
 
 #[test]
+fn explicit_test_snapshot_uses_inactive_connection_and_bounded_consistent_options() {
+    struct NeverHome;
+    impl credentials::CredentialReader for NeverHome {
+        fn read(&self, _: credentials::PublicKey) -> Result<Option<String>, ConfigError> {
+            panic!("an App-owned key must win during an explicit test");
+        }
+    }
+    let store = store();
+    let mut draft = store
+        .create(
+            0,
+            "Test only".into(),
+            ConnectionKind::Provider,
+            ProviderDialect::Deepseek,
+        )
+        .unwrap()
+        .connections
+        .remove(0)
+        .connection;
+    let id = draft.id.clone();
+    draft.model = "deepseek-v4-flash".into();
+    draft.timeout_ms = 120_000;
+    draft.max_output_tokens = Some(4096);
+    store
+        .save(
+            1,
+            draft.clone(),
+            KeyAction::Replace {
+                value: "test-only-credential-sentinel".into(),
+            },
+        )
+        .unwrap();
+    let configuration = store.resolve_test(2, &id, &NeverHome).unwrap();
+    assert_eq!(configuration.timeout_ms, 15_000);
+    assert_eq!(configuration.max_output_tokens, Some(16));
+    assert_eq!(
+        configuration.request_parameters.unwrap().max_output_tokens,
+        Some(16)
+    );
+    assert_eq!(store.view().unwrap().active_connection_id, None);
+    assert_eq!(
+        store.view().unwrap().connections[0]
+            .connection
+            .max_output_tokens,
+        Some(4096)
+    );
+    assert_eq!(
+        store.resolve_test(1, &id, &NeverHome).err().unwrap().0,
+        "configuration-conflict"
+    );
+    assert_eq!(
+        store
+            .resolve_test(2, "missing", &NeverHome)
+            .err()
+            .unwrap()
+            .0,
+        "configuration-connection-missing"
+    );
+    let masked = store
+        .view()
+        .unwrap()
+        .connections
+        .remove(0)
+        .masked_api_key
+        .unwrap();
+    assert_eq!(masked, "test****inel");
+    assert_eq!(mask_key("12345678"), "********");
+    draft.thinking_preference = ThinkingPreference::On;
+    draft.effort = Some("high".into());
+    draft.max_output_tokens = Some(512);
+    store.save(2, draft, KeyAction::Keep).unwrap();
+    let thinking = store.resolve_test(3, &id, &NeverHome).unwrap();
+    assert_eq!(thinking.max_output_tokens, Some(512));
+    assert_eq!(
+        thinking.request_parameters.unwrap().max_output_tokens,
+        Some(512)
+    );
+}
+
+#[test]
 fn anonymous_view_distinguishes_stored_key_presence_from_effective_credential_source() {
     let store = store();
     let mut draft = store

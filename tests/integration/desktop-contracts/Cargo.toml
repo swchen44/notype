@@ -182,3 +182,23 @@ path = "../model_roots.rs"
 [[test]]
 name = "model-transfer-worker"
 path = "../../unittest/model_transfer_worker.rs"
+
+[[test]]
+name = "dictionary-words"
+path = "../../unittest/dictionary_words.rs"
+
+[[test]]
+name = "native-target-policy"
+path = "../../unittest/native_target_policy.rs"
+
+[[test]]
+name = "connection-activity"
+path = "../connection_activity.rs"
+
+[[test]]
+name = "native-clipboard-state"
+path = "../../unittest/native_clipboard_state.rs"
+
+[[test]]
+name = "native-clipboard"
+path = "../native_clipboard.rs"

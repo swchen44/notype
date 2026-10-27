@@ -1,6 +1,9 @@
 //! Directed clipboard delivery. Original formats remain opaque and are never logged.
 //! A timed-out paste stays uncertain: its worker restores only after the remote handler ends.
 use notype_core::DeliveryOutcome;
+#[path = "native_clipboard_state.rs"]
+mod state;
+use state::Restoration;
 use std::{
     sync::{
         atomic::{AtomicBool, AtomicU8, Ordering},
@@ -101,7 +104,9 @@ fn run(
         std::thread::sleep(Duration::from_millis(5));
     }
     clipboard.safe_to_restore = true;
-    let delivered = done.load(Ordering::Acquire) && after();
+    let handler_completed = done.load(Ordering::Acquire);
+    let owned_on_completion = clipboard.owns();
+    let target_matches = handler_completed && after();
     // A temporary clipboard lock may outlive the caller deadline. Keep the opaque
     // backup alive until restoration becomes possible; never replay the paste.
     let restored = loop {
@@ -110,11 +115,12 @@ fn run(
             None => std::thread::sleep(Duration::from_millis(10)),
         }
     };
-    if delivered && restored {
-        DeliveryOutcome::Delivered
-    } else {
-        DeliveryOutcome::Uncertain
-    }
+    state::completion(
+        handler_completed,
+        target_matches,
+        owned_on_completion,
+        restored,
+    )
 }
 unsafe extern "system" fn completed(_: isize, _: u32, data: usize, _: isize) {
     let done = unsafe { Arc::from_raw(data as *const AtomicBool) };
@@ -147,7 +153,7 @@ struct Clipboard {
     owner: isize,
     original: Vec<Format>,
     safe_to_restore: bool,
-    restored: bool,
+    restoration: Option<Restoration>,
 }
 impl Clipboard {
     fn publish(text: &str) -> Option<Self> {
@@ -174,7 +180,7 @@ impl Clipboard {
                 owner,
                 original: vec![],
                 safe_to_restore: true,
-                restored: true,
+                restoration: Some(Restoration::Restored),
             };
             if OpenClipboard(owner) == 0 {
                 return None;
@@ -281,7 +287,7 @@ impl Clipboard {
                 CloseClipboard();
                 return None;
             }
-            guard.restored = false;
+            guard.restoration = None;
             if SetClipboardData(exclude, exclusion) == 0 {
                 GlobalFree(exclusion);
                 GlobalFree(memory);
@@ -300,14 +306,14 @@ impl Clipboard {
     fn owns(&self) -> bool {
         unsafe { GetClipboardOwner() == self.owner }
     }
-    /// None means temporarily locked; Some(false) means a restoration failed.
-    fn restore(&mut self) -> Option<bool> {
+    /// None means temporarily locked; superseding copies are preserved distinctly.
+    fn restore(&mut self) -> Option<Restoration> {
         unsafe {
-            if self.restored {
-                return Some(true);
+            if let Some(restoration) = self.restoration {
+                return Some(restoration);
             }
             if !self.safe_to_restore {
-                return Some(false);
+                return Some(Restoration::Failed);
             }
             if OpenClipboard(self.owner) == 0 {
                 return None;
@@ -317,12 +323,12 @@ impl Clipboard {
             // a user copy. A fresh hidden owner HWND uniquely identifies this write.
             if !self.owns() {
                 CloseClipboard();
-                self.restored = true;
-                return Some(true);
+                self.restoration = Some(Restoration::Superseded);
+                return self.restoration;
             }
             if EmptyClipboard() == 0 {
                 CloseClipboard();
-                return Some(false);
+                return Some(Restoration::Failed);
             }
             let mut success = true;
             for format in &mut self.original {
@@ -334,8 +340,12 @@ impl Clipboard {
             }
             CloseClipboard();
             // Never EmptyClipboard a second time after a partial transfer.
-            self.restored = true;
-            Some(success)
+            self.restoration = Some(if success {
+                Restoration::Restored
+            } else {
+                Restoration::Failed
+            });
+            self.restoration
         }
     }
 }
