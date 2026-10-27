@@ -7,20 +7,61 @@ export async function providerConnectionsFixture(
   connections = [],
   activeId = null,
   initialMode = "ok",
+  showStatus = false,
 ) {
   const page = await uiFixture(t, {
     cacheName: "provider-connections",
-    entry: `export {default as React} from 'react'; export {createRoot} from 'react-dom/client'; export {PostProcessingSettings} from '/src/components/settings/post-processing/PostProcessingSettings.tsx'; export {default as i18n} from '/src/i18n/index.ts'; import '/src/App.css';`,
+    entry: `export {default as React} from 'react'; export {createRoot} from 'react-dom/client'; export {PostProcessingSettings} from '/src/components/settings/post-processing/PostProcessingSettings.tsx'; export {ConnectionStatus} from '/src/components/ConnectionStatus.tsx'; export {default as i18n} from '/src/i18n/index.ts'; import '/src/App.css';`,
   });
   page.setDefaultTimeout(3000);
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
   t.after(() => assert.deepEqual(errors, []));
   await page.evaluate(
-    async ({ language, connections, activeId, initialMode, template }) => {
+    async ({
+      language,
+      connections,
+      activeId,
+      initialMode,
+      template,
+      showStatus,
+    }) => {
       window.calls = [];
       window.modelMode = "ok";
       window.mode = initialMode;
+      window.settings = {
+        custom_words: [],
+        app_language: language,
+        post_process_enabled: false,
+      };
+      window.testMode = "ok";
+      window.usage = {};
+      window.testResults = {};
+      const emptySummary = () => ({
+        call_count: 0,
+        observed_call_count: 0,
+        input: {
+          status: "not_applicable",
+          total: null,
+          known_subtotal: null,
+          reported_calls: 0,
+        },
+        output: {
+          status: "not_applicable",
+          total: null,
+          known_subtotal: null,
+          reported_calls: 0,
+        },
+        fees: {
+          status: "not_applicable",
+          totals: [],
+          known_subtotals: [],
+          reported_calls: 0,
+        },
+        requested_models: [],
+        reported_models: [],
+        model_efforts: [],
+      });
       window.configuration = {
         schema_version: 2,
         revision: 0,
@@ -61,7 +102,63 @@ export async function providerConnectionsFixture(
             };
           }
           if (cmd === "get_app_settings" || cmd === "get_default_settings")
-            return { custom_words: [], app_language: language };
+            return window.settings;
+          if (cmd === "change_post_process_enabled_setting") {
+            window.settings.post_process_enabled = args.enabled;
+            return null;
+          }
+          if (cmd === "get_connection_activity")
+            return window.configuration.connections.map((connection) => ({
+              configuration_revision: window.configuration.revision,
+              connection_id: connection.id,
+              summary: window.usage[connection.id] ?? emptySummary(),
+              ...(window.testResults[connection.id] ?? {
+                test_success: null,
+                test_error: null,
+                tested_at_ms: null,
+              }),
+            }));
+          if (cmd === "test_text_connection") {
+            if (window.testMode === "pending")
+              await new Promise((resolve) => (window.releaseTest = resolve));
+            window.usage[args.id] = {
+              ...emptySummary(),
+              call_count: 1,
+              observed_call_count: 1,
+              input: {
+                status: "complete",
+                total: 13,
+                known_subtotal: 13,
+                reported_calls: 1,
+              },
+              output: {
+                status: "complete",
+                total: 2,
+                known_subtotal: 2,
+                reported_calls: 1,
+              },
+              fees: {
+                status: "unknown",
+                totals: [],
+                known_subtotals: [],
+                reported_calls: 0,
+              },
+            };
+            window.testResults[args.id] = {
+              test_success: window.testMode !== "fail",
+              test_error:
+                window.testMode === "fail" ? "provider-timeout" : null,
+              tested_at_ms: 1793200000000,
+            };
+            if (window.testMode === "fail") throw "provider-timeout";
+            return null;
+          }
+          if (cmd === "clear_connection_usage") {
+            if (window.testMode === "clear-fail")
+              throw "synthetic-private-clear-error";
+            window.usage[args.id] = emptySummary();
+            return null;
+          }
           if (cmd === "check_custom_sounds")
             return { start: false, stop: false };
           if (cmd === "is_update_checks_locked") return false;
@@ -212,16 +309,34 @@ export async function providerConnectionsFixture(
           throw new Error(`Unexpected fixture IPC: ${cmd}`);
         },
       };
-      const { React, createRoot, PostProcessingSettings, i18n } = await import(
-        "/__ui_fixture.tsx"
-      );
+      const {
+        React,
+        createRoot,
+        PostProcessingSettings,
+        ConnectionStatus,
+        i18n,
+      } = await import("/__ui_fixture.tsx");
       await i18n.changeLanguage(language);
       window.uiRoot = createRoot(document.getElementById("root"));
       window.render = () =>
-        window.uiRoot.render(React.createElement(PostProcessingSettings));
+        window.uiRoot.render(
+          React.createElement(
+            React.Fragment,
+            null,
+            React.createElement(PostProcessingSettings),
+            showStatus ? React.createElement(ConnectionStatus) : null,
+          ),
+        );
       window.render();
     },
-    { language, connections, activeId, initialMode, template: savedConnection },
+    {
+      language,
+      connections,
+      activeId,
+      initialMode,
+      template: savedConnection,
+      showStatus,
+    },
   );
   return page;
 }

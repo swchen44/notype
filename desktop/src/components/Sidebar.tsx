@@ -1,6 +1,14 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
-import { Cog, FlaskConical, History, Info, Sparkles, Cpu, BookOpen } from "lucide-react";
+import {
+  Cog,
+  FlaskConical,
+  History,
+  Info,
+  Sparkles,
+  Cpu,
+  BookOpen,
+} from "lucide-react";
 import { DictionarySettings } from "./settings/DictionarySettings";
 import { ConnectionStatus } from "./ConnectionStatus";
 import HandyHand from "./icons/HandyHand";

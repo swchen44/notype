@@ -340,7 +340,12 @@ export function ConnectionEditor({
                   value={replacement}
                   onChange={(event) => setReplacement(event.target.value)}
                 />
-                <span className="font-mono break-all" aria-label={t("notype.usability.keyPreview")}>{replacement ? maskApiKey(replacement) : ""}</span>
+                <span
+                  className="font-mono break-all"
+                  aria-label={t("notype.usability.keyPreview")}
+                >
+                  {replacement ? maskApiKey(replacement) : ""}
+                </span>
               </label>
             )}
             {bindingInvalid && (
@@ -348,7 +353,11 @@ export function ConnectionEditor({
                 {t("notype.connections.bindingChanged")}
               </p>
             )}
-            {keyMode === "keep" && connection.masked_api_key && <p className="font-mono break-all">{t("notype.usability.savedKey")}: {connection.masked_api_key}</p>}
+            {keyMode === "keep" && connection.masked_api_key && (
+              <p className="font-mono break-all">
+                {t("notype.usability.savedKey")}: {connection.masked_api_key}
+              </p>
+            )}
           </div>
         )}
         <label className="flex gap-2 text-sm">

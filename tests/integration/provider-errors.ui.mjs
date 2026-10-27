@@ -33,6 +33,10 @@ for (const [language, forward, reverse] of [
       window.entries = entries;
       window.render();
     }, entries);
+    for (const summary of await page
+      .locator("article > details > summary")
+      .all())
+      await summary.click();
     await page.getByRole("note").getByText(forward, { exact: true }).waitFor();
     await page.getByRole("note").getByText(reverse, { exact: true }).waitFor();
     assert.doesNotMatch(
@@ -88,6 +92,10 @@ for (const [language, labels] of [
       window.entries = entries;
       window.render();
     }, entries);
+    for (const summary of await page
+      .locator("article > details > summary")
+      .all())
+      await summary.click();
     for (const label of labels.slice(0, 3)) {
       await page.getByRole("note").filter({ hasText: label }).waitFor();
     }

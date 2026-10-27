@@ -534,6 +534,7 @@
       "selectWord": "选中 {{word}}",
       "deleteSelected": "删除选中的 {{count}} 条",
       "noWords": "尚未新增词汇。",
+      "noMatchingWords": "没有符合的词汇。",
       "saveFailed": "保存失败，尚未确认更改已保存。",
       "enableAi": "启用 AI 文字处理",
       "enableAiDescription": "关闭时，口述、翻译与随便问都直接输入原稿，不调用 AI；开启时使用唯一选中的连接。",
@@ -551,11 +552,15 @@
       "tokenInput": "输入 tokens",
       "tokenOutput": "输出 tokens",
       "actualFees": "实际费用",
+      "usageScope": "此 App 自本功能启用或最近清除以来的用量（包含测试连接）。",
       "activityUnavailable": "无法获取连接状态或用量",
       "keyPreview": "Key 确认",
       "savedKey": "已保存的 Key",
       "selectConnection": "使用 {{name}}",
-      "useConnection": "使用此连接"
+      "useConnection": "使用此连接",
+      "cancel": "取消",
+      "clearingUsage": "正在清除用量…",
+      "usageClearFailed": "无法清除用量记录。"
     }
   },
   "tray": {
