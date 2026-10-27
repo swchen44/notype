@@ -285,7 +285,7 @@ fn identity(file: &File) -> RootResult<Fingerprint> {
 fn same_directory(left: &Fingerprint, right: &Fingerprint) -> bool {
     left.volume == right.volume && left.file == right.file
 }
-fn name_ok(name: &str) -> bool {
+pub(crate) fn name_ok(name: &str) -> bool {
     !name.is_empty()
         && name.len() <= 512
         && name != "."
@@ -633,7 +633,37 @@ impl Filesystem {
         for descriptor in catalog {
             cancelled(cancel)?;
             if !name_ok(&descriptor.filename) {
-                return Err(RootError("model-root-invalid"));
+                // Catalog entries may describe nested bundles. This adapter only
+                // supports flat filenames: retain the anchor without resolving
+                // any catalog-controlled path or poisoning unrelated models.
+                projection.artifacts.insert(
+                    descriptor.model_id.clone(),
+                    ArtifactRecord {
+                        key: ArtifactKey {
+                            generation: root.generation,
+                            model_id: descriptor.model_id.clone(),
+                            content_identity: String::new(),
+                            fingerprint: Fingerprint {
+                                volume: 0,
+                                file: 0,
+                                size: 0,
+                                modified: 0,
+                            },
+                        },
+                        filename: descriptor.filename.clone(),
+                        path: root.root.clone(),
+                        status: ArtifactStatus::Unavailable,
+                        legacy: false,
+                        custom: false,
+                        owned: false,
+                        present: false,
+                        hf_binding: None,
+                        descriptor: None,
+                    },
+                );
+                checked += 1;
+                progress(checked, total);
+                continue;
             }
             let direct = root.root.join(&descriptor.filename);
             let partial = root.root.join(format!("{}.partial", descriptor.filename));

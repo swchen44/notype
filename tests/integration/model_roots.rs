@@ -28,6 +28,128 @@ use std::{
 };
 static NEXT: AtomicU64 = AtomicU64::new(0);
 
+// Exercise the catalog shipped in the App, including bundle/*.gguf entries.
+// A synthetic flat-only catalog missed the production folder-selection failure.
+fn shipped_catalog() -> Vec<ArtifactDescriptor> {
+    let json: serde_json::Value = serde_json::from_str(include_str!(
+        "../../desktop/src-tauri/src/catalog/catalog.json"
+    ))
+    .unwrap();
+    json["models"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|model| {
+            model["files"].as_array().unwrap().iter().map(|file| {
+                let repo = model["id"].as_str().unwrap();
+                let filename = file["filename"].as_str().unwrap();
+                ArtifactDescriptor {
+                    model_id: format!("{repo}/{filename}"),
+                    filename: filename.into(),
+                    size: file["size_bytes"].as_u64(),
+                    sha256: file["sha256"].as_str().map(str::to_owned),
+                    repo: Some(repo.into()),
+                    revision: model["revision"].as_str().map(str::to_owned),
+                    directory: false,
+                }
+            })
+        })
+        .collect()
+}
+
+#[test]
+fn shipped_catalog_does_not_poison_reuse_of_a_valid_flat_model_folder() {
+    let fixture = Fixture::new();
+    let folder = fixture.path.join("existing models");
+    std::fs::create_dir(&folder).unwrap();
+    std::fs::write(folder.join("Q6.gguf"), b"abc").unwrap();
+    let mut catalog = shipped_catalog();
+    assert_eq!(catalog.len(), 367);
+    let unsupported: Vec<_> = catalog
+        .iter()
+        .filter(|d| d.filename.contains('/'))
+        .map(|d| d.model_id.clone())
+        .collect();
+    assert_eq!(unsupported.len(), 6);
+    catalog.push(
+        fixture.service("unused.json").artifacts()["fixture/speech/Q6.gguf"]
+            .descriptor
+            .clone()
+            .unwrap(),
+    );
+    let open = || {
+        RootService::open(
+            fixture.path.join("default"),
+            Arc::new(FileStorage::new(fixture.path.join("config.json"))),
+            Arc::new(Filesystem::new(|_| false)),
+            catalog.clone(),
+            None,
+        )
+    };
+    let service = open();
+    let candidate = service.validate(&folder, "choose", &|_, _| {}).unwrap();
+    assert_eq!(candidate.projection.status, model_roots::RootStatus::Ready);
+    assert_eq!(candidate.projection.artifacts.len(), 368);
+    service
+        .apply(&candidate.id, candidate.revision, || {})
+        .unwrap();
+    drop(service);
+    let service = open();
+    service.rescan("rescan", &|_, _| {}).unwrap();
+    let activity = service.admit().unwrap();
+    let artifacts = service.artifacts();
+    assert_eq!(artifacts.len(), 368);
+    assert_eq!(
+        artifacts["fixture/speech/Q6.gguf"].status,
+        ArtifactStatus::Verified
+    );
+    assert!(artifacts["fixture/speech/Q6.gguf"].supports_download());
+    assert_eq!(
+        std::fs::read(
+            service
+                .acquire("fixture/speech/Q6.gguf", &activity)
+                .unwrap()
+                .path
+                .clone()
+        )
+        .unwrap(),
+        b"abc"
+    );
+    for id in unsupported {
+        let record = &artifacts[&id];
+        assert_eq!(record.status, ArtifactStatus::Unavailable);
+        assert!(!record.present && !record.owned && !record.custom);
+        assert!(record.descriptor.is_none() && record.hf_binding.is_none());
+        assert!(!record.supports_download());
+        assert!(service.acquire(&id, &activity).is_err());
+        assert!(service.delete_owned(record, &activity).is_err());
+    }
+    assert_eq!(std::fs::read_dir(&folder).unwrap().count(), 1);
+    assert_eq!(std::fs::read(folder.join("Q6.gguf")).unwrap(), b"abc");
+}
+
+#[test]
+fn shipped_catalog_leaves_an_empty_safe_folder_selectable_with_no_models() {
+    let fixture = Fixture::new();
+    let folder = fixture.path.join("empty");
+    std::fs::create_dir(&folder).unwrap();
+    let service = RootService::open(
+        fixture.path.join("default"),
+        Arc::new(FileStorage::new(fixture.path.join("config.json"))),
+        Arc::new(Filesystem::new(|_| false)),
+        shipped_catalog(),
+        None,
+    );
+    let candidate = service.validate(&folder, "empty", &|_, _| {}).unwrap();
+    assert_eq!(
+        candidate.projection.status,
+        model_roots::RootStatus::NoModels
+    );
+    assert_eq!(candidate.projection.artifacts.len(), 367);
+    assert_eq!(candidate.projection.count(), 0);
+    assert_eq!(std::fs::read_dir(folder).unwrap().count(), 0);
+}
+
 struct Fixture {
     path: PathBuf,
     parent: PathBuf,
