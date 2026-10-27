@@ -96,6 +96,7 @@ export async function providerConnectionsFixture(
               throw "Bearer readiness-secret";
             return {
               text_configured:
+                window.settings.post_process_enabled &&
                 window.configuration.active_connection_id !== null,
               delivery_available: false,
               legacy_import_error: null,
