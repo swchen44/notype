@@ -38,6 +38,30 @@ async fn complete_same_helper_check_uses_owned_home_twelve_http_calls_nine_histo
     let core = SessionService::open(root.join("results/sessions.db")).unwrap();
     let entries = core.search("").unwrap();
     assert_eq!(entries.len(), 9);
+    let free = entries
+        .iter()
+        .filter(|entry| {
+            entry
+                .api_summary
+                .requested_models
+                .iter()
+                .any(|model| model == "google/gemma-4-31b-it:free")
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(free.len(), 3);
+    for entry in free {
+        assert_eq!(
+            entry.api_summary.fees.status,
+            notype_core::observations::Completeness::Complete
+        );
+        assert_eq!(
+            entry.api_summary.fees.reported_calls,
+            entry.api_summary.observed_call_count
+        );
+        assert_eq!(entry.api_summary.fees.totals.len(), 1);
+        assert_eq!(entry.api_summary.fees.totals[0].currency, "USD");
+        assert_eq!(entry.api_summary.fees.totals[0].amount, "0");
+    }
     let retried = entries
         .iter()
         .find(|entry| {
@@ -55,5 +79,11 @@ async fn complete_same_helper_check_uses_owned_home_twelve_http_calls_nine_histo
             .observed_calls,
         12
     );
+    // Returned zero is an actual receipt, not a price estimate or an unknown.
+    // Independent readback must reject a changed currency total in the CSV.
+    let text = std::str::from_utf8(&csv).unwrap();
+    let forged = text.replacen("\"\"amount\"\":\"\"0\"\"", "\"\"amount\"\":\"\"1\"\"", 1);
+    assert_ne!(forged.as_bytes(), csv);
+    assert!(probe::export::verify(forged.as_bytes(), &entries, &journal.snapshot()).is_err());
     assert!(root.join("results/diagnostics.txt").is_file());
 }

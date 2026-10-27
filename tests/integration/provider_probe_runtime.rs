@@ -609,9 +609,10 @@ async fn invalid_forward_stops_reverse(bad: u8) {
     assert_eq!(forward.api_summary.call_count, Some(1));
     assert_eq!(forward.api_summary.input.total, Some(5));
     assert_eq!(forward.api_summary.output.total, Some(2));
-    assert!(forward.api_summary.fees.totals.is_empty());
-    assert!(forward.api_summary.fees.known_subtotals.is_empty());
-    assert_eq!(forward.api_summary.fees.reported_calls, 0);
+    super::provider_probe_transport::assert_actual_fee(
+        &forward,
+        if bad == 10 { Some("0") } else { None },
+    );
     let core = rusqlite::Connection::open(root.join("results/sessions.db")).unwrap();
     assert_eq!(
         core.query_row("SELECT COUNT(*) FROM api_calls", [], |row| row
@@ -643,7 +644,10 @@ async fn invalid_forward_stops_reverse(bad: u8) {
     assert_eq!(retained.transcript, original);
     assert_eq!(retained.result.as_deref(), Some(bad_text));
     assert_eq!(retained.api_summary.input.total, Some(5));
-    assert!(retained.api_summary.fees.totals.is_empty());
+    super::provider_probe_transport::assert_actual_fee(
+        &retained,
+        if bad == 10 { Some("0") } else { None },
+    );
     assert!(
         probe::journal::Journal::open_report(&root.join("round"))
             .unwrap()
