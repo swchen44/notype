@@ -23,7 +23,7 @@ V7 準備 receipt `p14-delivery-v7-final-receipt.json` 的狀態是 `PREPARATION
 
 [實際安全紀錄](https://github.com/swchen44/notype/issues/14#issuecomment-6433977441)：2026-10-27 04:41 UTC，root啟動唯一一次固定d3 finalize，約4.4秒後在predecessor-proof以v7-session-worker-rejected失敗，沒有前置證明被接受。ZIP／既有副本驗證、extracted-content及隨附Node公開檢查均未到達。完整failure及完整state已保存並核對內容hash綁定；accountingComplete=true、全部owned children／Workers terminal、terminalUnproved=false、observationErrors為空且persistenceIncomplete=false。
 
-當次最大parent gap約112ms、space age586ms、allocation age795ms、source age676ms，均在原guards內；這不是已證實的stale-monitor失敗。底層原因仍UNKNOWN，目前僅唯讀診斷。修正或重試須新計畫與實際Astra核准0，尚未核准；舊code／gates／failed records及d2 ZIP／獨立解壓副本保留原狀。
+當次最大parent gap約112ms、space age586ms、allocation age795ms、source age676ms，均在原guards內；這不是已證實的stale-monitor失敗。[後續唯讀診斷](https://github.com/swchen44/notype/issues/14#issuecomment-6434068783)已確認底層v7-metadata-fixed-task：原noReparse(paths, tree=false)的實際preflight呼叫省略第二參數，替換adapter遺失該預設值，收到undefined卻須嚴格匹配false，因而拒絕有效呼叫。14個路徑逐位元組相同，無需路徑正規化。實際Worker鏈在2.51秒重現、最小probe約138ms；僅在診斷副本還原預設值的13項反事實檢查通過，未執行production修正或重試，也不是完整predecessor／finalization通過。新計畫待實際Astra審查，尚未核准；舊code／gates／failed records及d2 ZIP／獨立解壓副本保留原狀。
 
 ## 實際完成與發布的界線
 

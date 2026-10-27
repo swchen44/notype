@@ -3,7 +3,7 @@
 ## 目前待辦：d3 失敗唯讀診斷與尚未執行的人工驗收（2026-10-27）
 
 - [x] [V8計畫](https://github.com/swchen44/notype/issues/14#issuecomment-6433597289)／[Astra0](https://github.com/swchen44/notype/issues/14#issuecomment-6433619965) 範圍的程式、86項current／64項retained證據、完整Spec0／Standards0及[root carry／admission](https://github.com/swchen44/notype/issues/14#issuecomment-6433907847)已完成；準備通過不是實際驗收。
-- [ ] 唯讀診斷[實際d3 FAILED](https://github.com/swchen44/notype/issues/14#issuecomment-6433977441)：唯一一次執行約4.4秒在predecessor-proof以v7-session-worker-rejected停止，原因UNKNOWN，未到達ZIP／既有副本驗證或公開Node check。完整failure／state及accountingComplete／全部owned children與Workers terminal已保留；修正或重試須新計畫與實際Astra0，目前未核准。
+- [ ] 針對[實際d3 FAILED](https://github.com/swchen44/notype/issues/14#issuecomment-6433977441)提出新計畫並取得實際Astra0，目前尚未核准。[唯讀診斷已證實預設參數遺失](https://github.com/swchen44/notype/issues/14#issuecomment-6434068783)導致v7-metadata-fixed-task，原通用錯誤為v7-session-worker-rejected。唯一一次執行仍FAILED，未到達ZIP／既有副本驗證或公開Node check；完整failure／state及accountingComplete／全部owned children與Workers terminal保留，尚未修正或重試。
 - [ ] 未來實際完整性驗收通過後，才更新交付結果並發布已授權的private prerelease；現在沒有已驗收下載，原d2 extract與其他舊失敗均保留。
 - [ ] 後續人工優先順序與完整tested／untested／failed矩陣看 [README](README.md#windows-11-測試版與驗證狀態)；原生GUI／人聲／公司服務／clean-host／CSV／五App等仍待驗收。詳情見 [目前驗證狀態](docs/verification/delivery-v8-preparation.md) 與 [HANDOFF](HANDOFF.md)。
 
