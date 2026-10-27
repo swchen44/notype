@@ -31,9 +31,17 @@ V7 準備 receipt `p14-delivery-v7-final-receipt.json` 的狀態是 `PREPARATION
 
 實際子程序stderr已被丟棄，不能把後續推論改稱留存的實際錯誤碼。公開來源顯示--check亦要求有效資料目錄規劃，而驗證wrapper的最小環境沒有APPDATA或NOTYPE_DATA_DIR。5項自有小型檢查透過真正public inspectRelease與未改產品邏輯的CLI副本，證實舊環境invalid-data-directory／exit2，只增加自有未來絕對NOTYPE_DATA_DIR即能exit0／符合95-byte輸出，且沒有建立資料目錄、啟動App或存取profile。CLI副本只用合成23-byte runtime的execPath身分測試介面，兩個owned Node children均terminal；這不是實際整包CLI重試，也不支持產品／ZIP／CLI程式修正。
 
-## V10已核准，實作與唯一一次d5均待完成
+## V10準備完成，實際d5內容證明通過但整體FAILED
 
-[V10計畫](https://github.com/swchen44/notype/issues/14#issuecomment-6435007823)已獲[實際GPT-6-Astra APPROVED／0 unresolved](https://github.com/swchen44/notype/issues/14#issuecomment-6435055920)。失敗closure／完整carry、wrapper限定資料目錄環境與安全telemetry／accepted-prefix摘要實作、當輪測試、完整獨立來源雙軸0、root fresh admission及唯一一次d5均尚待完成；目前沒有實際d5或實際整包CLI重試。既有有限caps／phase／floors／guards／reserve不增加，所有舊失敗與未知觀測繼續累計保留。計畫核准不代替這些前置條件或實際驗收。
+[V10計畫](https://github.com/swchen44/notype/issues/14#issuecomment-6435007823)／[實際GPT-6-Astra APPROVED0](https://github.com/swchen44/notype/issues/14#issuecomment-6435055920)範圍的實作、236項當輪測試、實際唯讀公開CLI元件檢查、完整來源Spec0／Standards0與root admission均已完成。[唯一一次實際d5安全紀錄](https://github.com/swchen44/notype/issues/14#issuecomment-6435646399)保留四個已接受的component summaries：predecessor、實際既有ZIP／獨立解壓副本檢查、公開bundled-Node完整性檢查、after-public-check輸出未變證明。全部7個owned child attempts均exit0，含真正公開Node檢查；全部owned children／Workers terminal，accountingComplete=true、observationErrors為空、persistenceIncomplete=false。
+
+但結束控制器在terminal-snapshot以v7-stale-space失敗，lastAcceptedProof為after-public-check，整體仍FAILED。最大space age為1,089.3846ms，超過原1,000ms界線；unobservedInterval=true、terminalUnproved=false。完整失敗report／full state與原操作已封存，四個內容證明不構成整體finalization成功，不發布Release，也不改標d2／d3／d4等舊失敗。
+
+## 唯讀退役Worker診斷與V11草案
+
+[同一安全紀錄](https://github.com/swchen44/notype/issues/14#issuecomment-6435646399)記載：未變的parentTick／並行boundedWorkerEnd流程在6個實際owned Workers上重現stale-space；診斷副本僅對逐類已匹配terminal acknowledgement且觀測exit0的Worker停止freshness檢查時，關閉案例通過，仍活躍但停滯的案例仍被原guard拒絕。12個診斷Workers全部terminal。這確認drain-lifecycle機制，不重建實際d5逐類ack／exit時序；該歷史排序仍UNKNOWN。
+
+V11目前僅草案，尚無實際GPT-6-Astra APPROVED0，不能開始新實作或後續carry。任何新退役規則須保留活躍種類／parent freshness與所有既有界線，並要求綁定正確的最後sample／terminal acknowledgement及觀測exit0；目前沒有production修正或實際重試的新授權。所有舊code／gates／失敗state／ZIP／解壓副本不變。
 
 ## 實際完成與發布的界線
 

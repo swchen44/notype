@@ -1,10 +1,10 @@
 # Windows 11 開發接手
 
-## 目前 checkpoint：d4 內容檢查前段通過、公開Node檢查失敗；V10已核准（2026-10-27）
+## 目前 checkpoint：d5四個內容證明通過，結束控制器FAILED；V11僅草案（2026-10-27）
 
-使用者要求的完整 tested／untested／failed 清單以 [README](README.md#windows-11-測試版與驗證狀態) 為單一入口；詳細準備與失敗見 [delivery-v8-preparation](docs/verification/delivery-v8-preparation.md)。R10四階段／兩項原生fixtures及V9當輪228項測試、實際前置鏈診斷與完整Spec0／Standards0已通過。[實際d4](https://github.com/swchen44/notype/issues/14#issuecomment-6434963906)唯一一次執行接受predecessor及adopt-existing證明，含ZIP／獨立解壓strict-model等公開介面內容檢查，但後續公開bundled-Node CLI exit2，整體仍FAILED；完整失敗state／accounting與全部terminal保留，d2／d3等舊失敗亦保留。
+使用者要求的完整 tested／untested／failed 清單以 [README](README.md#windows-11-測試版與驗證狀態) 為單一入口；詳細準備與失敗見 [delivery-v8-preparation](docs/verification/delivery-v8-preparation.md)。V10當輪236項測試、實際公開CLI元件檢查、完整Spec0／Standards0與root admission已完成。[實際d5](https://github.com/swchen44/notype/issues/14#issuecomment-6435646399)唯一一次執行接受四個內容證明、公開Node exit0，全部owned children／Workers terminal、accounting完整，但terminal-snapshot／v7-stale-space令整體FAILED；完整report／state及所有舊失敗保留，沒有Release。
 
-實際stderr已丟棄，不能重建成已觀測錯誤碼；來源與5項自有public-seam檢查確認wrapper缺少資料目錄規劃環境，僅增加自有未來絕對NOTYPE_DATA_DIR可讓小型CLI通過且不建立目錄／啟動App／接觸profile，並非實際整包CLI重試或產品／ZIP修正依據。[V10計畫](https://github.com/swchen44/notype/issues/14#issuecomment-6435007823)已獲[實際Astra0](https://github.com/swchen44/notype/issues/14#issuecomment-6435055920)；closure／carry、wrapper實作、測試、完整來源雙軸0、root fresh admission及唯一一次d5均待完成，沒有實際d5或Release。
+唯讀退役Worker診斷已確認drain-lifecycle失敗機制，但d5逐類ack／exit時序未留存，歷史排序仍UNKNOWN。V11僅草案，須先取得實際GPT-6-Astra APPROVED0才能實作或建立後續carry；目前沒有修正／重試的新授權。README的人工、品質、公司服務與其他未測項目均持續適用。
 
 此文件commit僅更新狀態；root建置checkout仍凍結T=`a7fc1d79822544e6f4858cb32bcd809067367cc3`，App實編譯A=`a180a2360009448cdf6e2f4f8e7363e0eb2dbf30`不變。所有舊失敗與outputs保留；以下checkpoint是歷史，時態與下一步以本節及README為準。
 

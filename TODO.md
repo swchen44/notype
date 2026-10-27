@@ -1,10 +1,10 @@
 # notype 開發待辦
 
-## 目前待辦：V10已核准，d4失敗後續與人工驗收待完成（2026-10-27）
+## 目前待辦：d5整體FAILED，V11計畫審查與人工驗收待完成（2026-10-27）
 
-- [x] V9當輪228項測試、實際前置鏈診斷與完整來源Spec0／Standards0已完成。[實際d4](https://github.com/swchen44/notype/issues/14#issuecomment-6434963906)接受predecessor及透過公開介面完成ZIP／獨立解壓內容檢查的adopt-existing證明，但後續公開Node CLI exit2，整體FAILED；完整失敗state／accounting及全部terminal保留，不當作整包驗收。
-- [ ] 依[V10計畫](https://github.com/swchen44/notype/issues/14#issuecomment-6435007823)／[實際Astra0](https://github.com/swchen44/notype/issues/14#issuecomment-6435055920)完成失敗closure／carry、wrapper實作／測試、完整來源雙軸0及root fresh admission，之後才可唯一一次d5；目前全部待完成、未執行d5。實際d4 stderr未保留；已確認的自有public-seam診斷不等於實際整包CLI重試，亦不支持產品／ZIP／CLI程式修改。
-- [ ] 未來實際完整性驗收通過後，才更新交付結果並發布已授權的private prerelease；現在沒有已驗收下載，原d2／d3／d4與其他舊失敗均保留。
+- [x] V10當輪236項測試、實際公開CLI元件檢查、完整Spec0／Standards0與root admission已完成；[唯一一次d5](https://github.com/swchen44/notype/issues/14#issuecomment-6435646399)接受四個內容證明、公開Node exit0，全部owned children／Workers terminal與accounting完整，但terminal-snapshot／v7-stale-space令整體FAILED，完整失敗report／state保留，不當作整包驗收成功。
+- [ ] V11目前僅草案，先完成版本化計畫與實際GPT-6-Astra APPROVED0，之後才可實作或建立後續carry。唯讀退役Worker診斷確認機制，未證明d5歷史ack／exit排序；沒有新實作／重試授權。
+- [ ] 未來整體實際驗收通過後，才更新交付結果並發布已授權的private prerelease；現在沒有已驗收下載，原d2／d3／d4／d5與其他舊失敗均保留。
 - [ ] 後續人工優先順序與完整tested／untested／failed矩陣看 [README](README.md#windows-11-測試版與驗證狀態)；原生GUI／人聲／公司服務／clean-host／CSV／五App等仍待驗收。詳情見 [目前驗證狀態](docs/verification/delivery-v8-preparation.md) 與 [HANDOFF](HANDOFF.md)。
 
 這是docs-only checkpoint；root來源T與runtime A、舊程式／gates／輸出及失敗均保留。以下待辦為歷史快照，時態以本節與README為準。
