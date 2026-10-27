@@ -13,6 +13,10 @@ use std::{
 };
 static DELIVERY: Mutex<()> = Mutex::new(());
 
+/// Paste once into a captured control after `before` revalidates the original target.
+/// `after` verifies its post-write metadata. The caller waits at most two seconds;
+/// a committed timeout/ownership loss is Uncertain and must never be resent.
+/// An owned worker retains opaque clipboard formats until safe restoration is possible.
 pub fn paste(
     control: isize,
     text: String,

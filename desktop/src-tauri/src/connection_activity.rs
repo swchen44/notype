@@ -14,11 +14,13 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+/// Durable per-connection counters and explicit-test status, independent of history.
 pub struct ActivityStore {
     database: Mutex<Connection>,
     tests: Mutex<HashSet<String>>,
 }
 impl ActivityStore {
+    /// Open/create the owned SQLite ledger; failures return a safe storage code.
     pub fn open(path: &Path) -> Result<Arc<Self>, String> {
         Self::from_connection(Connection::open(path).map_err(|_| "activity-storage-failed")?)
     }
@@ -33,6 +35,7 @@ impl ActivityStore {
             tests: Mutex::new(HashSet::new()),
         }))
     }
+    /// Aggregate sent calls for one connection, preserving unknown usage and currencies.
     pub fn summary(&self, id: &str) -> Result<ApiSummary, String> {
         let connection = self
             .database
@@ -67,6 +70,7 @@ impl ActivityStore {
             .map_err(|_| "activity-storage-failed")?;
         Ok(())
     }
+    /// Wrap the history/probe observer; ledger admission must succeed before sending.
     pub fn observer(
         self: &Arc<Self>,
         id: String,
@@ -78,6 +82,7 @@ impl ActivityStore {
             parent,
         })
     }
+    /// Admit at most one explicit test per connection until its returned lease drops.
     pub fn admit_test(self: &Arc<Self>, id: &str) -> Result<TestLease, String> {
         if !self
             .tests
@@ -92,6 +97,7 @@ impl ActivityStore {
             id: id.into(),
         })
     }
+    /// Persist the bounded application error and outcome for this configuration revision.
     pub fn test_result(
         &self,
         id: &str,
@@ -107,6 +113,7 @@ impl ActivityStore {
         self.database.lock().map_err(|_| "activity-storage-failed")?.execute("INSERT INTO connection_tests(connection_id,revision,success,error,tested_at) VALUES(?1,?2,?3,?4,?5) ON CONFLICT(connection_id) DO UPDATE SET revision=excluded.revision,success=excluded.success,error=excluded.error,tested_at=excluded.tested_at",params![id,revision,success,error,at]).map_err(|_| "activity-storage-failed")?;
         Ok(())
     }
+    /// Return (success, safe error code, Unix milliseconds) only for the current revision.
     pub fn last_test(
         &self,
         id: &str,
@@ -115,6 +122,7 @@ impl ActivityStore {
         self.database.lock().map_err(|_| "activity-storage-failed")?.query_row("SELECT success,error,tested_at FROM connection_tests WHERE connection_id=?1 AND revision=?2",params![id,revision],|row| Ok((row.get(0)?,row.get(1)?,row.get(2)?))).optional().map_err(|_| "activity-storage-failed".into())
     }
 }
+/// A per-connection explicit-test admission released automatically on cancellation/drop.
 pub struct TestLease {
     store: Arc<ActivityStore>,
     id: String,
