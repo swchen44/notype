@@ -4,6 +4,8 @@ pub enum ControlKind {
     Edit,
     Scintilla,
 }
+/// Recognize supported control classes; Scintilla is admitted only for Notepad++.
+/// The image may be a process basename or a Windows/Unix-separated full path.
 pub fn control_kind(class: &str, image: &str) -> Option<ControlKind> {
     if ["Edit", "RichEdit20W", "RICHEDIT50W"]
         .iter()
