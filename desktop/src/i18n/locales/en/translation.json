@@ -535,6 +535,7 @@
       "selectWord": "Select {{word}}",
       "deleteSelected": "Delete {{count}} selected words",
       "noWords": "No words yet.",
+      "noMatchingWords": "No matching words.",
       "saveFailed": "Could not save. Your changes have not been confirmed.",
       "enableAi": "Enable AI text processing",
       "enableAiDescription": "When off, dictation, translation and ask all deliver the original transcript without calling AI. When on, use one selected connection.",
@@ -552,11 +553,15 @@
       "tokenInput": "Input tokens",
       "tokenOutput": "Output tokens",
       "actualFees": "Actual fees",
+      "usageScope": "Usage recorded by this app since tracking began or the last reset, including connection tests.",
       "activityUnavailable": "Connection status or usage unavailable",
       "keyPreview": "Key preview",
       "savedKey": "Saved key",
       "selectConnection": "Use {{name}}",
-      "useConnection": "Use this connection"
+      "useConnection": "Use this connection",
+      "cancel": "Cancel",
+      "clearingUsage": "Clearing usage…",
+      "usageClearFailed": "Unable to clear usage counters."
     }
   },
   "tray": {
