@@ -1,7 +1,10 @@
 //! Captures only application metadata and opaque original-control identities.
-//! Native handles stay in memory; no title, field value, clipboard, or Enter API.
+//! Native handles stay in memory; no title, field value, or Enter API.
 use notype_core::{DeliveryAdapter, DeliveryFuture, DeliveryOutcome, DeliveryRequest};
-#[path="native_target_policy.rs"]
+#[cfg(windows)]
+#[path = "native_clipboard.rs"]
+mod clipboard;
+#[path = "native_target_policy.rs"]
 mod target_policy;
 #[cfg(windows)]
 use std::sync::Arc;
@@ -184,6 +187,11 @@ mod platform {
         style: isize,
         epoch: u64,
         scope: TargetScope,
+        kind: target_policy::ControlKind,
+        document: usize,
+        code_page: usize,
+        eol: usize,
+        convert_endings: bool,
     }
     pub struct Registry {
         targets: Mutex<HashMap<String, Target>>,
@@ -299,6 +307,50 @@ mod platform {
             if current != target {
                 return DeliveryOutcome::TargetChanged;
             }
+            if target.kind == target_policy::ControlKind::Scintilla {
+                let Some(text) = target_policy::scintilla_text(
+                    &request.text,
+                    target.code_page,
+                    target.eol,
+                    target.convert_endings,
+                ) else {
+                    return DeliveryOutcome::Unavailable;
+                };
+                let Some(expected_length) = target
+                    .length
+                    .checked_sub((target.selection.1 - target.selection.0) as usize)
+                    .and_then(|n| n.checked_add(text.len()))
+                else {
+                    return DeliveryOutcome::Unavailable;
+                };
+                let expected_caret = target.selection.0 as usize + text.len();
+                if expected_caret > u32::MAX as usize || expected_length > u32::MAX as usize {
+                    return DeliveryOutcome::Unavailable;
+                }
+                let before = target.clone();
+                let after = target.clone();
+                return clipboard::paste(
+                    target.control,
+                    text,
+                    move || snapshot(&before.scope).as_ref() == Some(&before),
+                    move || {
+                        snapshot(&after.scope).is_some_and(|actual| {
+                            actual.foreground == after.foreground
+                                && actual.control == after.control
+                                && actual.pid == after.pid
+                                && actual.created == after.created
+                                && actual.epoch == after.epoch
+                                && actual.document == after.document
+                                && actual.code_page == after.code_page
+                                && actual.eol == after.eol
+                                && actual.convert_endings == after.convert_endings
+                                && actual.length == expected_length
+                                && actual.selection
+                                    == (expected_caret as u32, expected_caret as u32)
+                        })
+                    },
+                );
+            }
             if target.style & 0x4 == 0 && request.text.contains(['\r', '\n']) {
                 return DeliveryOutcome::Unavailable;
             }
@@ -375,31 +427,55 @@ mod platform {
             if !scope.matches(pid) {
                 return None;
             }
-            if IsWindowUnicode(control) == 0
-                || IsWindowEnabled(control) == 0
-                || IsWindowVisible(control) == 0
-            {
+            if IsWindowEnabled(control) == 0 || IsWindowVisible(control) == 0 {
                 return None;
             }
             let mut class = [0u16; 64];
             let size = GetClassNameW(control, class.as_mut_ptr(), 64);
             let class = String::from_utf16(class.get(..size.max(0) as usize)?).ok()?;
             let (created, image) = process_identity(pid)?;
-            super::target_policy::control_kind(&class,&image)?;
+            let kind = super::target_policy::control_kind(&class, &image)?;
             let style = GetWindowLongPtrW(control, -16);
             // Read-only EM_REPLACESEL can still write; password fields are never supported.
-            if style & (0x800 | 0x20) != 0 {
+            if kind == target_policy::ControlKind::Edit
+                && (IsWindowUnicode(control) == 0 || style & (0x800 | 0x20) != 0)
+            {
                 return None;
             }
             let mut start = 0u32;
             let mut end = 0u32;
-            message(
-                control,
-                0xb0,
-                &mut start as *mut u32 as usize,
-                &mut end as *mut u32 as isize,
-            )?;
-            let length = message(control, 0xe, 0, 0)?;
+            let (length, document, code_page, eol, convert_endings) =
+                if kind == target_policy::ControlKind::Scintilla {
+                    if message(control, 2140, 0, 0)? != 0
+                        || message(control, 2570, 0, 0)? != 1
+                        || message(control, 2423, 0, 0)? != 0
+                        || message(control, 2581, 0, 0)? != 0
+                        || message(control, 2583, 0, 0)? != 0
+                    {
+                        return None;
+                    }
+                    start = u32::try_from(message(control, 2143, 0, 0)?).ok()?;
+                    end = u32::try_from(message(control, 2145, 0, 0)?).ok()?;
+                    let document = message(control, 2357, 0, 0)?;
+                    if document == 0 {
+                        return None;
+                    }
+                    (
+                        message(control, 2006, 0, 0)?,
+                        document,
+                        message(control, 2137, 0, 0)?,
+                        message(control, 2030, 0, 0)?,
+                        message(control, 2468, 0, 0)? != 0,
+                    )
+                } else {
+                    message(
+                        control,
+                        0xb0,
+                        &mut start as *mut u32 as usize,
+                        &mut end as *mut u32 as isize,
+                    )?;
+                    (message(control, 0xe, 0, 0)?, 0, 0, 0, false)
+                };
             if start > end || end as usize > length {
                 return None;
             }
@@ -416,6 +492,11 @@ mod platform {
                 style,
                 epoch,
                 scope: scope.clone(),
+                kind,
+                document,
+                code_page,
+                eol,
+                convert_endings,
             })
         }
     }
