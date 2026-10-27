@@ -46,7 +46,7 @@ jobs:
       - name: Exercise real owned HTTP and SQLite contracts without credentials
         run: cargo +1.99.1 test --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test provider-probe-policy --test provider-probe-runtime --test native-delivery --test native-target-policy --test dictionary-words --test connection-activity
       - name: Lint the same helper contracts
-        run: cargo +1.99.1 clippy --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test provider-probe-policy --test provider-probe-runtime --test native-delivery --test native-target-policy --test dictionary-words --test connection-activity --bin notype-provider-probe -- -D warnings
+        run: cargo +1.99.1 clippy --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test provider-probe-policy --test provider-probe-runtime --test native-target-policy --test dictionary-words --test connection-activity --bin notype-provider-probe -- -D warnings
   artifact:
     if: github.event_name == 'workflow_dispatch' && inputs.build_private_artifact
     needs: contracts
