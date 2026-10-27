@@ -119,6 +119,10 @@ export const HistorySettings = () => {
   const visibleEntries = entries.filter((entry) =>
     historyMatches(historyText(entry), query),
   );
+  const errorDescription = (error: string) =>
+    i18n.exists(`notype.errors.${error}`)
+      ? t(`notype.errors.${error}`)
+      : t("notype.history.failed");
   return (
     <section
       className="max-w-3xl w-full mx-auto space-y-4"
@@ -218,13 +222,27 @@ export const HistorySettings = () => {
                 {entry.status === "delivery-unknown" && (
                   <p role="alert">{t("notype.history.uncertain")}</p>
                 )}
-                {entry.error && entry.status !== "delivery-unknown" && (
-                  <p className="text-sm" role="note">
-                    {i18n.exists(`notype.errors.${entry.error}`)
-                      ? t(`notype.errors.${entry.error}`)
-                      : t("notype.history.failed")}
+                {entry.observations.latest_processing_error && (
+                  <p
+                    className="text-sm"
+                    role="note"
+                    aria-label={t("notype.usability.processingError")}
+                  >
+                    <strong>{t("notype.usability.processingError")}: </strong>
+                    <span>
+                      {errorDescription(
+                        entry.observations.latest_processing_error,
+                      )}
+                    </span>
                   </p>
                 )}
+                {entry.error &&
+                  entry.error !== entry.observations.latest_processing_error &&
+                  entry.status !== "delivery-unknown" && (
+                    <p className="text-sm" role="note">
+                      {errorDescription(entry.error)}
+                    </p>
+                  )}
                 <div>
                   <h3 className="text-sm font-semibold">
                     {t("notype.history.original")}

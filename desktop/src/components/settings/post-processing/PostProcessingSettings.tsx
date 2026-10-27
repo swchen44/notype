@@ -39,6 +39,7 @@ export const PostProcessingSettings = () => {
   const [editorVersion, setEditorVersion] = useState(0);
   const [reloadVersion, setReloadVersion] = useState(0);
   const requestEpoch = useRef(0);
+  const readinessEpoch = useRef(0);
   const mutationLock = useRef(false);
 
   const apply = useCallback((updated: ConnectionSettingsView) => {
@@ -50,21 +51,17 @@ export const PostProcessingSettings = () => {
   useEffect(() => {
     const epoch = ++requestEpoch.current;
     setBusy(true);
-    setReady(false);
     setMessage("");
     setFailed(false);
-    void Promise.all([
-      commands.getTextConfiguration(),
-      commands.getWorkflowReadiness(),
-    ])
-      .then(([result, readiness]) => {
+    void commands
+      .getTextConfiguration()
+      .then((result) => {
         if (requestEpoch.current !== epoch) return;
         if (result.status === "ok") apply(result.data);
         else {
           setFailed(true);
           setMessage(t("notype.connections.failed"));
         }
-        setReady(readiness.text_configured);
       })
       .catch(() => {
         if (requestEpoch.current !== epoch) return;
@@ -78,6 +75,26 @@ export const PostProcessingSettings = () => {
       requestEpoch.current++;
     };
   }, [t, reloadVersion, apply]);
+
+  // The master switch changes readiness without changing saved connections or drafts.
+  useEffect(() => {
+    const epoch = ++readinessEpoch.current;
+    setReady(false);
+    if (enabled) {
+      void commands
+        .getWorkflowReadiness()
+        .then((readiness) => {
+          if (readinessEpoch.current === epoch)
+            setReady(readiness.text_configured);
+        })
+        .catch(() => {
+          if (readinessEpoch.current === epoch) setReady(false);
+        });
+    }
+    return () => {
+      readinessEpoch.current++;
+    };
+  }, [enabled, configuration?.revision, reloadVersion]);
 
   const mutate = async (operation: () => Promise<SettingsResult>) => {
     if (busy || mutationLock.current) return null;
@@ -104,12 +121,6 @@ export const PostProcessingSettings = () => {
       setName("");
       setFailed(false);
       setMessage(t("notype.connections.saved"));
-      try {
-        const readiness = await commands.getWorkflowReadiness();
-        if (requestEpoch.current === epoch) setReady(readiness.text_configured);
-      } catch {
-        if (requestEpoch.current === epoch) setReady(false);
-      }
       return result.data;
     } catch {
       if (requestEpoch.current !== epoch) return null;

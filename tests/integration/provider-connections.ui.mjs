@@ -492,16 +492,36 @@ for (const [mode, message] of [
 test("a stored save remains successful if readiness refresh fails", async (t) => {
   const page = await providerConnectionsFixture(t, "en", [savedConnection]);
   await page
+    .getByRole("checkbox", { name: "Enable AI text processing", exact: true })
+    .locator("..")
+    .click();
+  await page.waitForFunction(
+    () =>
+      window.settings.post_process_enabled &&
+      window.calls.some((call) => call.cmd === "get_workflow_readiness"),
+  );
+  await page
     .getByRole("button", { name: "Edit Company writing", exact: true })
     .click();
   await page
     .getByLabel("Model ID (manual entry)", { exact: true })
     .fill("saved-during-readiness-failure");
+  const before = await page.evaluate(
+    () =>
+      window.calls.filter((call) => call.cmd === "get_workflow_readiness")
+        .length,
+  );
   await page.evaluate(() => (window.mode = "readiness-error"));
   await page
     .getByRole("button", { name: "Save connection", exact: true })
     .click();
   await page.getByText("Connection settings saved.", { exact: true }).waitFor();
+  await page.waitForFunction(
+    (before) =>
+      window.calls.filter((call) => call.cmd === "get_workflow_readiness")
+        .length > before,
+    before,
+  );
   assert.equal(
     await page.evaluate(() => window.configuration.connections[0].model),
     "saved-during-readiness-failure",

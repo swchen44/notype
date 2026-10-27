@@ -273,6 +273,44 @@ test("history starts with timestamp and primary text, literal search hides origi
   ]);
 });
 
+test("history Advanced retains the AI failure separately when raw delivery targets have changed", async (t) => {
+  const page = await historyApiFixture(t);
+  await page.evaluate((entry) => {
+    window.entries = [
+      {
+        ...entry,
+        result: null,
+        error: "target-changed",
+        status: "pending",
+        selection: "original",
+        observations: {
+          ...entry.observations,
+          latest_processing_error: "provider-timeout",
+        },
+      },
+    ];
+    window.render();
+  }, historyEntry);
+  const article = page.getByRole("article");
+  const failure = article.getByRole("note", {
+    name: "Text processing error",
+    exact: true,
+  });
+  assert.equal(await failure.isVisible(), false);
+  await article.locator(":scope > details > summary").click();
+  await failure
+    .getByText(
+      "Service timed out. The request may already have been charged; check before explicitly retrying. The original is saved.",
+      { exact: true },
+    )
+    .waitFor();
+  await article
+    .getByText("The original target changed. The result remains pending.", {
+      exact: true,
+    })
+    .waitFor();
+});
+
 test("connection test is explicit, counted per connection, reset retains history and sidebar reflects latest real test", async (t) => {
   const second = {
     ...savedConnection,
@@ -412,6 +450,43 @@ test("saved keys and replacement input show masked head/tail without exposing fu
     .getByText("head****tail", { exact: true })
     .waitFor();
   assert.doesNotMatch(await page.locator("body").innerText(), /private-middle/);
+});
+
+test("AI enable changes refresh readiness without discarding an unsaved connection edit", async (t) => {
+  const page = await providerConnectionsFixture(
+    t,
+    "en",
+    [savedConnection],
+    savedConnection.id,
+  );
+  await page
+    .getByRole("button", { name: "Edit Company writing", exact: true })
+    .click();
+  const model = page.getByRole("textbox", {
+    name: "Model ID (manual entry)",
+    exact: true,
+  });
+  await model.fill("unsaved-model-draft");
+  const toggle = page
+    .getByRole("checkbox", { name: "Enable AI text processing", exact: true })
+    .locator("..");
+  await page.getByText("AI processing: off", { exact: true }).waitFor();
+  await toggle.click();
+  await page.getByText("AI settings are complete.", { exact: true }).waitFor();
+  assert.equal(await model.inputValue(), "unsaved-model-draft");
+  await toggle.click();
+  await page.getByText("AI processing: off", { exact: true }).waitFor();
+  assert.equal(
+    await page.getByText("AI settings are complete.", { exact: true }).count(),
+    0,
+  );
+  assert.equal(await model.inputValue(), "unsaved-model-draft");
+  assert.equal(
+    await page.evaluate(() =>
+      window.calls.some((c) => c.cmd === "test_text_connection"),
+    ),
+    false,
+  );
 });
 
 test("connection counters preserve exact currencies and partial data, failed clear retains usage", async (t) => {
