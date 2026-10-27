@@ -760,6 +760,7 @@ impl SessionService {
                     if active.revision == entry.revision {
                         observations.latest_processing_ms = Some(elapsed_ms(active.started));
                         observations.latest_outcome = Some("cancelled".into());
+                        observations.latest_processing_error = Some("cancelled".into());
                     }
                 }
             }
@@ -939,6 +940,7 @@ impl SessionService {
             observations.latest_processing_ms = None;
             observations.latest_api_ms = None;
             observations.latest_outcome = None;
+            observations.latest_processing_error = None;
             connection.execute("UPDATE sessions SET status='processing',result=NULL,back_translation=NULL,source_language=NULL,review_required=?4,review_confirmed=0,error=NULL,selection='polished',attempt=?3,updated_at=?2,observations=?5 WHERE id=?1", params![id, now(), attempt,review&&entry.scenario==Scenario::Translation,serde_json::to_string(&observations).map_err(|_|CoreError::Storage)?])?;
             self.active.lock().map_err(|_| CoreError::Storage)?.insert(
                 id.to_owned(),
@@ -1044,6 +1046,7 @@ impl SessionService {
             active.remove(id);
         }
         observations.result_count = result.as_ref().map(|text| observations::mixed_count(text));
+        observations.latest_processing_error = error.map(str::to_owned);
         let original_only =
             result.is_none() && !api_observer.has_sent() && error == Some("configuration-required");
         observations.latest_outcome = Some(

@@ -61,6 +61,110 @@ fn typed_history_observations_cannot_accept_arbitrary_control_labels() {
         Err(notype_core::CoreError::InvalidInput)
     ));
     assert!(service.search("").unwrap().is_empty());
+    for code in [
+        "Bearer private-key",
+        "https://internal.test/?token=secret",
+        "provider-auth\n",
+        "target-changed",
+        "back-configuration-required",
+    ] {
+        assert!(matches!(
+            service.create_observed(
+                "original",
+                SessionOptions::default(),
+                SessionObservations {
+                    latest_processing_error: Some(code.into()),
+                    ..Default::default()
+                }
+            ),
+            Err(notype_core::CoreError::InvalidInput)
+        ));
+    }
+    for code in [
+        "provider-auth",
+        "back-provider-timeout",
+        "configuration-credentials-unavailable",
+        "llm-timeout",
+    ] {
+        SessionObservations {
+            latest_processing_error: Some(code.into()),
+            ..Default::default()
+        }
+        .validate()
+        .unwrap();
+    }
+}
+
+#[tokio::test]
+async fn separate_processing_and_delivery_errors_export_and_reopen_and_successful_retry_clears_processing_error(
+) {
+    use notype_core::{
+        DeliveryAdapter, DeliveryFuture, DeliveryOutcome, DeliveryRequest, TextFailure,
+    };
+    struct Reply(bool);
+    impl TextProcessor for Reply {
+        fn polish(&self, _: TextRequest, _: CancellationToken) -> TextFuture {
+            let failed = self.0;
+            Box::pin(async move {
+                if failed {
+                    Err(TextFailure::Timeout)
+                } else {
+                    Ok("整理 API。".into())
+                }
+            })
+        }
+    }
+    struct Input;
+    impl DeliveryAdapter for Input {
+        fn deliver(&self, _: DeliveryRequest) -> DeliveryFuture {
+            Box::pin(async { DeliveryOutcome::Unavailable })
+        }
+    }
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("sessions.db");
+    let service = SessionService::open(&path).unwrap();
+    let entry = service
+        .create(
+            "原稿 API 42",
+            SessionOptions {
+                original_target: Some("captured-target".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let failed = service
+        .process(&entry.id, vec![], Arc::new(Reply(true)))
+        .await
+        .unwrap();
+    assert_eq!(
+        failed.observations.latest_processing_error.as_deref(),
+        Some("llm-timeout")
+    );
+    service.original_for_delivery(&entry.id).unwrap();
+    let entry = service.deliver(&entry.id, Arc::new(Input)).await.unwrap();
+    assert_eq!(entry.error.as_deref(), Some("delivery-unavailable"));
+    let destination = directory.path().join("errors.csv");
+    service
+        .export_csv(&destination, &PlentySpace, &CancellationToken::new())
+        .unwrap();
+    let rows = read_csv(&destination);
+    assert_eq!(rows[0]["error"], "delivery-unavailable");
+    assert_eq!(rows[0]["latest_processing_error"], "llm-timeout");
+    drop(service);
+    let service = SessionService::open(&path).unwrap();
+    let saved = service.get(&entry.id).unwrap();
+    assert_eq!(saved.error.as_deref(), Some("delivery-unavailable"));
+    assert_eq!(
+        saved.observations.latest_processing_error.as_deref(),
+        Some("llm-timeout")
+    );
+    let retried = service
+        .process(&entry.id, vec![], Arc::new(Reply(false)))
+        .await
+        .unwrap();
+    assert_eq!(retried.observations.latest_processing_error, None);
+    assert_eq!(retried.error, None);
+    assert_eq!(retried.result.as_deref(), Some("整理 API。"));
 }
 
 struct Metered {
