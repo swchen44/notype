@@ -23,6 +23,53 @@ fn exact_actual_receipts_reject_estimate_notations_and_invalid_units() {
 }
 
 #[test]
+fn explicit_openrouter_receipts_preserve_the_exact_returned_usd_decimal() {
+    use notype_core::observations::ApiReceipt;
+    for (wire, expected) in [
+        (r#"{"usage":{"cost":0}}"#, "0"),
+        (
+            r#"{"usage":{"cost":0.100000000000000001}}"#,
+            "0.100000000000000001",
+        ),
+        (r#"{"usage":{"cost":1.4e-7}}"#, "0.00000014"),
+        (r#"{"usage":{"cost":1e+2}}"#, "100"),
+        (r#"{"usage":{"cost":1.0000000000000000000}}"#, "1"),
+    ] {
+        let charge = ApiReceipt::default()
+            .with_openrouter_chat_charge(wire.as_bytes())
+            .actual_charge
+            .unwrap();
+        assert_eq!(charge.amount, expected);
+        assert_eq!(charge.currency, "USD");
+        assert_eq!(charge.provenance, "openrouter_usage_cost");
+    }
+    for wire in [
+        r#"{"usage":{}}"#,
+        r#"{"usage":{"cost":null}}"#,
+        r#"{"usage":{"cost":"0.2"}}"#,
+        r#"{"usage":{"cost":-1}}"#,
+        r#"{"usage":{"cost":1e-999}}"#,
+        r#"{"usage":{"cost":0.0000000000000000001}}"#,
+        r#"{"usage":{"cost":1e999}}"#,
+        r#"{"usage":{"cost":0,"cost":1}}"#,
+    ] {
+        assert!(
+            ApiReceipt::default()
+                .with_openrouter_chat_charge(wire.as_bytes())
+                .actual_charge
+                .is_none(),
+            "invalid receipt must remain unknown"
+        );
+    }
+    // A generic compatible server's similarly named value has no currency contract.
+    assert!(
+        ApiReceipt::from_chat_json(&serde_json::json!({"usage":{"cost":0.1}}))
+            .actual_charge
+            .is_none()
+    );
+}
+
+#[test]
 fn received_audio_rejects_unrepresentable_duration_and_zero_rate() {
     use notype_core::observations::RecordingObservation;
     assert!(RecordingObservation::new(1, 0, Some(0)).is_err());

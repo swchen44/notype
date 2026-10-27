@@ -444,6 +444,31 @@ pub struct ApiReceipt {
 }
 const MAX_USAGE: u64 = 9_007_199_254_740_991;
 impl ApiReceipt {
+    /// Apply only the explicitly selected OpenRouter chat billing contract.
+    /// Their returned `usage.cost` is denominated in USD credits; no token-rate
+    /// estimate, other provider field or upstream/BYOK price is substituted.
+    /// A borrowed raw number preserves decimals that an f64 would round.
+    pub fn with_openrouter_chat_charge(mut self, bytes: &[u8]) -> Self {
+        #[derive(Deserialize)]
+        struct Usage<'a> {
+            #[serde(borrow)]
+            cost: Option<&'a serde_json::value::RawValue>,
+        }
+        #[derive(Deserialize)]
+        struct Envelope<'a> {
+            #[serde(borrow)]
+            usage: Option<Usage<'a>>,
+        }
+        self.actual_charge = (|| {
+            if bytes.len() > 4 * 1024 * 1024 {
+                return None;
+            }
+            let envelope: Envelope<'_> = serde_json::from_slice(bytes).ok()?;
+            let amount = exact_json_decimal(envelope.usage?.cost?.get())?;
+            ActualCharge::new(&amount, "USD", "openrouter_usage_cost").ok()
+        })();
+        self
+    }
     /// Parse only standard compatible chat metadata. DeepSeek has no documented
     /// monetary receipt: no arbitrary cost/price field is interpreted as billing.
     pub fn from_chat_json(value: &serde_json::Value) -> Self {
@@ -506,6 +531,60 @@ impl ApiReceipt {
         });
         self
     }
+}
+
+/// Expand the bounded nonnegative JSON number exactly, without floating point.
+/// The receipt decimal boundary performs the final scale/overflow validation.
+fn exact_json_decimal(number: &str) -> Option<String> {
+    if number.len() > 128 || number.starts_with('-') {
+        return None;
+    }
+    let mut exponent_parts = number.split(['e', 'E']);
+    let mantissa = exponent_parts.next()?;
+    let exponent = exponent_parts
+        .next()
+        .map_or(Some(0), |value| value.parse::<i32>().ok())?;
+    if exponent_parts.next().is_some() || !(-1000..=1000).contains(&exponent) {
+        return None;
+    }
+    let mut parts = mantissa.split('.');
+    let whole = parts.next()?;
+    let fraction = parts.next().unwrap_or("");
+    if parts.next().is_some()
+        || whole.is_empty()
+        || !whole
+            .bytes()
+            .chain(fraction.bytes())
+            .all(|byte| byte.is_ascii_digit())
+    {
+        return None;
+    }
+    let mut digits = format!("{whole}{fraction}");
+    // Dropping only zero fractional digits never rounds the amount.
+    let mut scale = fraction.len() as i32 - exponent;
+    while scale > 0 && digits.ends_with('0') {
+        digits.pop();
+        scale -= 1;
+    }
+    if digits.bytes().all(|byte| byte == b'0') {
+        return Some("0".into());
+    }
+    if scale > 18 {
+        return None;
+    }
+    if scale <= 0 {
+        if digits.len() + (-scale) as usize > 64 {
+            return None;
+        }
+        digits.extend(std::iter::repeat_n('0', (-scale) as usize));
+        return Some(digits);
+    }
+    let scale = scale as usize;
+    if digits.len() <= scale {
+        digits = format!("{}{}", "0".repeat(scale + 1 - digits.len()), digits);
+    }
+    digits.insert(digits.len() - scale, '.');
+    Some(digits)
 }
 
 /// Formal transport accounting port. begin/mark_sent can refuse spending;
@@ -710,7 +789,9 @@ impl Decimal {
 }
 
 /// Aggregate actual sent calls with the same exact money/unknown rules as history.
-pub fn summarize_api_calls(calls: impl IntoIterator<Item = (ApiCallDescriptor, ApiReceipt)>) -> ApiSummary {
+pub fn summarize_api_calls(
+    calls: impl IntoIterator<Item = (ApiCallDescriptor, ApiReceipt)>,
+) -> ApiSummary {
     let mut accumulator = SummaryAccumulator::new(false);
     for (descriptor, receipt) in calls {
         accumulator.add(descriptor, receipt.sanitized());
