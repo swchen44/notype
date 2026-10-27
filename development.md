@@ -66,7 +66,7 @@ flowchart TB
 
 | 層 | 負責 | 邊界 |
 | --- | --- | --- |
-| React／Tauri IPC | 設定、歷史、語系、錄音提示與使用者動作 | 用安全 DTO 與 revision 處理回覆；不回傳已存／已解析的 key |
+| React／Tauri IPC | 設定、歷史、語系、錄音提示與使用者動作 | 用安全 DTO 與 revision 處理回覆；已存 key 僅回傳遮罩頭尾，實際值不回傳 |
 | 桌面協調層 | 音訊生命週期、辨識模式、當次設定、generation、結果通知 | 將外部事件接到核心；只有有效 generation 可建立當次工作結果 |
 | notype-core | 原稿與結果、session 狀態、重試／回譯／確認、交付及 SQLite | 不自行取得 OS 視窗、麥克風、憑證或介面語言 |
 | Provider adapter | 請求映射、提示詞、能力、HTTP、錯誤與用量 | 遠端內容與秘密不直接成為可公開診斷；目前文字請求採非串流回應 |
@@ -88,11 +88,12 @@ flowchart TD
     ASR -->|是| Save["先保存原稿與計量到 SQLite"]
     Save --> Saved{"保存成功？"}
     Saved -->|否| Storage["回報保存失敗，不呼叫文字服務"]
-    Saved -->|是| Config{"文字服務可用？"}
-    Config -->|否| Original["原稿可查看／複製／手動選擇"]
+    Saved -->|是| Config{"AI 開關啟用？"}
+    Config -->|否| Original["選擇已保存原稿"]
     Config -->|是| Process["依口述／翻譯／隨便問呼叫文字服務"]
     Process --> Result{"有效結果？"}
-    Result -->|失敗或取消| Original
+    Result -->|失敗或逾時| Original
+    Result -->|取消| Cancelled["保存取消狀態，不交付"]
     Result -->|成功| Review{"翻譯且啟用回譯？"}
     Review -->|是| Primary["先保存主要譯文"]
     Primary --> SourceKnown{"來源語言 metadata 可用？"}
@@ -106,12 +107,27 @@ flowchart TD
     Review -->|否| Pending["保存處理結果；未審閱結果可嘗試受保護交付"]
     Explicit --> Guard["核對原目標及可交付狀態"]
     Pending --> Guard
+    Original --> Guard
     Guard --> Outcome["Delivered／Pending／DeliveryUnknown"]
 ```
 
 來源：[DesktopWorkflow](desktop/src-tauri/src/workflow.rs)、[辨識協調](desktop/src-tauri/src/transcription_coordinator.rs)、[SessionService](crates/notype-core/src/lib.rs)。辨識未產生文字不應假造原稿；已有原始文字但字形正規化失敗時，可透過 `finish_recognition_failure` 保存失敗原稿，不呼叫文字服務或自動交付。
 
-複製原稿是本機版主要使用路徑。成功且不需審閱的 Polished 結果，在現有 `DesktopWorkflow.finish` 中可嘗試受保護交付；這項程式行為不代表所有目標 App 的相容性已通過。
+目前開發版本的 `DesktopWorkflow.finish`／`retry` 在 AI 關閉時直接選擇原稿；AI 處理失敗或逾時也會選擇原稿，保留錯誤原因並嘗試受保護交付。取消不進入此路徑，辨識字形失敗也不自動交付。成功且不需審閱的處理結果會交付；回譯審閱仍需確認。已交付或不確定寫入不會重送。這些行為不代表所有目標 App 的相容性已通過。
+
+### 原輸入目標與剪貼簿
+
+標準 Windows Edit／RichEdit 使用定向 Unicode 插入；Notepad++ Scintilla 使用定向 `WM_PASTE`。兩者保留原程序建立身分、文件、焦點、游標與選取範圍檢查，原生 handle 只留記憶體。Scintilla 使用 UTF-8 byte 位置，並依文件換行設定檢查結果；不讀取既有文件文字。其他 App 尚未被這個 adapter 自動涵蓋。
+
+剪貼簿貼上先不透明備份可保存的格式，完成後還原；新的使用者複製優先保留。暫存文字附 Windows 剪貼簿歷史／雲端排除格式。呼叫端等待上限為兩秒；超時後可能已寫入，保留不確定狀態且不重送，清理 worker 等接收端完成後才還原。完整限制與實測見 [#31 receipt](docs/verification/usability.md)。
+
+### 設定與連線用量
+
+詞彙表是獨立設定頁；前端與後端共同驗證長度、控制字元、前後空白及大小寫重複，後端確認保存成功才回覆。CSV 為單欄 `word`、UTF-8 BOM；匯入先解析整份，格式錯誤不部分套用。
+
+連線設定保留多筆、僅一筆 active，全域 AI 開關套用三個場景。只有遮罩 key 預覽可傳到 UI；實際 key 仍依既有 app 設定優先於家目錄 `.env`。測試連線是明確、短限時的實際請求，不更改 active、不建立語音歷史。
+
+`connection_activity_v1.db` 獨立記錄每筆連線的安全呼叫描述與 provider receipt，不包含提示詞、原稿、端點或 key。正式生成、重試、回譯與測試均使用相同 observer。統計不依賴歷史是否刪除；清除使用量刪該連線 ledger，遲到回覆只更新既有 row，不能復活清除前資料。費用採確切十進位、各幣別分開；缺資料保留未知。UI 最近測試狀態須符合目前設定 revision，不能用已填設定推論連線成功。
 
 ## 時序圖
 
@@ -132,18 +148,21 @@ sequenceDiagram
     Core->>DB: 保存原稿
     DB-->>Core: 提交成功
     Core-->>Desktop: 已保存的 session
-    Desktop->>Core: process_with_stop
-    Core->>API: generate_observed
-    alt 沒有可用文字服務
-        API-->>Core: ConfigurationRequired，不發送 HTTP
-        Core->>DB: 保存服務未設定狀態，保留原稿
-        Core-->>Desktop: 原稿與狀態
-        Desktop-->>User: 顯示服務狀態，原稿可複製
-    else 使用文字服務
-        API-->>Core: 處理結果／可取得的用量
-        Core->>DB: 保存結果與觀測
+    alt AI 關閉
+        Desktop->>Core: original_for_delivery_with_stop
+        Core->>DB: 保存原稿選擇與可用耗時
+        Desktop->>Core: deliver：原目標安全檢查
+    else AI 啟用
+        Desktop->>Core: process_with_stop
+        Core->>API: generate_observed
+        API-->>Core: 處理結果／安全錯誤與實收觀測
+        Core->>DB: 保存結果或失敗
         Core-->>Desktop: 結果狀態
-        Desktop-->>User: 顯示結果；符合條件時嘗試受保護交付
+        alt 處理失敗或逾時
+            Desktop->>Core: 選原稿並受保護交付
+        else 成功
+            Desktop-->>User: 顯示結果；需審閱時先確認，否則嘗試交付
+        end
     end
 ```
 
@@ -172,9 +191,11 @@ sequenceDiagram
     else 逾時、限流或無效回覆
         API-->>Core: 有限錯誤與可用觀測
         Core->>DB: 保存失敗，保留原稿與已取得觀測
+        Core-->>Desktop: 失敗狀態
+        Desktop->>Core: 選擇原稿並受保護交付，保留失敗原因
     end
     Core-->>Desktop: 可恢復狀態
-    Desktop-->>User: 顯示錯誤／原稿，可選擇複製或重試
+    Desktop-->>User: 顯示錯誤與交付狀態，原稿仍可複製
     opt 使用者明確重試
         User->>Desktop: 重試歷史項目
         Desktop->>Core: 以已保存資料開始新 attempt
@@ -284,6 +305,9 @@ notype/
 | 模型生命週期 | [model.rs](desktop/src-tauri/src/managers/model.rs)、[model_roots.rs](desktop/src-tauri/src/managers/model_roots.rs)、[model_transfer_worker.rs](desktop/src-tauri/src/managers/model_transfer_worker.rs) | 模型選擇、資料夾政策及背景工作 |
 | 按鍵與提示 | [physical_gestures.rs](desktop/src-tauri/src/physical_gestures.rs)、[capture_startup.rs](desktop/src-tauri/src/capture_startup.rs)、[overlay_lifecycle.rs](desktop/src-tauri/src/overlay_lifecycle.rs) | 實體按鍵、收音 ready、提示生命週期 |
 | 交付與視窗 | [native_input.rs](desktop/src-tauri/src/native_input.rs)、[window_lifecycle.rs](desktop/src-tauri/src/window_lifecycle.rs)、[tray.rs](desktop/src-tauri/src/tray.rs) | 原目標保護、系統匣與還原 |
+| Notepad++ 貼上 | [native_clipboard.rs](desktop/src-tauri/src/native_clipboard.rs)、[native_target_policy.rs](desktop/src-tauri/src/native_target_policy.rs) | 原生定向貼上、剪貼簿備份／還原、編碼與控制項支援 |
+| 詞彙與簡易歷史 | [DictionarySettings.tsx](desktop/src/components/settings/DictionarySettings.tsx)、[HistorySettings.tsx](desktop/src/components/settings/history/HistorySettings.tsx) | 詞彙表、CSV、時間／文字與搜尋反白 |
+| 連線用量與狀態 | [connection_activity.rs](desktop/src-tauri/src/connection_activity.rs)、[useConnectionActivity.ts](desktop/src/hooks/useConnectionActivity.ts) | 獨立用量、測試 admission／結果、設定 revision 與 UI 刷新 |
 | 文字 API | [faithful_provider.rs](desktop/src-tauri/src/faithful_provider.rs)、[provider_config.rs](desktop/src-tauri/src/provider_config.rs) | ChatProcessor、場景提示詞、設定與映射 |
 | 能力／key／模型列表 | [provider_capabilities.rs](desktop/src-tauri/src/provider_capabilities.rs)、[provider_credentials.rs](desktop/src-tauri/src/provider_credentials.rs)、[provider_models.rs](desktop/src-tauri/src/provider_models.rs) | thinking／effort、憑證來源、模型列表 |
 | 診斷 | [diagnostic_service.rs](desktop/src-tauri/src/diagnostic_service.rs)、[diagnostic_privacy.rs](desktop/src-tauri/src/diagnostic_privacy.rs) | 收集偏好、可匯出內容及敏感資訊處理 |

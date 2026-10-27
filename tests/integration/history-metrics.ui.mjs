@@ -9,6 +9,7 @@ test("incomplete setup keeps original and result history copy on the safe existi
     window.render();
   }, historyEntry);
   await page.getByText("Setup incomplete", { exact: true }).waitFor();
+  await page.locator("article > details > summary").click();
   await page
     .getByRole("button", { name: "Copy original", exact: true })
     .click();
@@ -47,6 +48,7 @@ test("history renders backend counts, observed duration, exact partial fees and 
     window.render();
   }, historyEntry);
   const article = page.getByRole("article");
+  await article.locator(":scope > details > summary").click();
   await article.getByText("Original count: 91", { exact: true }).waitFor();
   await article.getByText("Result count: 0", { exact: true }).waitFor();
   await article.getByText("1.234 s · Incomplete", { exact: true }).waitFor();
@@ -189,6 +191,7 @@ test("unknown observations remain unknown, separate from actual zero and no API 
     window.render();
   }, entry);
   const article = page.getByRole("article");
+  await article.locator(":scope > details > summary").click();
   await article.getByText("Original count: Unknown", { exact: true }).waitFor();
   await article.getByText("Result count: Unknown", { exact: true }).waitFor();
   await article.getByText("API usage and actual fees", { exact: true }).click();
@@ -230,6 +233,7 @@ test("complete actual fees retain decimal strings and returned zero, received au
     window.entries = [entry];
     window.render();
   }, entry);
+  await page.locator("article > details > summary").click();
   await page.getByText("0.000 s · Complete", { exact: true }).waitFor();
   await page.getByText("API usage and actual fees", { exact: true }).click();
   await page.getByText("USD 0", { exact: true }).waitFor();
@@ -272,6 +276,7 @@ for (const [language, labels] of [
       window.entries = [entry];
       window.render();
     }, historyEntry);
+    await page.locator("article > details > summary").click();
     await page.getByText(labels[0], { exact: true }).waitFor();
     await page.getByText(labels[1], { exact: true }).click();
     await page.getByText(labels[3], { exact: true }).waitFor();

@@ -73,6 +73,7 @@ for (const [
         window.entries = [entry];
         window.render();
       }, entry);
+      await page.locator("article > details > summary").click();
       await page.getByText(details, { exact: true }).click();
       await page.getByText(preference, { exact: true }).waitFor();
       await page.getByText(wire, { exact: true }).waitFor();

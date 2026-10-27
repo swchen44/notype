@@ -76,6 +76,8 @@ export function connectionDraft(view: ConnectionView): ConnectionDraft {
 }
 /** UI confirmation only: short credentials are never displayed in full. */
 export function maskApiKey(value: string): string {
-  const chars=Array.from(value);
-  return chars.length<=8 ? "********" : chars.slice(0,4).join("")+"****"+chars.slice(-4).join("");
+  const chars = Array.from(value);
+  return chars.length <= 8
+    ? "********"
+    : chars.slice(0, 4).join("") + "****" + chars.slice(-4).join("");
 }

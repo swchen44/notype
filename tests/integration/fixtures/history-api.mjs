@@ -53,7 +53,11 @@ export async function historyApiFixture(
           if (cmd === "plugin:event|listen") return 1;
           if (cmd === "plugin:event|unlisten") return null;
           if (cmd === "get_history_entries")
-            return args.query ? [] : window.entries;
+            return window.entries.filter((entry) =>
+              (entry.result || entry.transcript)
+                .toLowerCase()
+                .includes(args.query.trim().toLowerCase()),
+            );
           if (cmd === "copy_history_text") return null;
           if (cmd === "get_workflow_readiness")
             return {

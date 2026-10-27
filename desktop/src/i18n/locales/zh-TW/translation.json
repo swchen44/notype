@@ -534,6 +534,7 @@
       "selectWord": "選取 {{word}}",
       "deleteSelected": "刪除選取的 {{count}} 筆",
       "noWords": "尚未新增詞彙。",
+      "noMatchingWords": "沒有符合的詞彙。",
       "saveFailed": "儲存失敗，尚未確認變更已保存。",
       "enableAi": "啟用 AI 文字處理",
       "enableAiDescription": "關閉時，口述、翻譯與隨便問都直接輸入原稿，不呼叫 AI；開啟時使用唯一選取的連線。",
@@ -551,11 +552,15 @@
       "tokenInput": "輸入 tokens",
       "tokenOutput": "輸出 tokens",
       "actualFees": "實際費用",
+      "usageScope": "此 App 自本功能啟用或最近清除以來的用量（包含測試連線）。",
       "activityUnavailable": "無法取得連線狀態或用量",
       "keyPreview": "Key 確認",
       "savedKey": "已儲存的 Key",
       "selectConnection": "使用 {{name}}",
-      "useConnection": "使用此連線"
+      "useConnection": "使用此連線",
+      "cancel": "取消",
+      "clearingUsage": "清除用量中…",
+      "usageClearFailed": "無法清除用量紀錄。"
     }
   },
   "tray": {

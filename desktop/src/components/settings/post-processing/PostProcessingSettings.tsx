@@ -12,13 +12,19 @@ import { ScenarioSettings } from "./ScenarioSettings";
 import { ConnectionEditor } from "./ConnectionEditor";
 import { PostProcessingToggle } from "../PostProcessingToggle";
 import { ConnectionActivity } from "./ConnectionActivity";
-import { connectionConfigurationChanged, useConnectionActivity } from "@/hooks/useConnectionActivity";
+import {
+  connectionConfigurationChanged,
+  useConnectionActivity,
+} from "@/hooks/useConnectionActivity";
+import { useSettings } from "@/hooks/useSettings";
 
 type SettingsResult = Awaited<ReturnType<typeof commands.createTextConnection>>;
 
 export const PostProcessingSettings = () => {
   const { t } = useTranslation();
-  const {activity,refresh:refreshActivity}=useConnectionActivity();
+  const { activity, refresh: refreshActivity } = useConnectionActivity();
+  const { getSetting } = useSettings();
+  const enabled = getSetting("post_process_enabled") ?? false;
   const [configuration, setConfiguration] =
     useState<ConnectionSettingsView | null>(null);
   const [busy, setBusy] = useState(false);
@@ -33,6 +39,7 @@ export const PostProcessingSettings = () => {
   const [editorVersion, setEditorVersion] = useState(0);
   const [reloadVersion, setReloadVersion] = useState(0);
   const requestEpoch = useRef(0);
+  const mutationLock = useRef(false);
 
   const apply = useCallback((updated: ConnectionSettingsView) => {
     setConfiguration((current) =>
@@ -73,7 +80,8 @@ export const PostProcessingSettings = () => {
   }, [t, reloadVersion, apply]);
 
   const mutate = async (operation: () => Promise<SettingsResult>) => {
-    if (busy) return null;
+    if (busy || mutationLock.current) return null;
+    mutationLock.current = true;
     const epoch = ++requestEpoch.current;
     setBusy(true);
     setMessage("");
@@ -109,6 +117,7 @@ export const PostProcessingSettings = () => {
       setMessage(t("notype.connections.failed"));
       return null;
     } finally {
+      mutationLock.current = false;
       if (requestEpoch.current === epoch) setBusy(false);
     }
   };
@@ -140,7 +149,13 @@ export const PostProcessingSettings = () => {
         {t("notype.connections.description")}
       </p>
       <p role="status" className="text-sm">
-        {t(ready ? "notype.text.ready" : "notype.text.notReady")}
+        {t(
+          !enabled
+            ? "notype.usability.aiOff"
+            : ready
+              ? "notype.text.ready"
+              : "notype.text.notReady",
+        )}
       </p>
       <fieldset disabled={busy} className="space-y-4 min-w-0">
         <Button
@@ -216,16 +231,23 @@ export const PostProcessingSettings = () => {
             </label>
             <Button
               disabled={!nameValid}
-              onClick={() =>
-                void mutate(() =>
+              onClick={async () => {
+                const updated = await mutate(() =>
                   commands.createTextConnection(
                     configuration.revision,
                     name.trim(),
                     kind,
                     dialect,
                   ),
-                )
-              }
+                );
+                const created = updated?.connections.find(
+                  (connection) =>
+                    !configuration.connections.some(
+                      (saved) => saved.id === connection.id,
+                    ),
+                );
+                if (created) setSelectedId(created.id);
+              }}
             >
               {t("notype.connections.create")}
             </Button>
@@ -249,9 +271,41 @@ export const PostProcessingSettings = () => {
                 {configuration.active_connection_id === connection.id && (
                   <p role="status">{t("notype.connections.active")}</p>
                 )}
-                {connection.masked_api_key && <p className="font-mono text-sm">{t("notype.usability.savedKey")}: {connection.masked_api_key}</p>}
-                <label className="flex gap-2 items-center text-sm"><input type="radio" name="active-text-connection" aria-label={t("notype.usability.selectConnection",{name:connection.display_name})} checked={configuration.active_connection_id===connection.id} onChange={()=>void mutate(()=>commands.activateTextConnection(configuration.revision,connection.id))}/>{t("notype.usability.useConnection")}</label>
-                <ConnectionActivity id={connection.id} revision={configuration.revision} activity={activity.find(item=>item.connection_id===connection.id)} refresh={refreshActivity}/>
+                {connection.masked_api_key && (
+                  <p className="font-mono text-sm">
+                    {t("notype.usability.savedKey")}:{" "}
+                    {connection.masked_api_key}
+                  </p>
+                )}
+                <label className="flex gap-2 items-center text-sm">
+                  <input
+                    type="radio"
+                    name="active-text-connection"
+                    aria-label={t("notype.usability.selectConnection", {
+                      name: connection.display_name,
+                    })}
+                    checked={
+                      configuration.active_connection_id === connection.id
+                    }
+                    onChange={() =>
+                      void mutate(() =>
+                        commands.activateTextConnection(
+                          configuration.revision,
+                          connection.id,
+                        ),
+                      )
+                    }
+                  />
+                  {t("notype.usability.useConnection")}
+                </label>
+                <ConnectionActivity
+                  id={connection.id}
+                  revision={configuration.revision}
+                  activity={activity.find(
+                    (item) => item.connection_id === connection.id,
+                  )}
+                  refresh={refreshActivity}
+                />
                 <div className="flex flex-wrap gap-2">
                   <Button
                     variant="secondary"
@@ -261,22 +315,6 @@ export const PostProcessingSettings = () => {
                     onClick={() => setSelectedId(connection.id)}
                   >
                     {t("notype.connections.edit")}
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    disabled={
-                      configuration.active_connection_id === connection.id
-                    }
-                    onClick={() =>
-                      void mutate(() =>
-                        commands.activateTextConnection(
-                          configuration.revision,
-                          connection.id,
-                        ),
-                      )
-                    }
-                  >
-                    {t("notype.connections.activate")}
                   </Button>
                   <Button
                     variant="danger-ghost"

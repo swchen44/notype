@@ -146,6 +146,99 @@ async fn timeout_keeps_original_and_only_explicit_choice_makes_it_pending() {
     assert_eq!(*input.value.lock().unwrap(), "不要刪除 42");
 }
 
+#[tokio::test]
+async fn successful_original_delivery_retains_processing_failure_but_clears_a_delivery_failure() {
+    let service = SessionService::in_memory().unwrap();
+    let entry = service.create("原稿 API 42", options()).unwrap();
+    service
+        .process(
+            &entry.id,
+            vec![],
+            Arc::new(Reply(Err(TextFailure::Timeout))),
+        )
+        .await
+        .unwrap();
+    service.original_for_delivery(&entry.id).unwrap();
+    let input = Arc::new(TestInput {
+        focused: AtomicBool::new(true),
+        value: Mutex::new(String::new()),
+    });
+    let delivered = service.deliver(&entry.id, input.clone()).await.unwrap();
+    assert_eq!(delivered.status, SessionStatus::Delivered);
+    assert_eq!(delivered.error.as_deref(), Some("llm-timeout"));
+    assert_eq!(*input.value.lock().unwrap(), "原稿 API 42");
+
+    let entry = service.create("delivery recovery", options()).unwrap();
+    service.choose_original(&entry.id).unwrap();
+    input.focused.store(false, Ordering::SeqCst);
+    assert_eq!(
+        service
+            .deliver(&entry.id, input.clone())
+            .await
+            .unwrap()
+            .error
+            .as_deref(),
+        Some("target-changed")
+    );
+    input.focused.store(true, Ordering::SeqCst);
+    assert_eq!(service.deliver(&entry.id, input).await.unwrap().error, None);
+}
+
+#[tokio::test]
+async fn automatic_original_selection_rejects_cancelled_failed_recognition_and_completed_writes() {
+    let service = SessionService::in_memory().unwrap();
+    let cancelled = service.create("取消原稿", options()).unwrap();
+    service.cancel(&cancelled.id).unwrap();
+    let failed_recognition = service
+        .create_recognition_failure("無法正規化原稿", options())
+        .unwrap();
+    for entry in [&cancelled, &failed_recognition] {
+        assert!(matches!(
+            service.original_for_delivery(&entry.id),
+            Err(notype_core::CoreError::InvalidTransition)
+        ));
+    }
+    let input = Arc::new(TestInput {
+        focused: AtomicBool::new(true),
+        value: Mutex::new(String::new()),
+    });
+    let delivered = service.create("只寫一次", options()).unwrap();
+    service.original_for_delivery(&delivered.id).unwrap();
+    assert_eq!(
+        service
+            .deliver(&delivered.id, input.clone())
+            .await
+            .unwrap()
+            .status,
+        SessionStatus::Delivered
+    );
+    assert!(matches!(
+        service.original_for_delivery(&delivered.id),
+        Err(notype_core::CoreError::InvalidTransition)
+    ));
+    assert_eq!(*input.value.lock().unwrap(), "只寫一次");
+    struct Uncertain;
+    impl DeliveryAdapter for Uncertain {
+        fn deliver(&self, _: DeliveryRequest) -> DeliveryFuture {
+            Box::pin(async { DeliveryOutcome::Uncertain })
+        }
+    }
+    let unknown = service.create("可能已寫入", options()).unwrap();
+    service.original_for_delivery(&unknown.id).unwrap();
+    assert_eq!(
+        service
+            .deliver(&unknown.id, Arc::new(Uncertain))
+            .await
+            .unwrap()
+            .status,
+        SessionStatus::DeliveryUnknown
+    );
+    assert!(matches!(
+        service.original_for_delivery(&unknown.id),
+        Err(notype_core::CoreError::InvalidTransition)
+    ));
+}
+
 struct Deferred {
     started: Arc<Notify>,
     release: Arc<Notify>,
@@ -255,7 +348,7 @@ fn recognized_original_is_retrievable_with_its_captured_mode_and_target() {
 }
 
 #[tokio::test]
-async fn history_search_matches_both_texts_literally_and_deletion_stops_active_work() {
+async fn history_search_uses_only_displayed_text_and_deletion_stops_active_work() {
     let service = SessionService::in_memory().unwrap();
     let entry = service.create("原稿 100% API_42", options()).unwrap();
     service
@@ -267,7 +360,8 @@ async fn history_search_matches_both_texts_literally_and_deletion_stops_active_w
         .await
         .unwrap();
     service.create("unrelated", options()).unwrap();
-    assert_eq!(service.search("100%").unwrap()[0].id, entry.id);
+    assert!(service.search("100%").unwrap().is_empty());
+    assert!(service.search("API_42").unwrap().is_empty());
     assert_eq!(
         service.search("launch").unwrap()[0].transcript,
         "原稿 100% API_42"
@@ -294,6 +388,39 @@ async fn history_search_matches_both_texts_literally_and_deletion_stops_active_w
         service.get(&entry.id),
         Err(notype_core::CoreError::NotFound)
     ));
+}
+
+#[tokio::test]
+async fn history_search_is_literal_unicode_case_insensitive_with_original_fallback() {
+    let service = SessionService::in_memory().unwrap();
+    let original = service
+        .create("原稿 CAFÉ C++ 100% API_42", options())
+        .unwrap();
+    let edited = service.create("隱藏原稿 C++", options()).unwrap();
+    service
+        .process(
+            &edited.id,
+            vec![],
+            Arc::new(Reply(Ok("整理結果 ÉCOLE 100_42".into()))),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        service
+            .search(" café c++ ")
+            .unwrap()
+            .iter()
+            .map(|entry| entry.id.as_str())
+            .collect::<Vec<_>>(),
+        vec![original.id.as_str()]
+    );
+    assert_eq!(service.search("école").unwrap()[0].id, edited.id);
+    assert_eq!(service.search("C++").unwrap().len(), 1);
+    assert_eq!(service.search("100%").unwrap()[0].id, original.id);
+    assert_eq!(service.search("API_42").unwrap()[0].id, original.id);
+    assert!(service.search("100_4%").unwrap().is_empty());
+    assert!(service.search("隱藏原稿").unwrap().is_empty());
+    assert_eq!(service.search("  ").unwrap().len(), 2);
 }
 
 #[tokio::test]
