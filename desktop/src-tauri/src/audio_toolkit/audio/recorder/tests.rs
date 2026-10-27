@@ -3,6 +3,7 @@ use super::{
     CaptureProcessor, CaptureTransportState, ChunkDisposition, Cmd, VadConfig, VadPolicy,
 };
 use crate::audio_toolkit::vad::{VadFrame, VoiceActivityDetector};
+use crate::capture_startup::ReadySignal;
 use rtrb::RingBuffer;
 use std::{
     sync::{
