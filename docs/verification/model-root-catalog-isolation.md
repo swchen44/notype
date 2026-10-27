@@ -25,6 +25,18 @@ Reproducible Cargo targets for normal development/CI:
 cargo test --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test model-roots-policy --test model-roots
 ```
 
-## Remaining acceptance
+## Native build and actual GUI acceptance
 
-The already-published ZIP, tag and executable are unchanged and still contain the reproduced bug. A newly built App must repeat the original Choose → Apply → Use model GUI flow before this is claimed fixed for the user. Native build/clippy, packaged GUI operation, actual microphone transcription and model quality are separate checks; source contracts and hash verification do not establish them. A new native build/delivery requires its own bounded plan and Astra approval.
+The user subsequently requested compilation/computer-use and explicitly waived further Astra review. Build/acceptance records: [initial scope](https://github.com/swchen44/notype/issues/28#issuecomment-6443709618), [ONNX cache correction](https://github.com/swchen44/notype/issues/28#issuecomment-6444082023), [frontend staging correction](https://github.com/swchen44/notype/issues/28#issuecomment-6444508663).
+
+- R1 failed linking because `CARGO_NET_OFFLINE=true` makes ort-sys skip its binary-link setup, despite an existing local ONNX distribution. R2 restored normal cache resolution and compiled, but the temporary Windows absolute `frontendDist` override was parsed as an external URL and displayed a drive index. These were local build-configuration failures; their logs/results remain preserved. Production source was not changed to work around either issue.
+- R3 used the normal `../dist` layout with the nine previously built frontend assets. `tauri build --no-bundle` completed in 4m44s, source **f200d5dd21426caab1f8c8ac336dc128c94aaf55**, clean before/after. Existing Rust unused-code warnings remain; this is not a clippy run. The executable is **59,283,968 bytes**, SHA-256 **de9e655bea57bb91111ca113b22e54d8ec24c011a4a9f20674d1a6b732d3b94b**.
+- A separate full local portable payload contains **1,694 declared files / 805,265,575 bytes**, with the new executable and unchanged hash-checked runtime/resources from the existing release. Native integrity and normal-user checks remain enabled. A bare executable directory was correctly rejected; an elevated launch was correctly rejected; normal Explorer launch of the full payload succeeded. The published release extraction was never modified.
+- Actual Windows UI Automation and own-window captures selected the existing folder in the native chooser, confirmed a Ready candidate with **1 available model**, invoked Apply, and observed the applied external path and **Qwen3-ASR 0.6B (Q6_K)** marked downloaded/verified. Invoking **Use model** showed the loading state, then completed onboarding and opened the main App with a green Qwen footer. Invoking Rescan kept the same root/model available. This is the original GUI flow, not a fixture or direct command injection.
+- The production preference file persisted schema1/revision1 and the external model root. The existing 690MB speech model was not moved, copied, deleted or downloaded. No microphone recording, API call or credential access was part of this acceptance. Captures stay local; only these nonsecret results are published.
+
+## Remaining acceptance and known finding
+
+The already-published ZIP/tag/executable still contain the original bug; the successful new build is currently a separate local test payload, not a replacement GitHub release. Physical microphone transcription, quality, actual API operation, cross-App input, clean official host and restart persistence were not exercised in this run. The folder preference's durable write was checked, but it is not a new restart test.
+
+The GUI also retains a busy hint (“請完成或取消目前工作…”) while the App is idle and the folder/model are Ready. Apply, loading and Rescan succeeded despite it. This stale hint is a separate observed finding, not silently declared fixed by the catalog change.
