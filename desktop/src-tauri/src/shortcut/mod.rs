@@ -9,6 +9,7 @@
 //! The active implementation is determined by the `keyboard_implementation`
 //! setting and can be changed at runtime.
 
+mod dictionary;
 mod handler;
 pub mod handy_keys;
 pub mod tauri_impl;
@@ -938,9 +939,31 @@ pub fn change_whats_new_last_seen_version_setting(
 #[tauri::command]
 #[specta::specta]
 pub fn update_custom_words(app: AppHandle, words: Vec<String>) -> Result<(), String> {
+    crate::offline_bootstrap::admit()?;
+    static WRITER: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _writer = WRITER
+        .lock()
+        .map_err(|_| "dictionary-settings-save-failed")?;
+    let words = dictionary::validated_words(words).map_err(str::to_owned)?;
+    let store = app
+        .store(crate::portable::store_path(settings::SETTINGS_STORE_PATH))
+        .map_err(|_| "dictionary-settings-save-failed")?;
     let mut settings = settings::get_settings(&app);
+    let previous = settings.custom_words.clone();
     settings.custom_words = words;
     settings::write_settings(&app, settings);
+    if store.save().is_err() {
+        // Keep failed writes out of the in-memory settings view as well. Read
+        // the current envelope so unrelated settings are not rolled back.
+        let mut current = settings::get_settings(&app);
+        current.custom_words = previous;
+        settings::write_settings(&app, current);
+        return Err("dictionary-settings-save-failed".into());
+    }
+    let _ = app.emit(
+        "settings-changed",
+        serde_json::json!({"setting":"custom_words"}),
+    );
     Ok(())
 }
 

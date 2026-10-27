@@ -377,11 +377,56 @@ impl ConnectionStore {
         resolve_selected(&self.snapshot()?, reader)
     }
     /// Resolve only the explicitly tested connection without changing active selection.
-    pub fn resolve_connection(&self, revision: u64, id: &str, reader: &dyn credentials::CredentialReader) -> Result<crate::workflow::TextConfiguration, ConfigError> {
+    pub fn resolve_connection(
+        &self,
+        revision: u64,
+        id: &str,
+        reader: &dyn credentials::CredentialReader,
+    ) -> Result<crate::workflow::TextConfiguration, ConfigError> {
         let state = self.snapshot()?;
-        if state.revision != revision { return Err(ConfigError("configuration-conflict")); }
-        let record = state.connections.iter().find(|record| record.draft.id == id).ok_or(ConfigError("configuration-connection-missing"))?;
-        resolve_record(&state, record, record.draft.clone(), KeyAction::Keep, reader, true)
+        if state.revision != revision {
+            return Err(ConfigError("configuration-conflict"));
+        }
+        let record = state
+            .connections
+            .iter()
+            .find(|record| record.draft.id == id)
+            .ok_or(ConfigError("configuration-connection-missing"))?;
+        resolve_record(
+            &state,
+            record,
+            record.draft.clone(),
+            KeyAction::Keep,
+            reader,
+            true,
+        )
+    }
+    /// A test uses the same selected record's wire dialect and credentials, but
+    /// bounds time/output without persisting any test-only options or activation.
+    pub fn resolve_test(
+        &self,
+        revision: u64,
+        id: &str,
+        reader: &dyn credentials::CredentialReader,
+    ) -> Result<crate::workflow::TextConfiguration, ConfigError> {
+        let mut configuration = self.resolve_connection(revision, id, reader)?;
+        configuration.timeout_ms = configuration.timeout_ms.min(15_000);
+        let limit = if configuration.thinking_override == Some(true) {
+            1024
+        } else {
+            16
+        };
+        configuration.max_output_tokens = Some(
+            configuration
+                .max_output_tokens
+                .map_or(limit, |configured| configured.min(limit)),
+        );
+        if let Some(parameters) = &mut configuration.request_parameters {
+            parameters.max_output_tokens = configuration.max_output_tokens;
+        }
+        configuration.prompts.dictation =
+            "This is an explicit connection test. Reply with OK only.".into();
+        Ok(configuration)
     }
     /// Resolve an explicit existing editor snapshot for GET only. This does not
     /// persist its fields/key, activate, require a model or create generation rows.
@@ -998,7 +1043,11 @@ pub fn mask_key(value: &str) -> String {
     if chars.len() <= 8 {
         "********".into()
     } else {
-        format!("{}****{}", chars[..4].iter().collect::<String>(), chars[chars.len()-4..].iter().collect::<String>())
+        format!(
+            "{}****{}",
+            chars[..4].iter().collect::<String>(),
+            chars[chars.len() - 4..].iter().collect::<String>()
+        )
     }
 }
 

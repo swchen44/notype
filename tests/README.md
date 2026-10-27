@@ -1,5 +1,28 @@
 # 測試規範
 
+## Session delivery and usability (#31)
+
+The confirmed session/settings seams cover AI off in all three scenarios, automatic
+raw fallback after API error/timeout, cancellation/no-resend, primary-text history
+search, dictionary CRUD/UTF-8 CSV and independent connection accounting. See the
+[specification](https://github.com/swchen44/notype/issues/31) and
+[verification receipt](../docs/verification/usability.md).
+
+```powershell
+cargo test --locked --manifest-path crates/notype-core/Cargo.toml
+cargo test --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test desktop-workflow --test desktop-provider --test provider-config --test provider-config-store --test connection-activity --test dictionary-words --test native-target-policy --test native-delivery
+node --test tests/unittest/dictionary.ui.mjs tests/unittest/history-presentation.ui.mjs
+node --test --test-concurrency=1 tests/integration/usability.ui.mjs tests/integration/history-metrics.ui.mjs tests/integration/provider-connections.ui.mjs
+```
+
+Workflow/provider tests exercise public session behavior with synthetic data,
+loopback HTTP and real owned SQLite. Connection activity uses the production
+observer, SQLite reopen/reset/late receipts and actual loopback probe transport;
+no provider key or paid endpoint is used. Rendered browser fixtures mock IPC,
+exercise actual components, and verify downloaded CSV bytes/BOM and import results.
+The separate Windows Notepad++ probe requires an owned PID and a synthetic document;
+it is not part of portable CI and cannot establish microphone/full-App acceptance.
+
 ## Offline defaults and complete ZIP contracts (#29)
 
 Approved [P29-v1](https://github.com/swchen44/notype/issues/29#issuecomment-6405357391),

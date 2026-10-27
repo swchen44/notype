@@ -82,7 +82,8 @@ pub struct TextConfiguration {
     /// Runtime composition for connection accounting; never serialized or logged.
     #[serde(skip)]
     #[specta(skip)]
-    pub observer_wrapper: Option<Arc<dyn Fn(Arc<dyn ApiCallObserver>) -> Arc<dyn ApiCallObserver> + Send + Sync>>,
+    pub observer_wrapper:
+        Option<Arc<dyn Fn(Arc<dyn ApiCallObserver>) -> Arc<dyn ApiCallObserver> + Send + Sync>>,
     /// Runtime source association only; absent from serialized views/reports.
     #[serde(skip)]
     #[specta(skip)]
@@ -436,7 +437,8 @@ impl TextConfiguration {
 }
 
 struct ChatProcessor {
-    observer_wrapper: Option<Arc<dyn Fn(Arc<dyn ApiCallObserver>) -> Arc<dyn ApiCallObserver> + Send + Sync>>,
+    observer_wrapper:
+        Option<Arc<dyn Fn(Arc<dyn ApiCallObserver>) -> Arc<dyn ApiCallObserver> + Send + Sync>>,
     experiment: Option<experiment::ExperimentContract>,
     credential: Option<RuntimeCredential>,
     request_parameters: Option<notype_core::observations::RequestParameters>,
@@ -931,6 +933,9 @@ impl ChatProcessor {
                     }
                 })?;
                 let mut receipt = ApiReceipt::from_chat_json(&value);
+                if profile == TextProviderProfile::OpenRouter {
+                    receipt = receipt.with_openrouter_chat_charge(&bytes);
+                }
                 let reflected = |text: &str| {
                     credential
                         .as_ref()
