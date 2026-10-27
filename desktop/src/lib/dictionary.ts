@@ -13,7 +13,13 @@ export function validWord(word: string) {
 export function dictionaryCsv(words: string[]) {
   return (
     "\uFEFFword\r\n" +
-    words.map((word) => '"' + word.replace(/"/g, '""') + '"').join("\r\n") +
+    words
+      .map((word) => {
+        // A quoted cell can still be an Excel formula. Import trims this safe prefix.
+        const safe = /^\s*[=+@-]/u.test(word) ? "\t" + word : word;
+        return '"' + safe.replace(/"/g, '""') + '"';
+      })
+      .join("\r\n") +
     "\r\n"
   );
 }

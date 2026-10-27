@@ -44,6 +44,13 @@ test("imports preserve first spelling and count only newly added incoming words"
     },
   );
 });
+
+test("spreadsheet formulas are neutralized in CSV while normalized words round-trip", () => {
+  const words = ["=1+1", "+SUM(A1)", "-10", "@term"];
+  const csv = dictionaryCsv(words);
+  for (const word of words) assert.ok(csv.includes('"\t' + word + '"'));
+  assert.deepEqual(parseDictionaryCsv(csv), words);
+});
 test("malformed or wrong-column CSV is rejected as a whole", () => {
   for (const csv of [
     "wrong\r\nword",
