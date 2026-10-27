@@ -587,9 +587,18 @@ impl SessionService {
     /// Literal substring search over the displayed result, or original without a result.
     pub fn search(&self, query: &str) -> Result<Vec<SessionEntry>, CoreError> {
         let connection = self.connection()?;
-        let mut statement = connection.prepare("SELECT id FROM sessions WHERE instr(lower(coalesce(nullif(result,''),transcript)),lower(?1))>0 ORDER BY created_at DESC,id DESC")?;
+        // SQLite's built-in lower() only folds ASCII. Use the same Unicode
+        // lowercase substring semantics as the displayed-text/highlight UI.
+        let query = query.trim().to_lowercase();
+        let mut statement = connection.prepare("SELECT id,coalesce(nullif(result,''),transcript) FROM sessions ORDER BY created_at DESC,id DESC")?;
         let ids = statement
-            .query_map([query], |row| row.get::<_, String>(0))?
+            .query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })?
+            .filter_map(|row| match row {
+                Ok((id, text)) => text.to_lowercase().contains(&query).then_some(Ok(id)),
+                Err(error) => Some(Err(error)),
+            })
             .collect::<Result<Vec<_>, _>>()?;
         ids.iter().map(|id| read_entry(&connection, id)).collect()
     }
@@ -691,15 +700,41 @@ impl SessionService {
 
     /// User-authorized automatic raw fallback. Cancellation and completed delivery are never revived.
     pub fn original_for_delivery(&self, id: &str) -> Result<SessionEntry, CoreError> {
+        self.original_for_delivery_with_stop(id, None)
+    }
+
+    /// Record availability against this capture's accepted stop; retries pass no old clock.
+    pub fn original_for_delivery_with_stop(
+        &self,
+        id: &str,
+        stopped_at: Option<std::time::Instant>,
+    ) -> Result<SessionEntry, CoreError> {
         {
             let connection = self.connection()?;
             let entry = read_entry(&connection, id)?;
-            if !matches!(entry.status, SessionStatus::Recognized | SessionStatus::Failed | SessionStatus::Pending) || entry.transcript.trim().is_empty() {
+            if !matches!(
+                entry.status,
+                SessionStatus::Recognized | SessionStatus::Failed | SessionStatus::Pending
+            ) || entry.transcript.trim().is_empty()
+            {
                 return Err(CoreError::InvalidTransition);
             }
-            let failed: bool = connection.query_row("SELECT recognition_failed FROM sessions WHERE id=?1",[id],|row|row.get(0))?;
-            if failed { return Err(CoreError::InvalidTransition); }
-            connection.execute("UPDATE sessions SET status='pending',selection='original',review_required=0,review_confirmed=0,attempt=attempt+1,updated_at=?2 WHERE id=?1",params![id,now()])?;
+            let failed: bool = connection.query_row(
+                "SELECT recognition_failed FROM sessions WHERE id=?1",
+                [id],
+                |row| row.get(0),
+            )?;
+            if failed {
+                return Err(CoreError::InvalidTransition);
+            }
+            let mut observations = entry.observations;
+            if let Some(stopped_at) = stopped_at {
+                observations.initial_stop_to_result_ms = Some(elapsed_ms(stopped_at));
+            }
+            if observations.latest_processing_kind.is_none() {
+                observations.latest_outcome = Some("original_only".into());
+            }
+            connection.execute("UPDATE sessions SET status='pending',selection='original',review_required=0,review_confirmed=0,attempt=attempt+1,updated_at=?2,observations=?3 WHERE id=?1",params![id,now(),serde_json::to_string(&observations).map_err(|_|CoreError::Storage)?])?;
         }
         self.get(id)
     }
@@ -746,7 +781,7 @@ impl SessionService {
         id: &str,
         adapter: Arc<dyn DeliveryAdapter>,
     ) -> Result<SessionEntry, CoreError> {
-        let (request, attempt) = {
+        let (request, attempt, processing_error) = {
             let connection = self.connection()?;
             let entry = read_entry(&connection, id)?;
             if entry.status != SessionStatus::Pending {
@@ -758,6 +793,18 @@ impl SessionService {
             let Some(original_target) = entry.original_target else {
                 return Ok(entry);
             };
+            let processing_error = (entry.selection == TextSelection::Original)
+                .then_some(entry.error)
+                .flatten()
+                .filter(|code| {
+                    !matches!(
+                        code.as_str(),
+                        "cancelled"
+                            | "target-changed"
+                            | "delivery-unavailable"
+                            | "delivery-unknown"
+                    )
+                });
             let text = match entry.selection {
                 TextSelection::Original => entry.transcript,
                 TextSelection::Polished => entry.result.ok_or(CoreError::InvalidTransition)?,
@@ -775,6 +822,7 @@ impl SessionService {
                     original_target,
                 },
                 attempt,
+                processing_error,
             )
         };
         let mut guard = AttemptGuard {
@@ -786,7 +834,9 @@ impl SessionService {
         };
         let outcome = adapter.deliver(request).await;
         let (status, error) = match outcome {
-            DeliveryOutcome::Delivered => ("delivered", None),
+            // Raw fallback is a successful input operation even when AI failed.
+            // Keep its safe processing code so the delivered history explains why.
+            DeliveryOutcome::Delivered => ("delivered", processing_error.as_deref()),
             DeliveryOutcome::TargetChanged => ("pending", Some("target-changed")),
             DeliveryOutcome::Unavailable => ("pending", Some("delivery-unavailable")),
             DeliveryOutcome::Uncertain => ("delivery-unknown", Some("delivery-unknown")),

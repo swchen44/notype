@@ -12,6 +12,109 @@ use std::sync::Arc;
 use workflow::{DesktopWorkflow, TextConfiguration};
 
 #[tokio::test]
+async fn disabled_ai_delivers_original_on_finish_and_retry_in_all_three_scenarios_without_http() {
+    use notype_core::{
+        DeliveryAdapter, DeliveryFuture, DeliveryOutcome, DeliveryRequest, Scenario,
+        SessionOptions, TextSelection,
+    };
+    use std::sync::Mutex;
+    use std::time::Duration;
+    struct Input(Arc<Mutex<Vec<DeliveryRequest>>>);
+    impl DeliveryAdapter for Input {
+        fn deliver(&self, request: DeliveryRequest) -> DeliveryFuture {
+            self.0.lock().unwrap().push(request);
+            Box::pin(async { DeliveryOutcome::Delivered })
+        }
+    }
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let writes = Arc::new(Mutex::new(vec![]));
+    let workflow = DesktopWorkflow::new(SessionService::in_memory().unwrap(), Arc::new(|| {}))
+        .with_delivery(Arc::new(Input(writes.clone())));
+    let mut configuration = TextConfiguration {
+        processing_enabled: false,
+        transport: workflow::TextTransport::OpenAiChat,
+        endpoint: format!(
+            "http://{}/v1/chat/completions",
+            listener.local_addr().unwrap()
+        ),
+        model: "owned-fixture-model".into(),
+        authentication: workflow::TextAuthentication::None,
+        timeout_ms: 1000,
+        ..Default::default()
+    };
+    configuration.translation.back_translation = true;
+    for scenario in [Scenario::Dictation, Scenario::Translation, Scenario::Ask] {
+        let generation = workflow
+            .begin(
+                RecognitionMode::TraditionalEnglish,
+                Some("captured-target".into()),
+            )
+            .unwrap();
+        workflow
+            .capture_processing_snapshot(generation, scenario, configuration.clone(), vec![])
+            .unwrap();
+        workflow
+            .accept_stop(
+                generation,
+                std::time::Instant::now() - Duration::from_millis(80),
+            )
+            .unwrap();
+        // The captured master switch wins over preferences supplied after recording.
+        let finished = workflow
+            .finish(
+                generation,
+                "原稿 API 42",
+                TextConfiguration::default(),
+                vec![],
+            )
+            .await
+            .unwrap();
+        assert_eq!(finished.scenario, scenario);
+        assert_eq!(finished.status, SessionStatus::Delivered);
+        assert_eq!(finished.selection, TextSelection::Original);
+        assert_eq!(finished.result, None);
+        assert!(!finished.review_required);
+        assert_eq!(finished.api_summary.call_count, Some(0));
+        assert!(finished.observations.asr_after_stop_ms.unwrap() >= 80);
+        assert!(finished
+            .observations
+            .initial_stop_to_result_ms
+            .is_some_and(|ms| ms >= finished.observations.asr_after_stop_ms.unwrap()));
+        let entry = workflow
+            .sessions()
+            .create(
+                "原稿 API 42",
+                SessionOptions {
+                    original_target: Some("captured-target".into()),
+                    scenario,
+                    translation_target: (scenario == Scenario::Translation).then(|| "en".into()),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let result = workflow
+            .retry(&entry.id, configuration.clone(), vec![])
+            .await
+            .unwrap();
+        assert_eq!(result.status, SessionStatus::Delivered);
+        assert_eq!(result.selection, TextSelection::Original);
+        assert_eq!(result.result, None);
+        assert!(!result.review_required);
+    }
+    let writes = writes.lock().unwrap();
+    assert_eq!(writes.len(), 6);
+    assert!(writes
+        .iter()
+        .all(|write| write.text == "原稿 API 42" && write.original_target == "captured-target"));
+    assert!(
+        tokio::time::timeout(Duration::from_millis(50), listener.accept())
+            .await
+            .is_err(),
+        "AI off still sent an HTTP request"
+    );
+}
+
+#[tokio::test]
 async fn blocking_readiness_feedback_leaves_cancel_restart_and_stop_available() {
     use std::sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -501,7 +604,8 @@ async fn desktop_session_saves_original_without_audio_and_missing_configuration_
         )
         .await
         .unwrap();
-    assert_eq!(entry.status, SessionStatus::Failed);
+    assert_eq!(entry.status, SessionStatus::Pending);
+    assert_eq!(entry.selection, notype_core::TextSelection::Original);
     assert_eq!(entry.error.as_deref(), Some("configuration-required"));
     assert_eq!(
         entry.recognition_mode,
@@ -634,10 +738,10 @@ async fn received_audio_and_producer_snapshot_survive_stop_scheduling_without_ap
         "producer-model"
     );
     assert!(entry.observations.asr_after_stop_ms.unwrap() >= 80);
-    assert_eq!(
-        entry.observations.initial_stop_to_result_ms,
-        entry.observations.asr_after_stop_ms
-    );
+    assert!(entry
+        .observations
+        .initial_stop_to_result_ms
+        .is_some_and(|ms| ms >= entry.observations.asr_after_stop_ms.unwrap()));
     assert_eq!(
         entry.observations.latest_outcome.as_deref(),
         Some("original_only")
@@ -645,6 +749,22 @@ async fn received_audio_and_producer_snapshot_survive_stop_scheduling_without_ap
     assert_eq!(entry.api_summary.input.status, Completeness::NotApplicable);
     let saved = workflow.sessions().get(&entry.id).unwrap();
     assert_eq!(saved.observations.original_count, Some(6));
+    let initial_duration = saved.observations.initial_stop_to_result_ms;
+    let retried = workflow
+        .retry(
+            &entry.id,
+            TextConfiguration {
+                processing_enabled: false,
+                ..Default::default()
+            },
+            vec![],
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        retried.observations.initial_stop_to_result_ms, initial_duration,
+        "raw retry reused the old capture's clock"
+    );
     let observation = serde_json::to_value(saved.observations).unwrap();
     diagnostics.clear();
     assert!(diagnostics.set_enabled(true).effective_enabled);

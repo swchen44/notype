@@ -146,6 +146,152 @@ fn configured(endpoint: String) -> TextConfiguration {
 }
 
 #[tokio::test]
+async fn failed_or_timed_out_ai_delivers_original_once_with_the_failure_saved() {
+    use notype_core::{
+        DeliveryAdapter, DeliveryFuture, DeliveryOutcome, DeliveryRequest, Scenario, TextSelection,
+    };
+    use std::sync::Mutex;
+    struct Input(Arc<Mutex<Vec<DeliveryRequest>>>);
+    impl DeliveryAdapter for Input {
+        fn deliver(&self, request: DeliveryRequest) -> DeliveryFuture {
+            self.0.lock().unwrap().push(request);
+            Box::pin(async { DeliveryOutcome::Delivered })
+        }
+    }
+    for scenario in [Scenario::Dictation, Scenario::Translation, Scenario::Ask] {
+        for retry in [false, true] {
+            let writes = Arc::new(Mutex::new(vec![]));
+            let workflow =
+                DesktopWorkflow::new(SessionService::in_memory().unwrap(), Arc::new(|| {}))
+                    .with_delivery(Arc::new(Input(writes.clone())));
+            let (endpoint, request, server) = if retry {
+                fixture("{}", Duration::from_millis(600)).await
+            } else {
+                fixture_status("<html>private upstream page</html>", Duration::ZERO, 401).await
+            };
+            let mut configuration = configured(endpoint);
+            configuration.timeout_ms = 500;
+            configuration.translation.back_translation = true;
+            let entry = if retry {
+                let saved = workflow
+                    .sessions()
+                    .create(
+                        "原稿 API 42",
+                        SessionOptions {
+                            original_target: Some("captured-target".into()),
+                            scenario,
+                            translation_target: (scenario == Scenario::Translation)
+                                .then(|| "en".into()),
+                            ..Default::default()
+                        },
+                    )
+                    .unwrap();
+                workflow
+                    .retry(&saved.id, configuration, vec![])
+                    .await
+                    .unwrap()
+            } else {
+                let generation = workflow
+                    .begin(
+                        RecognitionMode::TraditionalEnglish,
+                        Some("captured-target".into()),
+                    )
+                    .unwrap();
+                workflow
+                    .capture_processing_snapshot(
+                        generation,
+                        scenario,
+                        configuration.clone(),
+                        vec![],
+                    )
+                    .unwrap();
+                workflow
+                    .finish(generation, "原稿 API 42", configuration, vec![])
+                    .await
+                    .unwrap()
+            };
+            request.await.unwrap();
+            server.await.unwrap();
+            assert_eq!(entry.status, SessionStatus::Delivered);
+            assert_eq!(entry.selection, TextSelection::Original);
+            assert_eq!(
+                entry.error.as_deref(),
+                Some(if retry {
+                    "llm-timeout"
+                } else {
+                    "provider-auth"
+                })
+            );
+            assert_eq!(entry.result, None);
+            assert!(!entry.review_required);
+            assert_eq!(entry.api_summary.call_count, Some(1));
+            assert_eq!(writes.lock().unwrap().len(), 1);
+            assert_eq!(writes.lock().unwrap()[0].text, "原稿 API 42");
+            assert_eq!(writes.lock().unwrap()[0].original_target, "captured-target");
+            assert_eq!(
+                workflow.deliver(&entry.id).await.unwrap().status,
+                SessionStatus::Delivered
+            );
+            assert_eq!(
+                writes.lock().unwrap().len(),
+                1,
+                "completed raw delivery was repeated"
+            );
+            assert_eq!(
+                workflow.sessions().get(&entry.id).unwrap().error,
+                entry.error
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn cancelling_a_saved_retry_during_http_never_falls_back_to_delivery() {
+    use notype_core::{DeliveryAdapter, DeliveryFuture, DeliveryOutcome, DeliveryRequest};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    struct Input(Arc<AtomicUsize>);
+    impl DeliveryAdapter for Input {
+        fn deliver(&self, _: DeliveryRequest) -> DeliveryFuture {
+            self.0.fetch_add(1, Ordering::SeqCst);
+            Box::pin(async { DeliveryOutcome::Delivered })
+        }
+    }
+    let calls = Arc::new(AtomicUsize::new(0));
+    let workflow = Arc::new(
+        DesktopWorkflow::new(SessionService::in_memory().unwrap(), Arc::new(|| {}))
+            .with_delivery(Arc::new(Input(calls.clone()))),
+    );
+    let entry = workflow
+        .sessions()
+        .create(
+            "cancelled retry original",
+            SessionOptions {
+                original_target: Some("captured-target".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let (endpoint, request, server) = fixture("{}", Duration::from_millis(150)).await;
+    let pending = {
+        let workflow = workflow.clone();
+        let id = entry.id.clone();
+        tokio::spawn(async move { workflow.retry(&id, configured(endpoint), vec![]).await })
+    };
+    request.await.unwrap();
+    workflow.cancel(&entry.id).unwrap();
+    assert_eq!(
+        pending.await.unwrap().unwrap().status,
+        SessionStatus::Cancelled
+    );
+    server.await.unwrap();
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+    assert_eq!(
+        workflow.sessions().get(&entry.id).unwrap().status,
+        SessionStatus::Cancelled
+    );
+}
+
+#[tokio::test]
 async fn deepseek_non_thinking_effort_and_token_limit_reach_the_actual_http_wire() {
     let (endpoint,request,server)=fixture(r#"{"model":"actual-flash","usage":{"prompt_tokens":17,"completion_tokens":5},"choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"整理 API。"}}]}"#,Duration::ZERO).await;
     let mut configuration = configured(endpoint);
@@ -190,7 +336,8 @@ async fn invalid_output_retains_reported_usage_without_inventing_price_or_effort
         .finish(generation, "recover original", configured(endpoint), vec![])
         .await
         .unwrap();
-    assert_eq!(result.status, SessionStatus::Failed);
+    assert_eq!(result.status, SessionStatus::Pending);
+    assert_eq!(result.selection, notype_core::TextSelection::Original);
     assert_eq!(result.error.as_deref(), Some("llm-invalid-response"));
     assert_eq!(result.api_summary.input.total, Some(23));
     assert_eq!(result.api_summary.output.total, None);
@@ -844,16 +991,29 @@ async fn session_http_separates_fixed_faithful_rules_examples_and_structured_cur
 
 #[tokio::test]
 async fn cancelling_desktop_session_during_http_keeps_cancelled_original_and_ignores_late_reply() {
+    use notype_core::{DeliveryAdapter, DeliveryFuture, DeliveryOutcome, DeliveryRequest};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    struct Input(Arc<AtomicUsize>);
+    impl DeliveryAdapter for Input {
+        fn deliver(&self, _: DeliveryRequest) -> DeliveryFuture {
+            self.0.fetch_add(1, Ordering::SeqCst);
+            Box::pin(async { DeliveryOutcome::Delivered })
+        }
+    }
+    let writes = Arc::new(AtomicUsize::new(0));
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("sessions.db");
     let reply=json!({"choices":[{"message":{"role":"assistant","content":"late result"},"finish_reason":"stop"}]}).to_string();
     let (endpoint, request, server) = fixture(&reply, Duration::from_millis(150)).await;
-    let workflow = Arc::new(DesktopWorkflow::new(
-        SessionService::open(&path).unwrap(),
-        Arc::new(|| {}),
-    ));
+    let workflow = Arc::new(
+        DesktopWorkflow::new(SessionService::open(&path).unwrap(), Arc::new(|| {}))
+            .with_delivery(Arc::new(Input(writes.clone()))),
+    );
     let recording = workflow
-        .begin(RecognitionMode::TraditionalEnglish, None)
+        .begin(
+            RecognitionMode::TraditionalEnglish,
+            Some("captured-target".into()),
+        )
         .unwrap();
     let worker = workflow.clone();
     let task = tokio::spawn(async move {
@@ -865,11 +1025,21 @@ async fn cancelling_desktop_session_during_http_keeps_cancelled_original_and_ign
     workflow.cancel_active().unwrap();
     let entry = task.await.unwrap().unwrap();
     assert_eq!(entry.status, SessionStatus::Cancelled);
+    assert_eq!(
+        writes.load(Ordering::SeqCst),
+        0,
+        "cancelled processing delivered raw fallback"
+    );
     server.await.unwrap();
     let saved = workflow.sessions().get(&entry.id).unwrap();
     assert_eq!(saved.transcript, "cancel me");
     assert_eq!(saved.result, None);
     assert_eq!(saved.status, SessionStatus::Cancelled);
+    assert_eq!(
+        writes.load(Ordering::SeqCst),
+        0,
+        "late reply delivered after cancellation"
+    );
     assert!(saved.observations.latest_processing_ms.is_some());
     assert_eq!(
         saved.observations.latest_outcome.as_deref(),
@@ -900,7 +1070,8 @@ async fn malformed_response_is_recoverable_after_real_sqlite_restart_and_retry_u
         .finish(recording, raw, configured(endpoint), vec![])
         .await
         .unwrap();
-    assert_eq!(failed.status, SessionStatus::Failed);
+    assert_eq!(failed.status, SessionStatus::Pending);
+    assert_eq!(failed.selection, notype_core::TextSelection::Original);
     assert_eq!(failed.error.as_deref(), Some("llm-invalid-response"));
     assert_eq!(failed.result, None);
     request.await.unwrap();
@@ -958,7 +1129,8 @@ async fn undeclared_authentication_or_missing_required_key_sends_zero_requests_a
             .finish(recording, "recover this original", configuration, vec![])
             .await
             .unwrap();
-        assert_eq!(entry.status, SessionStatus::Failed);
+        assert_eq!(entry.status, SessionStatus::Pending);
+        assert_eq!(entry.selection, notype_core::TextSelection::Original);
         assert_eq!(entry.error.as_deref(), Some("configuration-required"));
         assert_eq!(entry.transcript, "recover this original");
     }
@@ -1216,7 +1388,8 @@ async fn unauthorized_html_keeps_original_and_safe_auth_category_after_sqlite_re
         .unwrap();
     request.await.unwrap();
     server.await.unwrap();
-    assert_eq!(entry.status, SessionStatus::Failed);
+    assert_eq!(entry.status, SessionStatus::Pending);
+    assert_eq!(entry.selection, notype_core::TextSelection::Original);
     assert_eq!(entry.transcript, "recover original");
     assert_eq!(entry.result, None);
     assert_eq!(entry.api_summary.call_count, Some(1));
