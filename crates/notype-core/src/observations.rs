@@ -89,6 +89,9 @@ pub struct SessionObservations {
     pub latest_api_ms: Option<u64>,
     /// Typed application outcome label; absent when no endpoint was observed.
     pub latest_outcome: Option<String>,
+    /// Latest text-processing failure, independent of a subsequent delivery error.
+    /// Only application-owned codes are accepted; never upstream text or diagnostics.
+    pub latest_processing_error: Option<String>,
     /// An adapter/storage failure prevented a complete accounting of all calls.
     pub api_metadata_unavailable: bool,
 }
@@ -107,6 +110,7 @@ impl Default for SessionObservations {
             latest_processing_ms: None,
             latest_api_ms: None,
             latest_outcome: None,
+            latest_processing_error: None,
             api_metadata_unavailable: false,
         }
     }
@@ -124,6 +128,10 @@ impl SessionObservations {
                     "original_only" | "pending" | "failed" | "cancelled" | "interrupted"
                 )
             })
+            || self
+                .latest_processing_error
+                .as_deref()
+                .is_some_and(|code| !processing_error_code(code))
         {
             return Err(crate::CoreError::InvalidInput);
         }
@@ -151,6 +159,41 @@ impl SessionObservations {
         }
         Ok(())
     }
+}
+
+fn processing_error_code(code: &str) -> bool {
+    matches!(
+        code,
+        "configuration-required"
+            | "configuration-credentials-unavailable"
+            | "configuration-capability-required"
+            | "configuration-route-invalid"
+            | "configuration-invalid-options"
+            | "configuration-storage-failed"
+            | "llm-invalid-response"
+            | "llm-timeout"
+            | "llm-failed"
+            | "prompt-invalid"
+            | "history-storage-failed"
+            | "back-translation-timeout"
+            | "back-translation-failed"
+            | "cancelled"
+            | "interrupted"
+    ) || matches!(
+        code.strip_prefix("back-").unwrap_or(code),
+        "provider-auth"
+            | "provider-permission"
+            | "provider-balance"
+            | "provider-rate-limit"
+            | "provider-context"
+            | "provider-timeout"
+            | "provider-validation"
+            | "provider-unavailable"
+            | "provider-transport"
+            | "provider-protocol"
+            | "provider-oversize"
+            | "provider-unknown"
+    )
 }
 
 pub(crate) fn safe_label(value: &str) -> bool {

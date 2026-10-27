@@ -292,6 +292,84 @@ async fn cancelling_a_saved_retry_during_http_never_falls_back_to_delivery() {
 }
 
 #[tokio::test]
+async fn processing_failure_survives_every_failed_raw_delivery_and_sqlite_restart_without_diagnostics(
+) {
+    use notype_core::{DeliveryAdapter, DeliveryFuture, DeliveryOutcome, DeliveryRequest};
+    struct Input(u8);
+    impl DeliveryAdapter for Input {
+        fn deliver(&self, _: DeliveryRequest) -> DeliveryFuture {
+            let outcome = match self.0 {
+                0 => DeliveryOutcome::TargetChanged,
+                1 => DeliveryOutcome::Unavailable,
+                _ => DeliveryOutcome::Uncertain,
+            };
+            Box::pin(async move { outcome })
+        }
+    }
+    let diagnostics = diagnostics::service::global();
+    assert!(!diagnostics.set_enabled(false).effective_enabled);
+    diagnostics.clear();
+    for timeout in [false, true] {
+        for outcome in 0..3 {
+            let directory = tempfile::tempdir().unwrap();
+            let path = directory.path().join("sessions.db");
+            let workflow =
+                DesktopWorkflow::new(SessionService::open(&path).unwrap(), Arc::new(|| {}))
+                    .with_delivery(Arc::new(Input(outcome)));
+            let (endpoint, request, server) = if timeout {
+                fixture("{}", Duration::from_millis(600)).await
+            } else {
+                fixture_status("private body is not history", Duration::ZERO, 401).await
+            };
+            let mut configuration = configured(endpoint);
+            configuration.timeout_ms = 500;
+            let generation = workflow
+                .begin(
+                    RecognitionMode::TraditionalEnglish,
+                    Some("captured-target".into()),
+                )
+                .unwrap();
+            let entry = workflow
+                .finish(generation, "recover original", configuration, vec![])
+                .await
+                .unwrap();
+            request.await.unwrap();
+            server.await.unwrap();
+            let expected_processing = if timeout {
+                "llm-timeout"
+            } else {
+                "provider-auth"
+            };
+            let expected_delivery = match outcome {
+                0 => "target-changed",
+                1 => "delivery-unavailable",
+                _ => "delivery-unknown",
+            };
+            assert_eq!(entry.error.as_deref(), Some(expected_delivery));
+            assert_eq!(
+                serde_json::to_value(&entry.observations).unwrap()["latest_processing_error"],
+                expected_processing
+            );
+            if outcome == 2 {
+                assert_eq!(
+                    workflow.deliver(&entry.id).await.unwrap().status,
+                    SessionStatus::DeliveryUnknown
+                );
+            }
+            diagnostics.clear();
+            let id = entry.id;
+            drop(workflow);
+            let reopened = SessionService::open(&path).unwrap().get(&id).unwrap();
+            assert_eq!(reopened.error.as_deref(), Some(expected_delivery));
+            assert_eq!(
+                serde_json::to_value(&reopened.observations).unwrap()["latest_processing_error"],
+                expected_processing
+            );
+        }
+    }
+}
+
+#[tokio::test]
 async fn deepseek_non_thinking_effort_and_token_limit_reach_the_actual_http_wire() {
     let (endpoint,request,server)=fixture(r#"{"model":"actual-flash","usage":{"prompt_tokens":17,"completion_tokens":5},"choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"整理 API。"}}]}"#,Duration::ZERO).await;
     let mut configuration = configured(endpoint);

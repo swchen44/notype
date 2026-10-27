@@ -49,6 +49,8 @@ pub struct HistoryObservationsDto {
     pub latest_api_ms: Option<u64>,
     /// Application outcome label, not a raw provider error.
     pub latest_outcome: Option<String>,
+    /// Persisted safe processing failure, unaffected by delivery or diagnostics clearing.
+    pub latest_processing_error: Option<String>,
     /// Accounting cannot be asserted complete for every call.
     pub api_metadata_unavailable: bool,
 }
@@ -74,6 +76,7 @@ impl From<core::SessionObservations> for HistoryObservationsDto {
             latest_processing_ms: value.latest_processing_ms,
             latest_api_ms: value.latest_api_ms,
             latest_outcome: value.latest_outcome,
+            latest_processing_error: value.latest_processing_error,
             api_metadata_unavailable: value.api_metadata_unavailable,
         }
     }

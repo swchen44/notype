@@ -59,6 +59,8 @@ const HEADERS: &[&str] = &[
     "updated_at_utc",
     "scenario",
     "status",
+    "error",
+    "latest_processing_error",
     "recognition_mode",
     "recording_audio_seconds",
     "recording_quality",
@@ -302,6 +304,11 @@ fn cells(entry: &SessionEntry) -> Result<Vec<String>, CsvExportError> {
         entry.updated_at.clone(),
         label(&entry.scenario)?,
         label(&entry.status)?,
+        entry.error.clone().unwrap_or_default(),
+        observations
+            .latest_processing_error
+            .clone()
+            .unwrap_or_default(),
         entry
             .recognition_mode
             .as_ref()

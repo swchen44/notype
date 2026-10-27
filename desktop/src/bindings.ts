@@ -1422,7 +1422,7 @@ export type HistoryRecordingDto = { audio_ms: number; quality: string };
 /** Identity of the actual producer lease, independent of current settings. */
 export type HistoryModelDto = { id: string; name: string | null; backend: string | null };
 /** Durable nullable observations; zero means an observed zero. */
-export type HistoryObservationsDto = { recording: HistoryRecordingDto | null; requested_asr_model: string | null; actual_asr_model: HistoryModelDto | null; original_count: number | null; result_count: number | null; count_rule: string; asr_after_stop_ms: number | null; initial_stop_to_result_ms: number | null; latest_processing_kind: string | null; latest_processing_ms: number | null; latest_api_ms: number | null; latest_outcome: string | null; api_metadata_unavailable: boolean };
+export type HistoryObservationsDto = { recording: HistoryRecordingDto | null; requested_asr_model: string | null; actual_asr_model: HistoryModelDto | null; original_count: number | null; result_count: number | null; count_rule: string; asr_after_stop_ms: number | null; initial_stop_to_result_ms: number | null; latest_processing_kind: string | null; latest_processing_ms: number | null; latest_api_ms: number | null; latest_outcome: string | null; latest_processing_error: string | null; api_metadata_unavailable: boolean };
 /** Completeness applies independently to each metric across actual calls. */
 export type HistoryMetricStatus = "not_applicable" | "complete" | "partial" | "unknown";
 /** A complete total or a separately labeled known subtotal. */
