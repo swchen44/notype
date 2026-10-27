@@ -929,6 +929,18 @@ async getTextConfiguration() : Promise<Result<TextConfiguration, string>> {
     else return { status: "error", error: e  as any };
 }
 },
+async getConnectionActivity(): Promise<Result<ConnectionActivityView[], string>> {
+  try { return {status:"ok",data:await TAURI_INVOKE("get_connection_activity")}; }
+  catch (error) { if(error instanceof Error)throw error; return {status:"error",error:error as string}; }
+},
+async testTextConnection(expectedRevision:number,id:string): Promise<Result<null,string>> {
+  try { return {status:"ok",data:await TAURI_INVOKE("test_text_connection",{expectedRevision,id})}; }
+  catch(error){ if(error instanceof Error)throw error; return {status:"error",error:error as string}; }
+},
+async clearConnectionUsage(id:string): Promise<Result<null,string>> {
+  try { return {status:"ok",data:await TAURI_INVOKE("clear_connection_usage",{id})}; }
+  catch(error){ if(error instanceof Error)throw error; return {status:"error",error:error as string}; }
+},
 async createTextConnection(expectedRevision: number, displayName: string, kind: ConnectionKind, dialect: ProviderDialect): Promise<Result<ConnectionSettingsView, string>> {
     try { return { status: "ok", data: await TAURI_INVOKE("create_text_connection", { expectedRevision, displayName, kind, dialect }) }; }
     catch (e) { if (e instanceof Error) throw e; return { status: "error", error: e as string }; }
@@ -1460,10 +1472,15 @@ export type RequestResolutionView = {
 };
 export type CredentialSource = "app" | "home_env" | "none" | "unresolved";
 export type ConnectionView = ConnectionDraft & {
+  masked_api_key?: string | null;
   app_key_present: boolean; credential_present: boolean | null;
   credential_source: CredentialSource;
   effective_endpoint: string | null; resolution: RequestResolutionView | null;
   configuration_error: string | null;
+};
+export type ConnectionActivityView = {
+  configuration_revision:number; connection_id:string; summary:HistoryApiSummaryDto; test_success:boolean|null;
+  test_error:string|null; tested_at_ms:number|null;
 };
 export type ConnectionSettingsView = {
   schema_version: 2; revision: number; connections: ConnectionView[];

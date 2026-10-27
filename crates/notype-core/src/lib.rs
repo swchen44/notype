@@ -584,10 +584,10 @@ impl SessionService {
         read_entry(&*self.connection()?, id)
     }
 
-    /// Literal substring search across originals and results, newest first.
+    /// Literal substring search over the displayed result, or original without a result.
     pub fn search(&self, query: &str) -> Result<Vec<SessionEntry>, CoreError> {
         let connection = self.connection()?;
-        let mut statement = connection.prepare("SELECT id FROM sessions WHERE instr(lower(transcript),lower(?1))>0 OR instr(lower(coalesce(result,'')),lower(?1))>0 ORDER BY created_at DESC,id DESC")?;
+        let mut statement = connection.prepare("SELECT id FROM sessions WHERE instr(lower(coalesce(nullif(result,''),transcript)),lower(?1))>0 ORDER BY created_at DESC,id DESC")?;
         let ids = statement
             .query_map([query], |row| row.get::<_, String>(0))?
             .collect::<Result<Vec<_>, _>>()?;
@@ -685,6 +685,21 @@ impl SessionService {
                 return Err(CoreError::InvalidTransition);
             }
             connection.execute("UPDATE sessions SET status='pending',selection='original',review_confirmed=0,attempt=attempt+1,updated_at=?2 WHERE id=?1", params![id,now()])?;
+        }
+        self.get(id)
+    }
+
+    /// User-authorized automatic raw fallback. Cancellation and completed delivery are never revived.
+    pub fn original_for_delivery(&self, id: &str) -> Result<SessionEntry, CoreError> {
+        {
+            let connection = self.connection()?;
+            let entry = read_entry(&connection, id)?;
+            if !matches!(entry.status, SessionStatus::Recognized | SessionStatus::Failed | SessionStatus::Pending) || entry.transcript.trim().is_empty() {
+                return Err(CoreError::InvalidTransition);
+            }
+            let failed: bool = connection.query_row("SELECT recognition_failed FROM sessions WHERE id=?1",[id],|row|row.get(0))?;
+            if failed { return Err(CoreError::InvalidTransition); }
+            connection.execute("UPDATE sessions SET status='pending',selection='original',review_required=0,review_confirmed=0,attempt=attempt+1,updated_at=?2 WHERE id=?1",params![id,now()])?;
         }
         self.get(id)
     }

@@ -3,6 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { commands, type SessionDto, type WorkflowReadiness } from "@/bindings";
+import { historyText, historyMatches, historySegments } from "@/lib/historyPresentation";
 import { HistoryMetrics } from "./HistoryMetrics";
 import { Input } from "../../ui/Input";
 import { Button } from "../../ui/Button";
@@ -151,7 +152,7 @@ export const HistorySettings = () => {
       ) : entries.length === 0 ? (
         <p>{t(query ? "notype.history.noMatches" : "notype.history.empty")}</p>
       ) : (
-        entries.map((entry) => {
+        entries.filter((entry) => historyMatches(historyText(entry), query)).map((entry) => {
           const active =
             entry.status === "processing" || entry.status === "delivering";
           const frozen =
@@ -168,6 +169,16 @@ export const HistorySettings = () => {
               data-session-id={entry.id}
               className="border border-mid-gray/30 rounded-lg p-4 space-y-3"
             >
+              <time className="block text-sm text-text/60" dateTime={entry.created_at}>
+                {new Date(entry.created_at).toLocaleString(i18n.language)}
+              </time>
+              <p className="whitespace-pre-wrap break-words select-text cursor-text">
+                {historySegments(historyText(entry), query).map((part, index) =>
+                  part.match ? <mark key={index} className="bg-logo-primary/30 text-text rounded-sm">{part.text}</mark> : <span key={index}>{part.text}</span>,
+                )}
+              </p>
+              <details className="history-advanced space-y-3">
+                <summary className="cursor-pointer text-sm text-text/70">{t("notype.usability.advanced")}</summary>
               <div className="flex flex-wrap gap-2 justify-between text-sm text-text/70">
                 <span>
                   {t(`notype.scenarios.${entry.scenario}`)}
@@ -385,6 +396,7 @@ export const HistorySettings = () => {
                   {t("notype.history.delete")}
                 </Button>
               </div>
+              </details>
             </article>
           );
         })

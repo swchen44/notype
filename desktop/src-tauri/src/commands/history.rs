@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 use std::sync::OnceLock;
 use std::sync::{Arc, Mutex};
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 
 #[path = "history_metrics.rs"]
@@ -156,13 +156,91 @@ pub(crate) fn configuration_store(app: &AppHandle) -> Result<Arc<ConnectionStore
 }
 pub(crate) fn read_configuration(app: &AppHandle) -> Result<TextConfiguration, String> {
     crate::offline_bootstrap::admit()?;
-    let configuration = match configuration_store(app) {
+    if !settings::get_settings(app).post_process_enabled {
+        return Ok(TextConfiguration { processing_enabled: false, ..Default::default() });
+    }
+    let mut configuration = match configuration_store(app) {
         Ok(store) => store.processing_snapshot(&CurrentUserReader),
         Err(_) => crate::provider_config::failed_preparation(crate::provider_config::ConfigError(
             "configuration-storage-failed",
         )),
     };
+    if let Some(id) = configuration.connection_id.clone() {
+        match connection_activity_store(app) {
+            Ok(store) => configuration.observer_wrapper = Some(Arc::new(move |parent| store.observer(id.clone(), parent))),
+            Err(_) => configuration.preparation_failure = Some(notype_core::PreparationFailure::Storage),
+        }
+    }
     Ok(configuration)
+}
+
+fn connection_activity_store(app: &AppHandle) -> Result<Arc<crate::connection_activity::ActivityStore>,String> {
+    static STORE: OnceLock<Arc<crate::connection_activity::ActivityStore>>=OnceLock::new();
+    if let Some(store)=STORE.get(){return Ok(store.clone());}
+    let path=portable::app_data_dir(app).map_err(|_|"activity-storage-failed")?.join("connection_activity_v1.db");
+    let store=crate::connection_activity::ActivityStore::open(&path)?;
+    let _=STORE.set(store);
+    STORE.get().cloned().ok_or_else(||"activity-storage-failed".into())
+}
+/// Safe connection counters and last explicit test, independent of history details.
+#[derive(Serialize,Type)]
+pub struct ConnectionActivityView {
+    pub configuration_revision:u64,
+    pub connection_id:String,
+    pub summary:HistoryApiSummaryDto,
+    pub test_success:Option<bool>,
+    pub test_error:Option<String>,
+    pub tested_at_ms:Option<u64>,
+}
+#[tauri::command]
+#[specta::specta]
+pub fn get_connection_activity(app:AppHandle)->Result<Vec<ConnectionActivityView>,String>{
+    let configuration=configuration_store(&app)?.view().map_err(|e|e.to_string())?;
+    let store=connection_activity_store(&app)?;
+    configuration.connections.iter().map(|connection|{
+        let test=store.last_test(&connection.connection.id,configuration.revision)?;
+        Ok(ConnectionActivityView { configuration_revision:configuration.revision,connection_id:connection.connection.id.clone(),summary:store.summary(&connection.connection.id)?.into(),test_success:test.as_ref().map(|t|t.0),test_error:test.as_ref().and_then(|t|t.1.clone()),tested_at_ms:test.map(|t|t.2) })
+    }).collect()
+}
+#[tauri::command]
+#[specta::specta]
+pub fn clear_connection_usage(app:AppHandle,id:String)->Result<(),String>{
+    if !configuration_store(&app)?.view().map_err(|e|e.to_string())?.connections.iter().any(|c|c.connection.id==id){return Err("configuration-connection-missing".into());}
+    connection_activity_store(&app)?.clear(&id)?;
+    let _=app.emit("text-connection-activity-changed",());
+    Ok(())
+}
+/// One explicit bounded generation probe; never changes active connection or speech history.
+#[tauri::command]
+#[specta::specta]
+pub async fn test_text_connection(app:AppHandle,expected_revision:u64,id:String)->Result<(),String>{
+    use notype_core::{TextRequest,Scenario,CancellationToken,TextFailure};
+    let store=connection_activity_store(&app)?;
+    let current=configuration_store(&app)?.view().map_err(|e|e.to_string())?;
+    if current.revision!=expected_revision {return Err("configuration-conflict".into());}
+    if !current.connections.iter().any(|c|c.connection.id==id){return Err("configuration-connection-missing".into());}
+    let _lease=store.admit_test(&id)?;
+    let result=async {
+        let mut configuration=configuration_store(&app)?.resolve_connection(expected_revision,&id,&CurrentUserReader).map_err(|e|e.to_string())?;
+        configuration.timeout_ms=configuration.timeout_ms.min(15_000);
+        configuration.max_output_tokens=Some(if configuration.thinking_override==Some(true){1024}else{16});
+        configuration.prompts.dictation="This is an explicit connection test. Reply with OK only.".into();
+        let meter=store.clone();let connection=id.clone();
+        configuration.observer_wrapper=Some(Arc::new(move|parent|meter.observer(connection.clone(),parent)));
+        let processor=crate::workflow::text_processor(configuration);
+        processor.generate_observed(TextRequest {transcript:"Reply OK.".into(),glossary:vec![],recognition_mode:None,scenario:Scenario::Dictation,translation_target:None,source_context:Default::default(),back_translation:false},CancellationToken::new(),Arc::new(crate::connection_activity::ProbeObserver)).await.map(|_|()).map_err(|failure| match failure {
+            TextFailure::Preparation(value)=>value.code(),
+            TextFailure::Provider(value)=>value.history_code(false),
+            TextFailure::Timeout=>"processing-timeout",
+            TextFailure::Cancelled=>"processing-cancelled",
+            TextFailure::InvalidResponse=>"processing-invalid-response",
+            TextFailure::HistoryStorage=>"history-storage-failed",
+            _=>"processing-failed",
+        }.to_owned())
+    }.await;
+    store.test_result(&id,expected_revision,result.is_ok(),result.as_ref().err().map(String::as_str))?;
+    let _=app.emit("text-connection-activity-changed",());
+    result
 }
 /// Return only safe fields; no key resolution is performed while listing records.
 #[tauri::command]

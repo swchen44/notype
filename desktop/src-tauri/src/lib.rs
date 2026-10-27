@@ -18,6 +18,7 @@ mod bootstrap_selection;
 #[cfg(test)]
 mod clipboard;
 mod commands;
+mod connection_activity;
 mod data_policy;
 mod diagnostic_files;
 mod diagnostics;
@@ -878,6 +879,9 @@ pub fn run(cli_args: CliArgs) {
             commands::history::get_history_entries,
             commands::history::export_history_csv,
             commands::history::get_text_configuration,
+            commands::history::get_connection_activity,
+            commands::history::clear_connection_usage,
+            commands::history::test_text_connection,
             commands::history::create_text_connection,
             commands::history::save_text_connection,
             commands::history::activate_text_connection,

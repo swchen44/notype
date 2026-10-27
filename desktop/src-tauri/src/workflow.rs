@@ -413,6 +413,14 @@ impl DesktopWorkflow {
         if entry.error.as_deref() == Some("recognition-script-failed") {
             return Ok(entry);
         }
+        if !configuration.processing_enabled {
+            let raw = self.sessions.original_for_delivery(&entry.id)?;
+            return tokio::select! {
+                biased;
+                _=cancellation.cancelled()=>self.sessions.cancel(&raw.id),
+                delivered=self.deliver(&raw.id)=>delivered,
+            };
+        }
         let processing_started = std::time::Instant::now();
         diagnose(Phase::TextProcessing, Outcome::Started, None);
         let result = tokio::select! {
@@ -438,10 +446,12 @@ impl DesktopWorkflow {
             ),
         );
         let result = result?;
+        let result = if result.status == SessionStatus::Failed && !cancellation.is_cancelled() {
+            self.sessions.original_for_delivery(&result.id)?
+        } else { result };
         (self.notify)();
         if result.status == SessionStatus::Pending
             && !result.review_required
-            && result.selection == notype_core::TextSelection::Polished
         {
             tokio::select! {
                 biased;

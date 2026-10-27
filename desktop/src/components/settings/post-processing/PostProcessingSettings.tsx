@@ -8,14 +8,17 @@ import {
 } from "@/bindings";
 import { Input } from "../../ui/Input";
 import { Button } from "../../ui/Button";
-import { CustomWords } from "../CustomWords";
 import { ScenarioSettings } from "./ScenarioSettings";
 import { ConnectionEditor } from "./ConnectionEditor";
+import { PostProcessingToggle } from "../PostProcessingToggle";
+import { ConnectionActivity } from "./ConnectionActivity";
+import { connectionConfigurationChanged, useConnectionActivity } from "@/hooks/useConnectionActivity";
 
 type SettingsResult = Awaited<ReturnType<typeof commands.createTextConnection>>;
 
 export const PostProcessingSettings = () => {
   const { t } = useTranslation();
+  const {activity,refresh:refreshActivity}=useConnectionActivity();
   const [configuration, setConfiguration] =
     useState<ConnectionSettingsView | null>(null);
   const [busy, setBusy] = useState(false);
@@ -35,6 +38,7 @@ export const PostProcessingSettings = () => {
     setConfiguration((current) =>
       !current || updated.revision >= current.revision ? updated : current,
     );
+    connectionConfigurationChanged();
   }, []);
   useEffect(() => {
     const epoch = ++requestEpoch.current;
@@ -131,6 +135,7 @@ export const PostProcessingSettings = () => {
   return (
     <section className="max-w-3xl w-full mx-auto space-y-4 break-words">
       <h2 className="font-semibold">{t("notype.connections.title")}</h2>
+      <PostProcessingToggle descriptionMode="inline" />
       <p className="text-sm text-text/70">
         {t("notype.connections.description")}
       </p>
@@ -244,6 +249,9 @@ export const PostProcessingSettings = () => {
                 {configuration.active_connection_id === connection.id && (
                   <p role="status">{t("notype.connections.active")}</p>
                 )}
+                {connection.masked_api_key && <p className="font-mono text-sm">{t("notype.usability.savedKey")}: {connection.masked_api_key}</p>}
+                <label className="flex gap-2 items-center text-sm"><input type="radio" name="active-text-connection" aria-label={t("notype.usability.selectConnection",{name:connection.display_name})} checked={configuration.active_connection_id===connection.id} onChange={()=>void mutate(()=>commands.activateTextConnection(configuration.revision,connection.id))}/>{t("notype.usability.useConnection")}</label>
+                <ConnectionActivity id={connection.id} revision={configuration.revision} activity={activity.find(item=>item.connection_id===connection.id)} refresh={refreshActivity}/>
                 <div className="flex flex-wrap gap-2">
                   <Button
                     variant="secondary"
@@ -317,7 +325,6 @@ export const PostProcessingSettings = () => {
         onChange={apply}
         disabled={busy}
       />
-      <CustomWords descriptionMode="tooltip" />
     </section>
   );
 };

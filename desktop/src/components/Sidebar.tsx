@@ -1,6 +1,8 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
-import { Cog, FlaskConical, History, Info, Sparkles, Cpu } from "lucide-react";
+import { Cog, FlaskConical, History, Info, Sparkles, Cpu, BookOpen } from "lucide-react";
+import { DictionarySettings } from "./settings/DictionarySettings";
+import { ConnectionStatus } from "./ConnectionStatus";
 import HandyHand from "./icons/HandyHand";
 import { useSettings } from "../hooks/useSettings";
 import {
@@ -49,10 +51,11 @@ export const SECTIONS_CONFIG = {
     component: ModelsSettings,
     enabled: () => true,
   },
-  advanced: {
-    labelKey: "sidebar.advanced",
-    icon: Cog,
-    component: AdvancedSettings,
+
+  dictionary: {
+    labelKey: "notype.usability.dictionary",
+    icon: BookOpen,
+    component: DictionarySettings,
     enabled: () => true,
   },
   postprocessing: {
@@ -66,6 +69,12 @@ export const SECTIONS_CONFIG = {
     icon: FlaskConical,
     component: DebugSettings,
     enabled: (settings) => settings?.debug_mode ?? false,
+  },
+  advanced: {
+    labelKey: "sidebar.advanced",
+    icon: Cog,
+    component: AdvancedSettings,
+    enabled: () => true,
   },
   about: {
     labelKey: "sidebar.about",
@@ -126,6 +135,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           );
         })}
       </div>
+      <ConnectionStatus />
     </div>
   );
 };

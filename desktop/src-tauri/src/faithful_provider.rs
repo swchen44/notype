@@ -75,6 +75,14 @@ impl RuntimeCredential {
 /// Locally persisted provider preferences, cloned into each recording's processing snapshot.
 /// Contains credentials and deliberately does not implement Debug.
 pub struct TextConfiguration {
+    /// Per-session master switch; disabling it bypasses AI in all three scenarios.
+    #[serde(skip)]
+    #[specta(skip)]
+    pub processing_enabled: bool,
+    /// Runtime composition for connection accounting; never serialized or logged.
+    #[serde(skip)]
+    #[specta(skip)]
+    pub observer_wrapper: Option<Arc<dyn Fn(Arc<dyn ApiCallObserver>) -> Arc<dyn ApiCallObserver> + Send + Sync>>,
     /// Runtime source association only; absent from serialized views/reports.
     #[serde(skip)]
     #[specta(skip)]
@@ -119,6 +127,8 @@ pub struct TextConfiguration {
 impl Default for TextConfiguration {
     fn default() -> Self {
         Self {
+            processing_enabled: true,
+            observer_wrapper: None,
             connection_id: None,
             runtime_credential: None,
             preparation_failure: None,
@@ -426,6 +436,7 @@ impl TextConfiguration {
 }
 
 struct ChatProcessor {
+    observer_wrapper: Option<Arc<dyn Fn(Arc<dyn ApiCallObserver>) -> Arc<dyn ApiCallObserver> + Send + Sync>>,
     experiment: Option<experiment::ExperimentContract>,
     credential: Option<RuntimeCredential>,
     request_parameters: Option<notype_core::observations::RequestParameters>,
@@ -500,6 +511,7 @@ impl ChatProcessor {
         }
         let client = client.build().map_err(|_| invalid)?;
         Ok(Self {
+            observer_wrapper: configuration.observer_wrapper,
             experiment: None,
             credential,
             request_parameters: configuration.request_parameters,
@@ -645,6 +657,10 @@ impl ChatProcessor {
         scenario: Scenario,
     ) -> GenerationFuture {
         let client = self.client.clone();
+        let observer = observer.map(|observer| match &self.observer_wrapper {
+            Some(wrap) => wrap(observer),
+            None => observer,
+        });
         let endpoint = self.endpoint.clone();
         let model = self.model.clone();
         let authorization = self.authorization.clone();

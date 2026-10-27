@@ -1,6 +1,8 @@
 //! Captures only application metadata and opaque original-control identities.
 //! Native handles stay in memory; no title, field value, clipboard, or Enter API.
 use notype_core::{DeliveryAdapter, DeliveryFuture, DeliveryOutcome, DeliveryRequest};
+#[path="native_target_policy.rs"]
+mod target_policy;
 #[cfg(windows)]
 use std::sync::Arc;
 
@@ -382,18 +384,13 @@ mod platform {
             let mut class = [0u16; 64];
             let size = GetClassNameW(control, class.as_mut_ptr(), 64);
             let class = String::from_utf16(class.get(..size.max(0) as usize)?).ok()?;
-            if !["Edit", "RichEdit20W", "RICHEDIT50W"]
-                .iter()
-                .any(|expected| class.eq_ignore_ascii_case(expected))
-            {
-                return None;
-            }
+            let (created, image) = process_identity(pid)?;
+            super::target_policy::control_kind(&class,&image)?;
             let style = GetWindowLongPtrW(control, -16);
             // Read-only EM_REPLACESEL can still write; password fields are never supported.
             if style & (0x800 | 0x20) != 0 {
                 return None;
             }
-            let created = process_identity(pid)?.0;
             let mut start = 0u32;
             let mut end = 0u32;
             message(

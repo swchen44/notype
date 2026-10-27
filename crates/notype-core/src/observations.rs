@@ -485,7 +485,8 @@ impl ApiReceipt {
         }
         .sanitized()
     }
-    pub(crate) fn sanitized(mut self) -> Self {
+    /// Remove invalid/unbounded metadata before storing outside a session ledger.
+    pub fn sanitized(mut self) -> Self {
         self.total_tokens = self.total_tokens.filter(|value| *value <= MAX_USAGE);
         self.reported_model = self.reported_model.filter(|s| safe_label(s));
         self.reported_effort = self.reported_effort.filter(|s| valid_effort(s));
@@ -706,6 +707,15 @@ impl Decimal {
             )
         }
     }
+}
+
+/// Aggregate actual sent calls with the same exact money/unknown rules as history.
+pub fn summarize_api_calls(calls: impl IntoIterator<Item = (ApiCallDescriptor, ApiReceipt)>) -> ApiSummary {
+    let mut accumulator = SummaryAccumulator::new(false);
+    for (descriptor, receipt) in calls {
+        accumulator.add(descriptor, receipt.sanitized());
+    }
+    accumulator.finish()
 }
 
 pub(crate) struct SummaryAccumulator {

@@ -236,6 +236,8 @@ pub struct ConnectionView {
     pub connection: ConnectionDraft,
     /// Presence only of this record's App-owned credential.
     pub app_key_present: bool,
+    /// User-requested UI confirmation only; short credentials stay fully masked.
+    pub masked_api_key: Option<String>,
     /// None means eligible home fallback has not been resolved by an operation.
     pub credential_present: Option<bool>,
     /// app, home_env, none or unresolved; no value/prefix/suffix.
@@ -373,6 +375,13 @@ impl ConnectionStore {
         reader: &dyn credentials::CredentialReader,
     ) -> Result<crate::workflow::TextConfiguration, ConfigError> {
         resolve_selected(&self.snapshot()?, reader)
+    }
+    /// Resolve only the explicitly tested connection without changing active selection.
+    pub fn resolve_connection(&self, revision: u64, id: &str, reader: &dyn credentials::CredentialReader) -> Result<crate::workflow::TextConfiguration, ConfigError> {
+        let state = self.snapshot()?;
+        if state.revision != revision { return Err(ConfigError("configuration-conflict")); }
+        let record = state.connections.iter().find(|record| record.draft.id == id).ok_or(ConfigError("configuration-connection-missing"))?;
+        resolve_record(&state, record, record.draft.clone(), KeyAction::Keep, reader, true)
     }
     /// Resolve an explicit existing editor snapshot for GET only. This does not
     /// persist its fields/key, activate, require a model or create generation rows.
@@ -983,6 +992,16 @@ pub(crate) fn loopback(url: &reqwest::Url) -> bool {
 fn binding(draft: &ConnectionDraft) -> Result<String, ConfigError> {
     Ok(format!("{:?}|{}", draft.dialect, canonical_chat(draft)?))
 }
+/// Expose only a bounded head/tail confirmation; never reveal a short key in full.
+pub fn mask_key(value: &str) -> String {
+    let chars: Vec<_> = value.chars().collect();
+    if chars.len() <= 8 {
+        "********".into()
+    } else {
+        format!("{}****{}", chars[..4].iter().collect::<String>(), chars[chars.len()-4..].iter().collect::<String>())
+    }
+}
+
 fn view(state: &StoredSettings) -> ConnectionSettingsView {
     ConnectionSettingsView {
         schema_version: 2,
@@ -1023,6 +1042,7 @@ fn view(state: &StoredSettings) -> ConnectionSettingsView {
                 ConnectionView {
                     connection: record.draft.clone(),
                     app_key_present: has_key,
+                    masked_api_key: record.key.as_ref().map(|key| mask_key(&key.value)),
                     credential_present: if effective_app_key {
                         Some(true)
                     } else if record.draft.authentication == Authentication::None || !eligible {
