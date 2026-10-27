@@ -1,10 +1,10 @@
 # notype 開發待辦
 
-## 目前待辦：d3 失敗唯讀診斷與尚未執行的人工驗收（2026-10-27）
+## 目前待辦：V10已核准，d4失敗後續與人工驗收待完成（2026-10-27）
 
-- [x] [V8計畫](https://github.com/swchen44/notype/issues/14#issuecomment-6433597289)／[Astra0](https://github.com/swchen44/notype/issues/14#issuecomment-6433619965) 範圍的程式、86項current／64項retained證據、完整Spec0／Standards0及[root carry／admission](https://github.com/swchen44/notype/issues/14#issuecomment-6433907847)已完成；準備通過不是實際驗收。
-- [ ] [V9計畫](https://github.com/swchen44/notype/issues/14#issuecomment-6434094625)已獲[實際GPT-6-Astra APPROVED0](https://github.com/swchen44/notype/issues/14#issuecomment-6434122551)；closure／carry、production修正、current tests、完整來源Spec0／Standards0、root admission及唯一一次d4實際執行均待完成，目前未執行d4。[實際d3 FAILED](https://github.com/swchen44/notype/issues/14#issuecomment-6433977441)紀錄保留。[唯讀診斷已證實預設參數遺失](https://github.com/swchen44/notype/issues/14#issuecomment-6434068783)導致v7-metadata-fixed-task，原通用錯誤為v7-session-worker-rejected。唯一一次執行仍FAILED，未到達ZIP／既有副本驗證或公開Node check；完整failure／state及accountingComplete／全部owned children與Workers terminal保留，尚未修正或重試。
-- [ ] 未來實際完整性驗收通過後，才更新交付結果並發布已授權的private prerelease；現在沒有已驗收下載，原d2 extract與其他舊失敗均保留。
+- [x] V9當輪228項測試、實際前置鏈診斷與完整來源Spec0／Standards0已完成。[實際d4](https://github.com/swchen44/notype/issues/14#issuecomment-6434963906)接受predecessor及透過公開介面完成ZIP／獨立解壓內容檢查的adopt-existing證明，但後續公開Node CLI exit2，整體FAILED；完整失敗state／accounting及全部terminal保留，不當作整包驗收。
+- [ ] 依[V10計畫](https://github.com/swchen44/notype/issues/14#issuecomment-6435007823)／[實際Astra0](https://github.com/swchen44/notype/issues/14#issuecomment-6435055920)完成失敗closure／carry、wrapper實作／測試、完整來源雙軸0及root fresh admission，之後才可唯一一次d5；目前全部待完成、未執行d5。實際d4 stderr未保留；已確認的自有public-seam診斷不等於實際整包CLI重試，亦不支持產品／ZIP／CLI程式修改。
+- [ ] 未來實際完整性驗收通過後，才更新交付結果並發布已授權的private prerelease；現在沒有已驗收下載，原d2／d3／d4與其他舊失敗均保留。
 - [ ] 後續人工優先順序與完整tested／untested／failed矩陣看 [README](README.md#windows-11-測試版與驗證狀態)；原生GUI／人聲／公司服務／clean-host／CSV／五App等仍待驗收。詳情見 [目前驗證狀態](docs/verification/delivery-v8-preparation.md) 與 [HANDOFF](HANDOFF.md)。
 
 這是docs-only checkpoint；root來源T與runtime A、舊程式／gates／輸出及失敗均保留。以下待辦為歷史快照，時態以本節與README為準。

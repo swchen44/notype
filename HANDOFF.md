@@ -1,10 +1,10 @@
 # Windows 11 開發接手
 
-## 目前 checkpoint：V8 實際 d3 前置證明失敗，僅唯讀診斷（2026-10-27）
+## 目前 checkpoint：d4 內容檢查前段通過、公開Node檢查失敗；V10已核准（2026-10-27）
 
-使用者要求的完整 tested／untested／failed 清單以 [README](README.md#windows-11-測試版與驗證狀態) 為單一入口；詳細準備與失敗見 [delivery-v8-preparation](docs/verification/delivery-v8-preparation.md)。R10 四階段／兩項原生 fixtures 已通過；原 d2 extract 仍 FAILED、沒有成功 audit。V8 程式、86項current／64項retained證據、完整Spec0／Standards0及[root carry／admission](https://github.com/swchen44/notype/issues/14#issuecomment-6433907847)已完成。
+使用者要求的完整 tested／untested／failed 清單以 [README](README.md#windows-11-測試版與驗證狀態) 為單一入口；詳細準備與失敗見 [delivery-v8-preparation](docs/verification/delivery-v8-preparation.md)。R10四階段／兩項原生fixtures及V9當輪228項測試、實際前置鏈診斷與完整Spec0／Standards0已通過。[實際d4](https://github.com/swchen44/notype/issues/14#issuecomment-6434963906)唯一一次執行接受predecessor及adopt-existing證明，含ZIP／獨立解壓strict-model等公開介面內容檢查，但後續公開bundled-Node CLI exit2，整體仍FAILED；完整失敗state／accounting與全部terminal保留，d2／d3等舊失敗亦保留。
 
-[V8計畫](https://github.com/swchen44/notype/issues/14#issuecomment-6433597289)／[Astra0](https://github.com/swchen44/notype/issues/14#issuecomment-6433619965) 的唯一一次實際d3於04:41 UTC啟動後約4.4秒在predecessor-proof以v7-session-worker-rejected失敗，未接受前置證明，未到達ZIP／既有副本驗證或公開Node check。[完整失敗紀錄](https://github.com/swchen44/notype/issues/14#issuecomment-6433977441)保留完整failure／state、accountingComplete及全部owned children／Workers terminal。[唯讀診斷已證實預設參數遺失](https://github.com/swchen44/notype/issues/14#issuecomment-6434068783)，觸發v7-metadata-fixed-task；14個路徑完全相同。[V9計畫](https://github.com/swchen44/notype/issues/14#issuecomment-6434094625)已獲[實際GPT-6-Astra APPROVED0](https://github.com/swchen44/notype/issues/14#issuecomment-6434122551)；closure／carry、production修正、current tests、完整來源Spec0／Standards0、root admission及唯一一次d4實際執行均待完成，目前未執行d4。沒有Release或已驗收下載。
+實際stderr已丟棄，不能重建成已觀測錯誤碼；來源與5項自有public-seam檢查確認wrapper缺少資料目錄規劃環境，僅增加自有未來絕對NOTYPE_DATA_DIR可讓小型CLI通過且不建立目錄／啟動App／接觸profile，並非實際整包CLI重試或產品／ZIP修正依據。[V10計畫](https://github.com/swchen44/notype/issues/14#issuecomment-6435007823)已獲[實際Astra0](https://github.com/swchen44/notype/issues/14#issuecomment-6435055920)；closure／carry、wrapper實作、測試、完整來源雙軸0、root fresh admission及唯一一次d5均待完成，沒有實際d5或Release。
 
 此文件commit僅更新狀態；root建置checkout仍凍結T=`a7fc1d79822544e6f4858cb32bcd809067367cc3`，App實編譯A=`a180a2360009448cdf6e2f4f8e7363e0eb2dbf30`不變。所有舊失敗與outputs保留；以下checkpoint是歷史，時態與下一步以本節及README為準。
 

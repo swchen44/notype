@@ -1,4 +1,4 @@
-# Delivery V8 準備狀態（2026-10-27）
+# Delivery V8～V10 準備與實際失敗狀態（2026-10-27）
 
 這是來源／準備／實際失敗的狀態紀錄，不是成品驗收通過 receipt。完整人工待驗收矩陣以 [README](../../README.md#windows-11-測試版與驗證狀態) 為準。
 
@@ -19,11 +19,21 @@ V7 準備 receipt `p14-delivery-v7-final-receipt.json` 的狀態是 `PREPARATION
 
 [新的 preparation carry／轉換見證與 root 獨立重播紀錄](https://github.com/swchen44/notype/issues/14#issuecomment-6433705942)保留。V8 程式與86項current測試已通過，另保留未變更session的64項證據（不是重新執行），全部fixture owned children／Workers terminal；完整獨立Spec0／Standards0及leases交還已完成，見[完整審查紀錄](https://github.com/swchen44/notype/issues/14#issuecomment-6433879274)。[root carry／當下 admission 重播](https://github.com/swchen44/notype/issues/14#issuecomment-6433907847)已通過，包含後續已知正向變化；這些準備與admission並非成品驗收。
 
-## 實際 d3 失敗與當前阻塞
+## 保留的實際 d3 失敗
 
 [實際安全紀錄](https://github.com/swchen44/notype/issues/14#issuecomment-6433977441)：2026-10-27 04:41 UTC，root啟動唯一一次固定d3 finalize，約4.4秒後在predecessor-proof以v7-session-worker-rejected失敗，沒有前置證明被接受。ZIP／既有副本驗證、extracted-content及隨附Node公開檢查均未到達。完整failure及完整state已保存並核對內容hash綁定；accountingComplete=true、全部owned children／Workers terminal、terminalUnproved=false、observationErrors為空且persistenceIncomplete=false。
 
-當次最大parent gap約112ms、space age586ms、allocation age795ms、source age676ms，均在原guards內；這不是已證實的stale-monitor失敗。[後續唯讀診斷](https://github.com/swchen44/notype/issues/14#issuecomment-6434068783)已確認底層v7-metadata-fixed-task：原noReparse(paths, tree=false)的實際preflight呼叫省略第二參數，替換adapter遺失該預設值，收到undefined卻須嚴格匹配false，因而拒絕有效呼叫。14個路徑逐位元組相同，無需路徑正規化。實際Worker鏈在2.51秒重現、最小probe約138ms；僅在診斷副本還原預設值的13項反事實檢查通過，未執行production修正或重試，也不是完整predecessor／finalization通過。[V9計畫](https://github.com/swchen44/notype/issues/14#issuecomment-6434094625)已獲[實際GPT-6-Astra APPROVED0](https://github.com/swchen44/notype/issues/14#issuecomment-6434122551)；closure／carry、production修正、current tests、完整來源Spec0／Standards0、root admission及唯一一次d4實際執行均待完成，目前未執行d4。舊code／gates／failed records及d2 ZIP／獨立解壓副本保留原狀。
+當次最大parent gap約112ms、space age586ms、allocation age795ms、source age676ms，均在原guards內；這不是已證實的stale-monitor失敗。[後續唯讀診斷](https://github.com/swchen44/notype/issues/14#issuecomment-6434068783)已確認底層v7-metadata-fixed-task：原noReparse(paths, tree=false)的實際preflight呼叫省略第二參數，替換adapter遺失該預設值，收到undefined卻須嚴格匹配false，因而拒絕有效呼叫。14個路徑逐位元組相同，無需路徑正規化。實際Worker鏈在2.51秒重現、最小probe約138ms；僅在診斷副本還原預設值的13項反事實檢查通過。該次診斷不是production修正或完整predecessor／finalization通過；後續V9實作與實際結果分開記錄如下。舊code／gates／failed records及d2 ZIP／獨立解壓副本保留原狀。
+
+## V9準備完成與實際d4失敗
+
+[V9計畫](https://github.com/swchen44/notype/issues/14#issuecomment-6434094625)／[實際Astra0](https://github.com/swchen44/notype/issues/14#issuecomment-6434122551)範圍的實作、228項當輪測試及實際唯讀前置鏈診斷已通過，完整獨立Spec0／Standards0與root admission亦完成。[實際紀錄與public-seam診斷](https://github.com/swchen44/notype/issues/14#issuecomment-6434963906)記載：d4唯一一次執行接受predecessor及adopt-existing證明，後者包含透過公開檢查介面完成的實際ZIP／hash／清單，以及獨立解壓副本strict-model／來源／bootstrap檢查；之後公開bundled-Node CLI在public-check階段exit2，整體FAILED。lastAcceptedProof為adopt-existing不是整包成功；完整failed report／state、accountingComplete、全部owned children／Workers terminal與無observation／persistence errors均保留。d2／d3失敗不改標成功。
+
+實際子程序stderr已被丟棄，不能把後續推論改稱留存的實際錯誤碼。公開來源顯示--check亦要求有效資料目錄規劃，而驗證wrapper的最小環境沒有APPDATA或NOTYPE_DATA_DIR。5項自有小型檢查透過真正public inspectRelease與未改產品邏輯的CLI副本，證實舊環境invalid-data-directory／exit2，只增加自有未來絕對NOTYPE_DATA_DIR即能exit0／符合95-byte輸出，且沒有建立資料目錄、啟動App或存取profile。CLI副本只用合成23-byte runtime的execPath身分測試介面，兩個owned Node children均terminal；這不是實際整包CLI重試，也不支持產品／ZIP／CLI程式修正。
+
+## V10已核准，實作與唯一一次d5均待完成
+
+[V10計畫](https://github.com/swchen44/notype/issues/14#issuecomment-6435007823)已獲[實際GPT-6-Astra APPROVED／0 unresolved](https://github.com/swchen44/notype/issues/14#issuecomment-6435055920)。失敗closure／完整carry、wrapper限定資料目錄環境與安全telemetry／accepted-prefix摘要實作、當輪測試、完整獨立來源雙軸0、root fresh admission及唯一一次d5均尚待完成；目前沒有實際d5或實際整包CLI重試。既有有限caps／phase／floors／guards／reserve不增加，所有舊失敗與未知觀測繼續累計保留。計畫核准不代替這些前置條件或實際驗收。
 
 ## 實際完成與發布的界線
 
