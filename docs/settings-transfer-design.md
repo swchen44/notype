@@ -1,6 +1,6 @@
 # YAML settings transfer design (#34)
 
-Status: transfer source is implemented; native restart/package acceptance is pending. Accepted decisions are
+Status: transfer source, native synthetic restart and complete package acceptance passed; see [receipt](verification/settings-transfer-native.md). Accepted decisions are
 [recorded in issue #34](https://github.com/swchen44/notype/issues/34#issuecomment-6462790837).
 The user has waived further Astra plan reviews. Existing settings/tuning source
 and local candidate acceptance remain separate from this planned feature.

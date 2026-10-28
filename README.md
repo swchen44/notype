@@ -4,7 +4,7 @@
 
 notype 是為繁體中文／英文與簡體中文／英文混合口述設計的桌面語音輸入工具。透過快捷鍵開始說話，在本機完成語音辨識，保留可查閱、複製及匯出的文字歷史；需要整理、翻譯或代寫時，再接上自己選擇的文字 AI 服務。
 
-[下載 Windows 11 測試版](https://github.com/swchen44/notype/releases/tag/v0.1.1-local.2) · [安裝與啟動](#安裝與啟動) · [第一次使用](#第一次使用) · [開發者手冊](development.md)
+[下載 Windows 11 測試版](https://github.com/swchen44/notype/releases/tag/v0.1.1-local.6) · [安裝與啟動](#安裝與啟動) · [第一次使用](#第一次使用) · [開發者手冊](development.md)
 
 ## 為什麼使用 notype
 
@@ -104,7 +104,7 @@ call ".\Start-notype.cmd"
 
 **本版的連線測試與用量。** 每筆連線可輸入 key、核對遮罩後的頭尾、測試連線與清除用量；左下角顯示 AI 開關、目前目的地及最近實際測試狀態。用量從此 App 開始追蹤或最近清除起累計，包含測試連線；清除不刪歷史。只有 provider 實際回報的金額會計入，未回報就顯示未知。測試按鈕會向該端點發送一次短文字請求。
 
-**API key 的位置。** 目前下載包 v0.1.1-local.2 請先按連線的「編輯」，選擇 Bearer 認證，再將「App 金鑰操作」切成「替換」，即可輸入 key。最新原始碼與本機候選版已改成直接顯示輸入框，並補上新增後的設定引導；這項修正尚未包含在上述 ZIP，見 [#32 驗證與版本範圍](docs/verification/provider-setup.md)。
+**API key 的位置。** 新增連線後按「編輯」，選擇 Bearer 認證，直接在 API key 欄輸入並儲存；留白保留目前 key。每個 server 可分別設定口述／翻譯／隨便問特調提示詞，預設 None，附加到場景共用提示詞。進階設定可匯出／匯入 YAML；包含 App key 的選項預設關閉，勾選後會以明文匯出。匯入會先顯示差異與 key 處理方式，確認後整份取代並重啟；未附 key 僅保留同一連線與 API 位址綁定的原 key。
 
 ## 回報問題
 
@@ -114,9 +114,9 @@ call ".\Start-notype.cmd"
 
 ## Windows 11 測試版與驗證狀態
 
-v0.1.1-local.2 的來源檢查、Windows contracts、原生編譯、完整 ZIP／獨立解壓及逐檔雜湊核對已完成。驗證細節見 [#31 紀錄](docs/verification/usability.md)。這涵蓋指定來源及測試環境，不等同所有電腦的驗收。
+v0.1.1-local.6 已完成完整 CI、Windows 原生編譯、1,733 檔案的 ZIP／獨立解壓核對，以及 Computer Use 的原生 YAML 匯出、差異預覽、取消、確認套用、自動重啟與重啟後詞彙核對。這些原生測試使用獨立合成設定，不等同所有電腦或所有連線的驗收，詳見 [YAML 原生驗證](docs/verification/settings-transfer-native.md)。
 
-後續本機候選版 `0.1.1-local.5` 已加入 AI server 狀態顯示、設定分頁及每個 server 的三場景獨立特調提示詞。Gemini 已在 App 以使用者確認的免費專案測試成功（`gemini-3.1-flash-lite`，最低 thinking）；回報 input 50／output 1 token，實際費用未知。這些變更**尚未包入上述 Release**。YAML 設定匯入／匯出來源與畫面測試已完成，仍待新原生套件的重啟驗證，詳見[驗證紀錄](docs/verification/server-tuning-status.md)與 [YAML 設計](docs/settings-transfer-design.md)。
+本版亦包含 AI server 狀態、設定分頁及每個 server 的三場景特調提示詞。Gemini 曾於前一本機候選版以使用者確認的免費專案完成實測（gemini-3.1-flash-lite，最低 thinking；input50／output1，實際費用未知）。真人錄音、快捷鍵延遲、其他目標 App、公司內網與乾淨 Windows 11 主機仍待驗收。
 
 | 已執行 | 範圍 |
 | --- | --- |
