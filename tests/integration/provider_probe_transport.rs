@@ -41,6 +41,24 @@ impl notype_core::TextProcessor for ObservedOnly {
 fn good_reply() -> Value {
     json!({"model":"google/gemma-4-31b-it","usage":{"prompt_tokens":5,"completion_tokens":2,"total_tokens":7,"cost":0},"choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"OK"}}]})
 }
+pub(super) fn assert_actual_fee(entry: &notype_core::SessionEntry, amount: Option<&str>) {
+    use notype_core::observations::Completeness;
+    let fees = &entry.api_summary.fees;
+    if let Some(amount) = amount {
+        assert_eq!(fees.status, Completeness::Complete);
+        assert_eq!(fees.reported_calls, 1);
+        for amounts in [&fees.totals, &fees.known_subtotals] {
+            assert_eq!(amounts.len(), 1);
+            assert_eq!(amounts[0].currency, "USD");
+            assert_eq!(amounts[0].amount, amount);
+        }
+    } else {
+        assert_eq!(fees.status, Completeness::Unknown);
+        assert_eq!(fees.reported_calls, 0);
+        assert!(fees.totals.is_empty());
+        assert!(fees.known_subtotals.is_empty());
+    }
+}
 fn openrouter_configuration(owned: &OwnedLoopback) -> TextConfiguration {
     use provider_config::*;
     let store = ConnectionStore::open(Arc::new(Memory)).unwrap();
@@ -183,37 +201,37 @@ async fn a_documented_different_comparison_model_is_a_contradiction_while_unknow
 #[tokio::test]
 async fn sealed_response_rejects_incoherent_usage_reasoning_and_model_but_retains_actual_receipt() {
     let mut cases = vec![];
-    for (field, value) in [
-        ("prompt_tokens", json!(32769)),
-        ("completion_tokens", json!(513)),
-        ("total_tokens", json!(8)),
-        ("cost", json!("0")),
-        ("cost", json!(-1)),
-        ("cost", Value::Null),
+    for (field, value, expected_fee) in [
+        ("prompt_tokens", json!(32769), Some("0")),
+        ("completion_tokens", json!(513), Some("0")),
+        ("total_tokens", json!(8), Some("0")),
+        ("cost", json!("0"), None),
+        ("cost", json!(-1), None),
+        ("cost", Value::Null, None),
     ] {
         let mut reply = good_reply();
         reply["usage"][field] = value;
-        cases.push(reply);
+        cases.push((reply, expected_fee));
     }
     let mut reply = good_reply();
     reply["model"] = json!("");
-    cases.push(reply);
+    cases.push((reply, Some("0")));
     let mut reply = good_reply();
     reply["usage"]["completion_tokens_details"] = json!({"reasoning_tokens":1});
-    cases.push(reply);
+    cases.push((reply, Some("0")));
     let mut reply = good_reply();
     reply["usage"]["prompt_tokens_details"] = json!({"cached_tokens":6});
-    cases.push(reply);
+    cases.push((reply, Some("0")));
     let mut reply = good_reply();
     reply["choices"][0]["message"]["reasoning_content"] = json!("synthetic unwanted reasoning");
-    cases.push(reply);
-    for reply in cases {
+    cases.push((reply, Some("0")));
+    for (reply, expected_fee) in cases {
         let (entry, _, latch) = owned_openrouter_response(reply).await;
         assert_eq!(entry.error.as_deref(), Some("llm-invalid-response"));
         assert_eq!(entry.api_summary.call_count, Some(1));
         assert!(latch.observed().is_some());
         assert!(entry.result.is_none());
-        assert!(entry.api_summary.fees.totals.is_empty());
+        assert_actual_fee(&entry, expected_fee);
     }
 }
 
@@ -393,11 +411,7 @@ async fn sealed_openrouter_sends_only_the_reviewed_zero_price_google_route() {
     assert_eq!(result.result.as_deref(), Some("OK"));
     assert!(latch.observed().is_none());
     assert_eq!(result.api_summary.call_count, Some(1));
-    assert_eq!(
-        result.api_summary.fees.totals.len(),
-        0,
-        "zero validation must not invent an actual-money receipt"
-    );
+    assert_actual_fee(&result, Some("0"));
     assert_eq!(
         body["provider"],
         json!({"only":["google-ai-studio"],"allow_fallbacks":false,"require_parameters":true,"max_price":{"prompt":0,"completion":0,"request":0}})
@@ -407,12 +421,12 @@ async fn sealed_openrouter_sends_only_the_reviewed_zero_price_google_route() {
 
 #[tokio::test]
 async fn sealed_openrouter_requires_numeric_zero_cost_without_discarding_actual_usage() {
-    for cost in [
-        None,
-        Some(Value::Null),
-        Some(json!("0")),
-        Some(json!(0.001)),
-        Some(json!(-1)),
+    for (cost, expected_fee) in [
+        (None, None),
+        (Some(Value::Null), None),
+        (Some(json!("0")), None),
+        (Some(json!(0.001)), Some("0.001")),
+        (Some(json!(-1)), None),
     ] {
         let mut reply = good_reply();
         if let Some(cost) = cost {
@@ -425,7 +439,7 @@ async fn sealed_openrouter_requires_numeric_zero_cost_without_discarding_actual_
         assert!(result.result.is_none());
         assert_eq!(result.api_summary.input.total, Some(5));
         assert_eq!(result.api_summary.output.total, Some(2));
-        assert!(result.api_summary.fees.totals.is_empty());
+        assert_actual_fee(&result, expected_fee);
         assert_eq!(
             latch.observed().unwrap().category,
             AdverseCategory::Contract
@@ -436,4 +450,5 @@ async fn sealed_openrouter_requires_numeric_zero_cost_without_discarding_actual_
     let (result, _, latch) = owned_openrouter_response(reply).await;
     assert_eq!(result.result.as_deref(), Some("OK"));
     assert!(latch.observed().is_none());
+    assert_actual_fee(&result, Some("0"));
 }

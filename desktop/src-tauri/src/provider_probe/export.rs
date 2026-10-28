@@ -1,5 +1,5 @@
 //! Independent bounded CSV readback. The production encoder/export transaction
-//! remains the sole writer and actual money remains UNKNOWN.
+//! remains the sole writer; provider-reported money and unknowns stay distinct.
 use super::journal::{Failure, Snapshot, State};
 use notype_core::SessionEntry;
 use serde::Serialize;
@@ -12,7 +12,7 @@ pub struct CsvProof {
     pub histories: usize,
     /// Actual durable possibly-sent calls, not a guessed slot count.
     pub observed_calls: u64,
-    /// No actual currency/charge was invented from metadata or reservations.
+    /// At least one history lacks a complete provider-reported actual fee.
     pub actual_fees_unknown: bool,
 }
 fn parse(bytes: &[u8]) -> Result<Vec<Vec<String>>, Failure> {
@@ -117,6 +117,13 @@ pub fn verify(
         if get(row, "format_version")? != "2"
             || get(row, "original_text")? != entry.transcript
             || get(row, "result_text")? != entry.result.as_deref().unwrap_or("")
+            || get(row, "error")? != entry.error.as_deref().unwrap_or("")
+            || get(row, "latest_processing_error")?
+                != entry
+                    .observations
+                    .latest_processing_error
+                    .as_deref()
+                    .unwrap_or("")
             || get(row, "back_translation")? != entry.back_translation.as_deref().unwrap_or("")
             || get(row, "api_observed_call_count")? != expected_calls.to_string()
             || get(row, "api_call_count")?
@@ -183,12 +190,9 @@ pub fn verify(
                     .known_subtotal
                     .map(|v| v.to_string())
                     .unwrap_or_default()
-            || get(row, "actual_fee_status")? != "unknown"
-            || get(row, "actual_fee_reported_calls")? != "0"
-            || get(row, "actual_fee_totals_by_currency")? != "[]"
-            || get(row, "actual_fee_known_subtotals_by_currency")? != "[]"
-            || !entry.api_summary.fees.totals.is_empty()
-            || !entry.api_summary.fees.known_subtotals.is_empty()
+            || get(row, "actual_fee_status")? != label(&entry.api_summary.fees.status)
+            || get(row, "actual_fee_reported_calls")?
+                != entry.api_summary.fees.reported_calls.to_string()
             || !get(row, "recording_audio_seconds")?.is_empty()
             || !get(row, "asr_actual_model")?.is_empty()
             || !get(row, "asr_requested_model")?.is_empty()
@@ -207,6 +211,14 @@ pub fn verify(
             return Err(Failure::Storage);
         }
         for (column, expected) in [
+            (
+                "actual_fee_totals_by_currency",
+                serde_json::to_value(&entry.api_summary.fees.totals),
+            ),
+            (
+                "actual_fee_known_subtotals_by_currency",
+                serde_json::to_value(&entry.api_summary.fees.known_subtotals),
+            ),
             (
                 "api_requested_models",
                 serde_json::to_value(&entry.api_summary.requested_models),
@@ -244,6 +256,12 @@ pub fn verify(
     Ok(CsvProof {
         histories: entries.len(),
         observed_calls: calls,
-        actual_fees_unknown: true,
+        actual_fees_unknown: entries.iter().any(|entry| {
+            matches!(
+                entry.api_summary.fees.status,
+                notype_core::observations::Completeness::Unknown
+                    | notype_core::observations::Completeness::Partial
+            )
+        }),
     })
 }
