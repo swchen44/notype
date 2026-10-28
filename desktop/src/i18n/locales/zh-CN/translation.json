@@ -591,6 +591,19 @@
       "cancel": "取消",
       "clearingUsage": "正在清除用量…",
       "usageClearFailed": "无法清除用量记录。"
+    },
+    "connectionIndicator": {
+      "title": "AI server",
+      "noServer": "尚未选择 AI server",
+      "states": {
+        "loading": "正在读取 AI server 状态",
+        "unavailable": "无法获取 AI server 状态",
+        "unselected": "尚未选择 AI server",
+        "disabled": "AI 文字处理已关闭",
+        "untested": "已选连接，尚未测试",
+        "succeeded": "AI 已启用，最近连接测试成功",
+        "failed": "AI 已启用，最近连接测试失败"
+      }
     }
   },
   "tray": {
@@ -718,7 +731,7 @@
   "modelSelector": {
     "custom": "自定义",
     "streaming": "流式",
-    "active": "活跃",
+    "active": "已选择",
     "switching": "切换中...",
     "noModelsAvailable": "没有可用的模型",
     "verifying": "正在验证 {{modelName}}...",
@@ -747,7 +760,9 @@
     },
     "cancel": "取消",
     "cancelDownload": "取消下载",
-    "legacy": "旧版"
+    "legacy": "旧版",
+    "loadedName": "已加载：{{modelName}}",
+    "unloadedName": "待加载：{{modelName}}"
   },
   "settings": {
     "modelSettings": {

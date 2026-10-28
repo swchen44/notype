@@ -213,7 +213,9 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onError }) => {
     switch (modelStatus) {
       case "ready":
         return currentModelInfo
-          ? getTranslatedModelName(currentModelInfo, i18n)
+          ? t("modelSelector.loadedName", {
+              modelName: getTranslatedModelName(currentModelInfo, i18n),
+            })
           : t("modelSelector.modelReady");
       case "loading":
         return currentModelInfo
@@ -231,7 +233,9 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onError }) => {
         return modelError || t("modelSelector.modelError");
       case "unloaded":
         return currentModelInfo
-          ? getTranslatedModelName(currentModelInfo, i18n)
+          ? t("modelSelector.unloadedName", {
+              modelName: getTranslatedModelName(currentModelInfo, i18n),
+            })
           : t("modelSelector.modelUnloaded");
       case "none":
         return t("modelSelector.noModelDownloadRequired");

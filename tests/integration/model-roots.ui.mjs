@@ -368,7 +368,7 @@ test("read-only folders allow explicit model use and rescan while imported model
   });
   await page.getByText("1 model available", { exact: true }).waitFor();
   await page.getByRole("button", { name: "Use model", exact: true }).click();
-  await page.getByText("Active", { exact: true }).waitFor();
+  await page.getByText("Selected", { exact: true }).waitFor();
   assert.equal(await page.getByRole("button", { name: /Delete/ }).count(), 0);
   assert.equal(
     await page
@@ -717,7 +717,7 @@ test("a late selection acknowledgement cannot clear a successor selection or cha
     window.catalog.current_model = "fixture-model";
     window.selections[1].resolve(null);
   });
-  await page.getByText("Active", { exact: true }).waitFor();
+  await page.getByText("Selected", { exact: true }).waitFor();
 });
 
 test("picker cancellation and candidate cancellation leave the current folder unchanged", async (t) => {
@@ -955,7 +955,7 @@ test("selection queued before a folder change cannot mutate the successor prefer
     .getByRole("button", { name: "Rescan models", exact: true })
     .click();
   await page.getByRole("button", { name: "Use model", exact: true }).waitFor();
-  assert.equal(await page.getByText("Active", { exact: true }).count(), 0);
+  assert.equal(await page.getByText("Selected", { exact: true }).count(), 0);
 });
 
 test("late download rejection cannot clear the same model's download progress in a successor folder", async (t) => {

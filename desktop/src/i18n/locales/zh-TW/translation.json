@@ -591,6 +591,19 @@
       "cancel": "取消",
       "clearingUsage": "清除用量中…",
       "usageClearFailed": "無法清除用量紀錄。"
+    },
+    "connectionIndicator": {
+      "title": "AI server",
+      "noServer": "尚未選擇 AI server",
+      "states": {
+        "loading": "正在讀取 AI server 狀態",
+        "unavailable": "無法取得 AI server 狀態",
+        "unselected": "尚未選擇 AI server",
+        "disabled": "AI 文字處理已關閉",
+        "untested": "已選連線，尚未測試",
+        "succeeded": "AI 已啟用，最近連線測試成功",
+        "failed": "AI 已啟用，最近連線測試失敗"
+      }
     }
   },
   "tray": {
@@ -718,7 +731,7 @@
   "modelSelector": {
     "custom": "自訂",
     "streaming": "串流",
-    "active": "使用中",
+    "active": "已選取",
     "switching": "切換中...",
     "noModelsAvailable": "沒有可用的模型",
     "verifying": "正在驗證 {{modelName}}...",
@@ -747,7 +760,9 @@
       "translate": "翻譯為英語",
       "streaming": "在您說話時即時顯示轉錄"
     },
-    "legacy": "舊版"
+    "legacy": "舊版",
+    "loadedName": "已載入：{{modelName}}",
+    "unloadedName": "待載入：{{modelName}}"
   },
   "settings": {
     "modelSettings": {

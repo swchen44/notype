@@ -592,6 +592,19 @@
       "cancel": "Cancel",
       "clearingUsage": "Clearing usage…",
       "usageClearFailed": "Unable to clear usage counters."
+    },
+    "connectionIndicator": {
+      "title": "AI server",
+      "noServer": "No AI server selected",
+      "states": {
+        "loading": "Reading AI server status",
+        "unavailable": "AI server status unavailable",
+        "unselected": "No AI server selected",
+        "disabled": "AI processing is off",
+        "untested": "Selected server has not been tested",
+        "succeeded": "AI enabled; last connection test succeeded",
+        "failed": "AI enabled; last connection test failed"
+      }
     }
   },
   "tray": {
@@ -720,7 +733,7 @@
     "custom": "Custom",
     "legacy": "Legacy",
     "streaming": "Streaming",
-    "active": "Active",
+    "active": "Selected",
     "switching": "Switching...",
     "noModelsAvailable": "No models available",
     "verifying": "Verifying {{modelName}}...",
@@ -748,7 +761,9 @@
       "translation": "Can translate to English",
       "translate": "Translate",
       "streaming": "Shows live transcription as you speak"
-    }
+    },
+    "loadedName": "Loaded: {{modelName}}",
+    "unloadedName": "Not loaded: {{modelName}}"
   },
   "settings": {
     "modelSettings": {
