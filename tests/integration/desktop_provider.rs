@@ -9,6 +9,8 @@ mod diagnostics;
 mod workflow;
 // Run the focused unit and HTTP regressions in the same CI target so both
 // failure boundaries execute before the workflow advances to Clippy.
+#[path = "../unittest/dictation_prompt.rs"]
+mod dictation_prompt;
 #[path = "../unittest/gateway_error_context.rs"]
 mod gateway_error_context;
 use notype_core::{RecognitionMode, SessionOptions, SessionService, SessionStatus};
@@ -696,6 +698,41 @@ async fn invalid_source_metadata_retains_valid_primary_as_recoverable_review_fai
         request.await.unwrap();
         server.await.unwrap();
     }
+}
+
+#[tokio::test]
+async fn default_dictation_sends_fluency_guidance_and_delivers_provider_result() {
+    let transcript = "那個，我們下週的會議，呃，就改到星期三下午兩點，不用準備簡報。";
+    let polished = "我們下週的會議改到星期三下午兩點，不用準備簡報。";
+    let reply = json!({"choices":[{"message":{"role":"assistant","content":polished},"finish_reason":"stop"}]}).to_string();
+    let (endpoint, request, server) = fixture(&reply, Duration::ZERO).await;
+    let workflow = DesktopWorkflow::new(SessionService::in_memory().unwrap(), Arc::new(|| {}));
+    let config = configured(endpoint);
+    let generation = workflow
+        .begin(RecognitionMode::TraditionalEnglish, None)
+        .unwrap();
+    workflow
+        .capture_processing_snapshot(
+            generation,
+            notype_core::Scenario::Dictation,
+            config.clone(),
+            vec![],
+        )
+        .unwrap();
+    let entry = workflow
+        .finish(generation, transcript, config, vec![])
+        .await
+        .unwrap();
+    assert_eq!(entry.transcript, transcript);
+    assert_eq!(entry.result.as_deref(), Some(polished));
+    let wire = request.await.unwrap();
+    let prompt = wire["messages"][1]["content"].as_str().unwrap();
+    assert!(prompt.contains("Actively remove verbal fillers"));
+    assert!(prompt.contains("Smooth awkward spoken grammar"));
+    let input: Value =
+        serde_json::from_str(wire["messages"][2]["content"].as_str().unwrap()).unwrap();
+    assert_eq!(input["transcript"], transcript);
+    server.await.unwrap();
 }
 
 #[tokio::test]

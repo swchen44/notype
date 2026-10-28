@@ -1,5 +1,16 @@
 # 測試規範
 
+## Dictation fluency (#35)
+
+`tests/unittest/dictation_prompt.rs` verifies restoring the dictation prompt
+requests meaningful cleanup while leaving the customized translation prompt
+untouched. `tests/integration/desktop_provider.rs` exercises the real workflow
+with an owned loopback provider: it checks the default guidance reaches the
+provider and the returned text is retained alongside the original transcript.
+The fixture does not prove model quality. A separate synthetic DeepSeek test
+showed filler removal and preserved the meeting time and instruction; real
+speech, providers and model outputs can vary.
+
 ## YAML settings transfer (#34)
 
 The source now connects Advanced settings to native file selection, a redacted
