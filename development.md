@@ -405,6 +405,8 @@ bun run build:portable
 
 ## 目前交付與來源
 
+連線設定後續修正：[#32](docs/verification/provider-setup.md) 的產品來源 `90159a19c6e930abb06959e297f0656b08577a8e` 已完成原生本機候選 `0.1.1-local.3`，改善 key 入口／編輯引導；實際 DeepSeek 生成成功，OpenRouter 認證成功但免費生成限流。下面的 GitHub 全離線包仍為 v0.1.1-local.2，沒有被覆寫。
+
 [v0.1.1-local.2](https://github.com/swchen44/notype/releases/tag/v0.1.1-local.2) 直接編譯產品來源 `d7d28645ec275c0b64b8590cc9013ffcc21f422c`；之後的文件 commit 不冒充二進位編譯來源。App 59,353,088 bytes，SHA-256 `e456219eb59d625680c452bdf6a1f987bbe6d1d3262ca1610b95eea063a33419`；ZIP 1,053,413,929 bytes，1,722 files／1,581,582,522 expanded bytes，SHA-256 `6a2a6d1875dcc5e2f5013e32b508e4738cf8afe045674e7c3cb6fb01843343b5`。
 
 完整包重用已逐檔驗證的 runtime／模型，模型 pin 未變；不讀取或搬移使用者已有模型。完整 staged bundle、bundled Node `--offline-bundle --check`、嚴格 ZIP32 inventory／CRC／SHA 與實際獨立解壓已通過。外層四資產以 Release checksum 核對；產品測試及限制見 [#31 receipt](docs/verification/usability.md)。
