@@ -40,6 +40,16 @@ test('rejects changed runtime bytes and unexpected files before packaging', asyn
   await assert.rejects(verifyNativeInputs(g));
 });
 
+test('rejects replacement CRT bytes even when the new manifest accurately hashes them', async t => {
+  const f=await fixture(t), name='vcruntime140.dll', data=Buffer.from('different CRT');
+  await writeFile(path.join(f.root,name),data);
+  const p=path.join(f.root,'native-build.json');
+  const m=JSON.parse(await (await import('node:fs/promises')).readFile(p,'utf8'));
+  Object.assign(m.files.find(x=>x.path===name),{bytes:data.length,sha256:hash(data)});
+  await writeFile(p,JSON.stringify(m));
+  await assert.rejects(verifyNativeInputs(f),/crt-baseline-mismatch/);
+});
+
 test('accepts only bounded SemVer without metadata or numeric leading zeros', () => {
   for (const v of ['1.2.3','1.2.3-beta.1','1.2.3-local.1']) assert.doesNotThrow(()=>validateVersion(v));
   for (const v of ['v1.2.3','01.2.3','1.2.3-rc.01','1.2.3+build','1.2.3;echo','1.2.3-'+('x'.repeat(120))]) assert.throws(()=>validateVersion(v));

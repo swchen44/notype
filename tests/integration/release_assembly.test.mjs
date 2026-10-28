@@ -4,7 +4,7 @@ import path from 'node:path';
 import { mkdir,readFile,writeFile } from 'node:fs/promises';
 import { bundleFixture,sealBundle } from './fixtures/offline-bundle.mjs';
 import { digest,json } from './fixtures/portable-package.mjs';
-import { assemble } from '../../scripts/release/assemble-offline.mjs';
+import { assemble, nativeMetadata, sourceGate } from '../../scripts/release/assemble-offline.mjs';
 import { nativeNames } from '../../scripts/release/assembly-policy.mjs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -27,7 +27,10 @@ async function fixture(t) {
   const files=[];
   for (const name of nativeNames) {
     const data=`native:${name}`;
-    if(name!=='notype.exe') await add(`app/${name}`,`old:${name}`,'native',name.startsWith('msvc')||name.startsWith('vcruntime')?'crt':'cpp');
+    if(name!=='notype.exe') {
+      const isCrt=name.startsWith('msvc')||name.startsWith('vcruntime');
+      await add(`app/${name}`,isCrt?data:`old:${name}`,'native',isCrt?'crt':'cpp');
+    }
     await writeFile(path.join(native,name),data);
     files.push({path:name,bytes:Buffer.byteLength(data),sha256:digest(data)});
   }
@@ -45,8 +48,9 @@ async function fixture(t) {
   await mkdir(path.join(f.root,'provenance'));await writeFile(path.join(f.root,'provenance/native-sources.json'),'fixture');
   await sealBundle(f);
   const bundlePin=digest(await readFile(path.join(f.root,'bundle.json')));
-  const overrides={bundlePin,sourceGate:async()=>{},nativeMetadata:m=>m.tools,verifyPE:()=>{},skipActualCli:true};
-  const args={baseline:f.root,native,source,version:'0.1.2-local.1',output:path.join(f.ownerRoot,'output'),dumpbin:path.join(f.ownerRoot,'dumpbin.exe')};
+  const crtLicense=path.join(f.ownerRoot,'license.docx');await writeFile(crtLicense,'fixture licence');
+  const overrides={bundlePin,sourceGate:async()=>{},nativeMetadata:m=>m.tools,verifyPE:()=>{},skipActualCli:true,crtLicensePin:digest('fixture licence')};
+  const args={baseline:f.root,native,source,version:'0.1.2-local.1',output:path.join(f.ownerRoot,'output'),dumpbin:path.join(f.ownerRoot,'dumpbin.exe'),crtLicense};
   return {f,args,overrides};
 }
 
@@ -58,6 +62,8 @@ test('assembles and audits a complete synthetic offline bundle from matching nat
   assert.ok(report.archive.bytes>0);
   const output=await readFile(path.join(args.output,'extracted/app/node_modules/notype-win32-x64/app/notype.exe'),'utf8');
   assert.equal(output,'native:notype.exe');
+  const licence=await readFile(path.join(args.output,'extracted/app/node_modules/notype-win32-x64/notices/Visual-C-Runtime-2015-2022-License.docx'),'utf8');
+  assert.equal(licence,'fixture licence');
 });
 
 test('a corrupted baseline or native runtime never produces a completed release report',async t=>{
@@ -80,4 +86,83 @@ test('baseline unpacker rejects an unpinned archive without creating a destinati
   const run=spawnSync('python',[script,'--archive',archive,'--destination',destination],{encoding:'utf8',windowsHide:true});
   assert.notEqual(run.status,0);
   await assert.rejects(readFile(path.join(destination,'bundle.json')));
+});
+
+test('archive boundary rejects traversal even when Python assertions are disabled',async t=>{
+  const {f}=await fixture(t);
+  const root=path.join(f.ownerRoot,'archive-input'); await mkdir(root);
+  const outside=path.join(f.ownerRoot,'outside'); await writeFile(outside,'outside');
+  const inventory=path.join(f.ownerRoot,'malicious-inventory.json');
+  await writeFile(inventory,JSON.stringify([{path:'../outside',bytes:7,sha256:digest('outside')}]));
+  const script=fileURLToPath(new URL('../../scripts/release/archive.py',import.meta.url));
+  const run=spawnSync('python',['-O',script,'write',root,path.join(f.ownerRoot,'out.zip'),inventory],{encoding:'utf8',windowsHide:true});
+  assert.notEqual(run.status,0);
+});
+
+test('native provenance rejects lock, toolchain and CRT changes',()=>{
+  const m={schema:1,source_revision:source,cargo_lock_sha256:'c'.repeat(64),bun_lock_sha256:'d'.repeat(64),files:[],tools:{node:'22.15.0',bun:'1.2.22',rust:'1.99.1',msvc:'14.44.35207',redist:'14.44.35211',redist_dir:'14.44.35112',cpp_source:'https://github.com/handy-computer/transcribe.cpp',cpp_revision:'4807edaf210d0d7e8a6f7fb2a44b65966a2797f0',crt_source:'https://learn.microsoft.com/visualstudio/releases/2022/redistribution'}};
+  const pins={cargoPin:'c'.repeat(64),bunPin:'d'.repeat(64)};
+  assert.doesNotThrow(()=>nativeMetadata(m,source,pins));
+  for(const changed of [
+    {...m,cargo_lock_sha256:'e'.repeat(64)},
+    {...m,tools:{...m.tools,rust:'1.98.0'}},
+    {...m,tools:{...m.tools,redist:'14.44.35212'}},
+    {...m,source_revision:'b'.repeat(40)},
+  ]) assert.throws(()=>nativeMetadata(changed,source,pins));
+});
+
+test('changed runtime licence is rejected before generating a report',async t=>{
+  const {args,overrides}=await fixture(t);
+  await writeFile(args.crtLicense,'altered licence');
+  await assert.rejects(assemble(args,overrides),/crt-license-invalid/);
+  await assert.rejects(readFile(path.join(args.output,'assembly-report.json')));
+});
+
+test('real git source and lock gates reject mismatches while preserving existing output',async t=>{
+  const {f,args,overrides}=await fixture(t);
+  const repo=path.join(f.ownerRoot,'repo'); await mkdir(path.join(repo,'desktop','src-tauri'),{recursive:true});
+  await writeFile(path.join(repo,'desktop','src-tauri','Cargo.lock'),'cargo');
+  await writeFile(path.join(repo,'desktop','bun.lock'),'bun');
+  const git=(...argv)=>{const p=spawnSync('git',argv,{cwd:repo,encoding:'utf8'});assert.equal(p.status,0,p.stderr);return p.stdout.trim();};
+  git('init','-q'); git('config','user.name','fixture');git('config','user.email','fixture@example.invalid');
+  git('add','.');git('commit','-qm','fixture');
+  const head=git('rev-parse','HEAD'), options={cwd:repo,baselineSource:head,cargoPin:digest('cargo'),bunPin:digest('bun')};
+  await sourceGate(head,options);
+  await mkdir(args.output);await writeFile(path.join(args.output,'sentinel'),'keep');
+  overrides.sourceGate=s=>sourceGate(s,options);
+  await assert.rejects(assemble({...args,source:'b'.repeat(40)},overrides),/source-revision-mismatch/);
+  overrides.sourceGate=s=>sourceGate(s,{...options,cargoPin:'0'.repeat(64)});
+  await assert.rejects(assemble({...args,source:head},overrides),/baseline-lock-changed/);
+  overrides.sourceGate=s=>sourceGate(s,options);
+  await writeFile(path.join(repo,'desktop','bun.lock'),'changed');
+  await assert.rejects(assemble({...args,source:head},overrides),/source-worktree-dirty/);
+  git('add','.');git('commit','-qm','changed lock');
+  const changed=git('rev-parse','HEAD');
+  await assert.rejects(assemble({...args,source:changed},overrides),/baseline-inputs-changed/);
+  assert.equal(await readFile(path.join(args.output,'sentinel'),'utf8'),'keep');
+  await assert.rejects(readFile(path.join(args.output,'assembly-report.json')));
+});
+
+test('actual native provenance gate rejects toolchain and CRT changes before touching output',async t=>{
+  const {args,overrides}=await fixture(t);
+  const file=path.join(args.native,'native-build.json');
+  const original=JSON.parse(await readFile(file,'utf8'));
+  Object.assign(original,{cargo_lock_sha256:'c'.repeat(64),bun_lock_sha256:'d'.repeat(64)});
+  Object.assign(original.tools,{node:'22.15.0',bun:'1.2.22',rust:'1.99.1',redist_dir:'14.44.35112',cpp_source:'https://github.com/handy-computer/transcribe.cpp'});
+  overrides.nativeMetadata=(m,s)=>nativeMetadata(m,s,{cargoPin:'c'.repeat(64),bunPin:'d'.repeat(64)});
+  await mkdir(args.output);await writeFile(path.join(args.output,'sentinel'),'keep');
+  for(const change of [{rust:'1.98.0'},{redist:'14.44.35212'}]) {
+    await writeFile(file,JSON.stringify({...original,tools:{...original.tools,...change}}));
+    await assert.rejects(assemble(args,overrides),/native-provenance-invalid/);
+    assert.equal(await readFile(path.join(args.output,'sentinel'),'utf8'),'keep');
+    await assert.rejects(readFile(path.join(args.output,'assembly-report.json')));
+  }
+  const crt=Buffer.from('replacement runtime');
+  await writeFile(path.join(args.native,'vcruntime140.dll'),crt);
+  const entry=original.files.find(x=>x.path==='vcruntime140.dll');
+  Object.assign(entry,{bytes:crt.length,sha256:digest(crt)});
+  await writeFile(file,JSON.stringify(original));
+  await assert.rejects(assemble(args,overrides),/crt-baseline-mismatch/);
+  assert.equal(await readFile(path.join(args.output,'sentinel'),'utf8'),'keep');
+  await assert.rejects(readFile(path.join(args.output,'assembly-report.json')));
 });

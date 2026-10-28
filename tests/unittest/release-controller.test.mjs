@@ -20,8 +20,8 @@ test('GitHub adapter rejects collisions and uses only literal command arguments'
     calls.push(args);
     if(args.includes('repos/swchen44/notype/commits/main')) return JSON.stringify({sha:'a'.repeat(40)});
     if(args.includes('repos/swchen44/notype/releases')) return JSON.stringify([[{tag_name:'v1.2.3',draft:true}]]);
-    if(args.includes('repos/swchen44/notype/git/matching-refs/tags/v1.2.4')) return JSON.stringify([{ref:'refs/tags/v1.2.4-extra'}]);
-    if(args.includes('repos/swchen44/notype/git/matching-refs/tags/v1.2.5')) return JSON.stringify([{ref:'refs/tags/v1.2.5'}]);
+    if(args.includes('repos/swchen44/notype/git/matching-refs/tags/v1.2.4')) return JSON.stringify(args.includes('--slurp')?[[{ref:'refs/tags/v1.2.4-extra'}]]:[{ref:'refs/tags/v1.2.4-extra'}]);
+    if(args.includes('repos/swchen44/notype/git/matching-refs/tags/v1.2.5')) return JSON.stringify(args.includes('--slurp')?[[{ref:'refs/tags/v1.2.5'}]]:[{ref:'refs/tags/v1.2.5'}]);
     throw Error('unexpected command');
   };
   const gh=createGitHubAdapter(run);
@@ -29,5 +29,7 @@ test('GitHub adapter rejects collisions and uses only literal command arguments'
   assert.equal(await gh.exists('v1.2.3'),true);
   assert.equal(await gh.exists('v1.2.4'),false);
   assert.equal(await gh.exists('v1.2.5'),true);
+  assert.equal(await gh.tagExists('v1.2.4'),false);
+  assert.equal(await gh.tagExists('v1.2.5'),true);
   assert.ok(calls.every(args=>Array.isArray(args) && args[0]==='api'));
 });

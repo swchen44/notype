@@ -18,7 +18,7 @@ concurrency:
 jobs:
   build:
     name: Build and verify offline ZIP on Windows
-    runs-on: windows-latest
+    runs-on: windows-2022
     timeout-minutes: 120
     outputs:
       artifact-id: ${{ steps.artifact.outputs.artifact-id }}
@@ -106,7 +106,9 @@ jobs:
           if ($native.tools.msvc -cne $toolset) { throw 'dumpbin-toolset-mismatch' }
           $dumpbin = Join-Path $vs "VC/Tools/MSVC/$toolset/bin/Hostx64/x64/dumpbin.exe"
           if (-not (Test-Path -LiteralPath $dumpbin -PathType Leaf)) { throw 'dumpbin-not-found' }
-          node scripts/release/assemble-offline.mjs --baseline (Join-Path $env:RUNNER_TEMP 'notype-baseline') --native (Join-Path $env:RUNNER_TEMP 'notype-native') --source $env:GITHUB_SHA --version $env:RELEASE_VERSION --output (Join-Path $env:RUNNER_TEMP 'notype-assembled') --dumpbin $dumpbin
+          $license = Join-Path $env:RUNNER_TEMP 'notype-vc-runtime-license.docx'
+          Invoke-WebRequest -Uri 'https://visualstudio.microsoft.com/wp-content/uploads/2021/09/Visual-C-Runtime-2015-2022-License-1.docx' -OutFile $license
+          node scripts/release/assemble-offline.mjs --baseline (Join-Path $env:RUNNER_TEMP 'notype-baseline') --native (Join-Path $env:RUNNER_TEMP 'notype-native') --source $env:GITHUB_SHA --version $env:RELEASE_VERSION --output (Join-Path $env:RUNNER_TEMP 'notype-assembled') --dumpbin $dumpbin --crtLicense $license
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Smoke-test the verified extracted App with isolated data
         env:

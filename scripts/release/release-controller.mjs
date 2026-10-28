@@ -47,6 +47,7 @@ export async function publishDraft({ input, artifactRoot, github, wait = ms => n
   if (await github.mainHead() !== release.source || await github.exists(release.tag)) throw Error('release-gate-changed');
   const incomplete = `INCOMPLETE — upload or verification has not finished. Do not publish.\n\nSource: ${release.source}\n`;
   const id = await github.createDraft({...release, body:incomplete});
+  if (await github.tagExists(release.tag)) throw Error('tag-conflict');
   for (const asset of assets) await github.upload(id, asset);
   let verified = false;
   for (let attempt = 0; attempt < 5; attempt++) {
@@ -67,8 +68,17 @@ export async function publishDraft({ input, artifactRoot, github, wait = ms => n
   }
   if (!verified) throw Error('uploaded-asset-unavailable');
   if (await github.mainHead() !== release.source) throw Error('release-source-changed');
+  if (await github.tagExists(release.tag)) throw Error('tag-conflict');
   const body = `# notype ${release.version} — Windows 11 測試版\n\n來源：${release.source}\n\n下載完整離線 ZIP 與 SHA256SUMS.txt，在目標 Windows 11 電腦核對雜湊後完整解壓，執行 Start-notype.cmd。ZIP 已包含語音模型及執行環境；文字整理需要連線至自行設定的 AI server。\n\nZIP SHA-256：\`${assets[0].digest}\`\n\n本次完成自動建置、檔案完整性檢查與隔離資料的原生 --list-models 啟動檢查。乾淨 Windows 11、真人麥克風、公司內網、目標應用程式及人工語音品質仍需實機驗收。草稿需維護者檢查後才發布。\n`;
-  await github.finalize(id, body);
+  const guardedBody = `${body}\n人工發布前請再次確認同名 Git tag 不存在，或確認其實際 commit 與上述來源一致。草稿完成後仍可能出現外部 tag 變更。\n`;
+  await github.finalize(id, guardedBody);
+  try {
+    if (await github.tagExists(release.tag)) throw Error('tag-conflict');
+  } catch (error) {
+    try { await github.finalize(id, incomplete); }
+    catch { throw Error('draft-rollback-failed-manual-review-required'); }
+    throw error;
+  }
   return {tag:release.tag, source:release.source, id, assets};
 }
 
@@ -80,6 +90,12 @@ export function createGitHubAdapter(run) {
   async function json(args) { return JSON.parse(await run(['api', ...args])); }
   return {
     async mainHead() { const data=await json([`${api}/commits/main`]); return data.sha; },
+    async tagExists(tag) {
+      if (!/^v[0-9A-Za-z.-]{1,65}$/.test(tag)) throw Error('invalid-tag');
+      const pages=await json(['--paginate','--slurp',`${api}/git/matching-refs/tags/${tag}`]);
+      if (!Array.isArray(pages) || pages.some(page=>!Array.isArray(page))) throw Error('invalid-tag-list');
+      return pages.flat().some(ref=>ref.ref===`refs/tags/${tag}`);
+    },
     async exists(tag) {
       if (!/^v[0-9A-Za-z.-]{1,65}$/.test(tag)) throw Error('invalid-tag');
       const pages = await json(['--paginate', '--slurp', `${api}/releases`]);
@@ -118,14 +134,25 @@ export function createGitHubAdapter(run) {
 import { spawn } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 
-function runGh(args) {
+export function runGh(args, {executable='gh',timeoutMs=(args[0]==='release' && args[1]==='upload' ? 35*60*1000 : 90*1000)}={}) {
+  if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 35*60*1000) throw Error('github-timeout-invalid');
   return new Promise((resolve, reject) => {
-    const child=spawn('gh',args,{shell:false,windowsHide:true,stdio:['ignore','pipe','pipe']});
-    const chunks=[]; let size=0; let overflow=false;
+    const child=spawn(executable,args,{shell:false,windowsHide:true,stdio:['ignore','pipe','pipe']});
+    const chunks=[]; let size=0; let overflow=false; let timedOut=false; let errorPrefix='';
+    const timer=setTimeout(()=>{ timedOut=true; child.kill('SIGKILL'); },timeoutMs);
     child.stdout.on('data',chunk=>{size+=chunk.length; if(size>8*1024*1024) {overflow=true; child.kill();} else chunks.push(chunk);});
-    child.stderr.resume();
-    child.on('error',()=>reject(Error('github-client-unavailable')));
-    child.on('close',code=>code===0&&!overflow ? resolve(Buffer.concat(chunks).toString('utf8')) : reject(Error('github-request-failed')));
+    child.stderr.on('data',chunk=>{if(errorPrefix.length<8192) errorPrefix+=chunk.toString('utf8').slice(0,8192-errorPrefix.length);});
+    child.on('error',()=>{clearTimeout(timer);reject(Error('github-client-unavailable'));});
+    child.on('close',code=>{
+      clearTimeout(timer);
+      if(timedOut) reject(Error('github-timeout'));
+      else if(overflow) reject(Error('github-response-too-large'));
+      else if(code===0) resolve(Buffer.concat(chunks).toString('utf8'));
+      else {
+        const status=/\bHTTP (400|401|403|404|409|422|429|500|502|503|504)\b/.exec(errorPrefix)?.[1];
+        reject(Error(status ? `github-http-${status}` : `github-request-failed:${Number.isInteger(code) ? code : 'signal'}`));
+      }
+    });
   });
 }
 

@@ -397,7 +397,9 @@ bun run build:portable
 
 GitHub 的 Windows runner 會執行契約測試、重新編譯程式與其原生函式庫，從固定雜湊的既有離線包取得經驗證的共用元件，核對依賴、授權與內容後組裝 ZIP 並進行獨立解壓檢查。通過檢查的解壓版 EXE 會以獨立測試資料執行 `--list-models`，最長 120 秒，逾時會終止該程序樹；這不等於真人錄音或辨識驗收。輸出再由獨立 job 檢查檔案及 GitHub 回報的 SHA-256，建立 **prerelease 草稿**，不會自動公開。來源依賴或 runtime 不符合受控基準時會停止，須更新並驗證依賴，不能強行沿用舊檔。
 
-下載和解壓結果、版本、變更與尚待實機驗收項目須由維護者檢查，確認後再自行發布草稿。若上傳或核對失敗，已建立的草稿會標示 `INCOMPLETE`；請先檢查並處理該草稿，再重新使用版本。執行不使用個人的 API key 或文字資料。跨 job 的暫存 artifact 於執行結束後刪除；若清理工作未執行或失敗，該 artifact 設定一天後到期。GitHub-hosted runner 的臨時檔在 job 結束後隨 runner 回收。
+目前固定 Windows 2022 runner，四個 Visual C++ Runtime DLL 僅接受與 local.7 基準完全相同的檔案及 14.44.35211 版；Microsoft 官方 runtime 授權文件會另行下載、驗證固定 SHA-256 並附入 notice。runner 映像、CRT 或授權文件變更時會停止，需重新檢查及更新 pin；雜湊核對不等於法律授權審查。
+
+下載和解壓結果、版本、變更與尚待實機驗收項目須由維護者檢查，確認後再自行發布草稿。人工發布前須再確認同名 tag 不存在或實際指向已驗證 commit；草稿完成後仍可能有外部建立或變更 tag 的競態。若上傳或核對失敗，流程會盡力將草稿標示為 `INCOMPLETE`；若 GitHub 同時拒絕回寫，動作會報錯並要求人工檢查，不能假設標記已成功。請先處理該草稿，再重新使用版本。執行不使用個人的 API key 或文字資料。跨 job 的暫存 artifact 於執行結束後刪除；若清理工作未執行或失敗，該 artifact 設定一天後到期。GitHub-hosted runner 的臨時檔在 job 結束後隨 runner 回收。
 
 ## 測試與協作
 

@@ -1,9 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { restoreEquivalentTauriManifest, validateNativeInputs } from '../../scripts/release/native-stage.mjs';
+import { cppDlls, crtDlls, nativeNames } from '../../scripts/release/native-contract.mjs';
 
 const source = 'a'.repeat(40);
 const tools = { node: '22.15.0', bun: '1.2.22', rust: '1.99.1' };
+
+test('native contract includes the executable and all 12 C++ and 4 CRT files',()=>{
+  assert.equal(cppDlls.length,12); assert.equal(crtDlls.length,4); assert.equal(nativeNames.length,17);
+  assert.ok(nativeNames.includes('notype.exe')); assert.ok(Object.isFrozen(nativeNames));
+});
 
 test('native build accepts only exact source, pinned tools and controlled runtime inputs', () => {
   assert.doesNotThrow(() => validateNativeInputs({ source, actualSource: source, clean: true, tools, env: {} }));

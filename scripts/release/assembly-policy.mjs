@@ -3,8 +3,9 @@ import { createReadStream } from 'node:fs';
 import { lstat, readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 
-const dlls = ['transcribe.dll', 'ggml.dll', 'ggml-base.dll', ...['x64','sse42','sandybridge','haswell','alderlake','cannonlake','cascadelake','icelake','skylakex'].map(x => `ggml-cpu-${x}.dll`), 'msvcp140.dll','msvcp140_1.dll','vcruntime140.dll','vcruntime140_1.dll'];
-export const nativeNames = Object.freeze(['notype.exe', ...dlls]);
+import { cppDlls, crtDlls, nativeNames } from './native-contract.mjs';
+export { nativeNames } from './native-contract.mjs';
+const dlls = [...cppDlls,...crtDlls];
 export function validateVersion(version) {
   if (typeof version !== 'string' || version.length > 64 || !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/.test(version)) throw Error('invalid-version');
   const pre=version.split('-').slice(1).join('-');
@@ -36,5 +37,9 @@ export async function verifyNativeInputs({root, source, baseline}) {
     accepted.set(item.path, item);
   }
   for (const name of dlls) if (!baseline.some(x => x.path === `app/${name}` && (x.source === 'cpp' || x.source === 'crt'))) throw Error('native-baseline-role-mismatch');
+  for (const name of crtDlls) {
+    const pinned=baseline.find(x=>x.path===`app/${name}` && x.source==='crt'), actual=accepted.get(name);
+    if (!pinned || pinned.bytes!==actual.bytes || pinned.sha256!==actual.sha256) throw Error('crt-baseline-mismatch');
+  }
   return accepted;
 }

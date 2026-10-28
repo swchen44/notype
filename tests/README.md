@@ -5,9 +5,14 @@
 `node --test tests/unittest/release-controller.test.mjs tests/integration/release-controller.test.mjs`
 checks the real draft controller with synthetic owned files and a GitHub adapter
 double. It covers safe version/main input, tag/release collision, asset checksum,
-remote digest mismatch and an incomplete draft after upload failure. These tests
+remote digest mismatch, bounded client timeout, stderr redaction, post-create tag
+fences and an incomplete draft after upload failure. These tests
 do not invoke GitHub, compile a native App or establish Windows host acceptance;
 the manually dispatched Windows action and actual draft verification are separate.
+Release assembly tests also exercise actual Git source/lock gates in an owned Git
+repository, native provenance and CRT checks, unchanged-output sentinel, a pinned
+license fixture, and malformed archive rejection under Python -O. These fixtures
+do not prove current GitHub runner CRT compatibility or legal redistribution rights.
 `release-smoke.test.mjs` tests the isolated data environment, a real owned child
 with a bounded timeout, and the requirement that the requested EXE belongs to the
 freshly validated extraction. The action separately runs `--list-models` on that

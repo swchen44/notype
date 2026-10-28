@@ -19,8 +19,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-const nativeDlls = ['transcribe.dll', 'ggml.dll', 'ggml-base.dll', 'ggml-cpu-x64.dll', 'ggml-cpu-sse42.dll', 'ggml-cpu-sandybridge.dll', 'ggml-cpu-haswell.dll', 'ggml-cpu-skylakex.dll', 'ggml-cpu-cannonlake.dll', 'ggml-cpu-icelake.dll', 'ggml-cpu-cascadelake.dll', 'ggml-cpu-alderlake.dll'];
-const crtDlls = ['msvcp140.dll', 'msvcp140_1.dll', 'vcruntime140.dll', 'vcruntime140_1.dll'];
+import { cppDlls as nativeDlls, crtDlls } from './native-contract.mjs';
 
 async function digest(file) {
   const hash = createHash('sha256');
