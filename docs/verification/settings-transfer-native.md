@@ -6,6 +6,13 @@ Windows executable SHA256: `7284667c18c790dc26ce71a951b59a3777420fcfbf2b01018a7b
 The complete local.6 ZIP contains1733 files and independently extracted successfully;
 ZIP SHA256: `32e2d3a32a9b11ff72cb63984ad4b6630bf01233a193edd2599fadd1a76c4d10`.
 
+[v0.1.1-local.6](https://github.com/swchen44/notype/releases/tag/v0.1.1-local.6)
+was published after all four uploaded assets matched their local size and GitHub
+SHA256 digest. The ZIP is1054035313 bytes. Product tag points to e5; later main
+commits update documentation only. The new executable was also launched using
+the original user profile after the synthetic fixture was normally closed;
+Computer Use confirmed AI remains OFF. No extra live generation was sent.
+
 Computer Use used the exact packaged executable and a separate owned profile,
 with no real key or speech model. Export produced a valid UTF-8 YAML8957 bytes;
 the key inclusion option was unchecked and no app_keys payload was present.

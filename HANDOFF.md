@@ -1,5 +1,7 @@
 # 最新 checkpoint：local.6 原生 YAML 驗證完成（2026-10-29）
 
+[v0.1.1-local.6 已發布](https://github.com/swchen44/notype/releases/tag/v0.1.1-local.6)，四個附件的遠端大小與 SHA256 均已核對。main 已推送；新版程式已用原有使用者 profile 啟動，文字整理仍關閉。產品來源 e5，後續文件 commit 不改二進位。以下保留驗證與歷史紀錄。
+
 產品來源 e5a8b5af3ae842fd3894ebb6ad25d634bf556304；完整 CI40675317547 成功。Windows ZIP 共1,733檔案，完整與獨立解壓檢查通過。Computer Use 已實測 YAML 匯出（預設不帶 key）、差異預覽、取消、套用／自動重啟及新詞彙顯示；獨立測試 profile 已正常結束。詳見 [原生驗證](docs/verification/settings-transfer-native.md)。原 root 仍凍結，整合 checkout 位於 D:/git/notype-impl-worktrees/usability-followup。真人語音、乾淨主機、公司內網與其他 App 仍待驗收，不與來源／合成驗證混用。以下保留歷史 checkpoint。
 
 # Windows 11 開發接手
