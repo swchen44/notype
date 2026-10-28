@@ -112,6 +112,8 @@ call ".\Start-notype.cmd"
 
 ## 回報問題
 
+維護者可從 GitHub Actions 手動建立 Windows 離線 Release 草稿；操作與驗證步驟見[開發者手冊](development.md#github-windows-release-草稿)。草稿必須經維護者檢查後才會公開。
+
 設定中的診斷功能可關閉、清除、預覽與匯出。診斷首次預設開啟，既有關閉偏好會保留。重現問題後先自行檢視匯出內容，再到 [GitHub Issues](https://github.com/swchen44/notype/issues) 附上 App 與 Windows 版本、重現步驟、預期結果及診斷檔。
 
 請勿附上 API key、`.env`、連線設定、工作錄音或私人歷史 CSV。無法啟動時請回報畫面訊息與錯誤代碼；快捷鍵反應慢時，請記錄按鍵到收音提示的大約時間。
