@@ -1,6 +1,16 @@
 # Windows 11 開發接手
 
-## 目前 checkpoint：P31 已交付 Windows 11 測試包（2026-10-28）
+## 目前 checkpoint：AI server 狀態／設定分頁與特調（2026-10-28）
+
+產品來源 `6e3e61461b1a4bd58d96bbcf7e449df1d55327e0` 位於 `feature/settings-tabs-transfer`，包含 #33 左下角 AI server 名稱／狀態與模型「選取／載入」區分，以及 #34 的兩分頁、每個 server 三場景獨立特調（預設 None，附加到共用提示詞）。[完整 ALL CI40630433546](https://github.com/swchen44/notype/actions/runs/40630433546) 兩個 jobs 已成功；本機相關 Rust42、UI32、Clippy／lint／build／格式通過。原生編譯及本機 `0.1.1-local.5` 完整檔案核對已完成，詳見[驗證紀錄](docs/verification/server-tuning-status.md)。
+
+Windows 鎖定，Computer Use 已停止，等待使用者解鎖後才可繼續原生畫面驗證。舊 App 尚未結束；新候選版未啟動，重新啟動時須先正常結束舊版，避免 single-instance 只喚回舊 App。不要終止其他 App，不操作登入／安全畫面。不需移除模型、歷史、設定或 `.env`。
+
+YAML 尚未實作；已確認包含設定、提示詞、詞彙、可選 key，不含歷史／模型檔，匯入須先預覽差異及衝突。兩個 async 問題待答：含 key 匯出是否包含實際使用的 home `.env` key，及逐項選擇或預覽後整份套用。不要猜測。Gemini 新 development key 尚未放好，不再請求 Gemini，先前 HTTP200 僅為舊值的模型清單。使用者對後續 Astra 審查的明確豁免維持有效；原 root checkout 仍凍結，整合 checkout 在 `D:/git/notype-impl-worktrees/usability-followup`。
+
+GitHub Release **v0.1.1-local.2 保持原樣**，不含本次來源／本機候選版變更。新 ZIP 尚未發布，#33／#34 與真實環境驗收均不得冒稱完成。以下為歷史 checkpoint。
+
+## 歷史 checkpoint：P31 已交付 Windows 11 測試包（2026-10-28）
 
 [v0.1.1-local.2](https://github.com/swchen44/notype/releases/tag/v0.1.1-local.2) 產品來源 `d7d28645ec275c0b64b8590cc9013ffcc21f422c`，新原生 App、完整離線 ZIP／獨立解壓已核對。簡易歷史、自訂詞彙、AI 連線測試／用量、原稿 fallback 及 Notepad++ 受保護貼上見 [#31](https://github.com/swchen44/notype/issues/31)／[驗證紀錄](docs/verification/usability.md)。使用者明確豁免本輪 Astra 計畫審查，獨立 Spec／Standards 最終均無未解必修項。
 

@@ -30,6 +30,8 @@ notype 的基本工作單位是一次**語音 session**：開始錄音、停止�
 
 ## 架構與責任邊界
 
+最新 AI server 狀態、設定分頁與特調提示詞的來源／原生編譯／待驗收邊界，見 [#33／#34 驗證紀錄](docs/verification/server-tuning-status.md)。YAML 移轉仍待兩項資料政策確認，尚未實作。
+
 正式 App 使用 **Rust + Tauri 2 + React／TypeScript + SQLite**。桌面來源基於固定 Handy fork，來源與 MIT 授權見 [UPSTREAM](desktop/UPSTREAM.md)／[LICENSE](desktop/LICENSE)。下圖描述現有模組責任，不表示所有平台或實機場景均已驗收。
 
 ```mermaid
@@ -290,6 +292,25 @@ notype/
 `node_modules/`、`dist/`、Rust `target/` 是本機產物；`desktop/src-tauri/transcribe-libs/` 是原生 library staging 區，不能把整個開發快取當成可配送 payload。上游文件保留供參考，notype 的規則與 CPU-only／portable 政策以 [desktop/AGENTS.md](desktop/AGENTS.md)、[desktop/NOTYPE.md](desktop/NOTYPE.md) 及根目錄規則為準。
 
 ## 重要檔案
+
+連線特調的有效提示詞在建立當次設定快照時組合，流程如下；None 使用共用提示詞原文，特調僅附加於相同場景。儲存共用提示詞或連線時會先驗證全部受影響組合，拒絕過長內容並保留舊設定。
+
+```mermaid
+sequenceDiagram
+    participant UI as 設定頁
+    participant Store as ConnectionStore
+    participant Tune as 提示詞組合模組
+    participant Session as 當次 session
+    participant API as ChatProcessor
+    UI->>Store: 儲存連線特調／共用提示詞（revision）
+    Store->>Tune: 驗證三場景與組合長度
+    Tune-->>Store: 成功／固定錯誤代碼
+    Store-->>UI: 提交後的安全設定檢視／保留原設定
+    Session->>Store: 取得所選連線的當次快照
+    Store->>Tune: 共用提示詞＋各場景可選特調
+    Store-->>Session: 自有的有效提示詞與連線設定
+    Session->>API: 使用當次場景提示詞
+```
 
 | 工作範圍 | 主要檔案 | 職責 |
 | --- | --- | --- |
