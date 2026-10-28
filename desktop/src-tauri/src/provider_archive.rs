@@ -92,6 +92,13 @@ impl ConnectionStore {
 impl ProviderArchive {
     /// Validate an isolated archive, without resolving credentials or applying it.
     pub(crate) fn validate(&self) -> Result<(), ConfigError> {
+        if self
+            .app_keys
+            .as_ref()
+            .is_some_and(|keys| keys.values().any(|key| key.contains("****")))
+        {
+            return Err(ConfigError("configuration-archive-invalid"));
+        }
         self.state(0, None).map(|_| ())
     }
 

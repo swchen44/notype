@@ -334,6 +334,12 @@ impl RootService {
     pub fn reserve(&self) -> RootResult<ActivityLease> {
         self.gate.enter().map_err(|_| RootError("model-root-busy"))
     }
+    /// Hold exclusive idle admission until configuration restart is staged.
+    pub fn freeze_for_settings(&self) -> RootResult<super::model_root_activity::IdleTransition> {
+        self.gate
+            .transition()
+            .map_err(|_| RootError("model-root-busy"))
+    }
     fn start_scan(
         &self,
         request: &str,

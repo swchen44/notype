@@ -9,7 +9,7 @@
 //! The active implementation is determined by the `keyboard_implementation`
 //! setting and can be changed at runtime.
 
-mod dictionary;
+pub(crate) mod dictionary;
 mod handler;
 pub mod handy_keys;
 pub mod tauri_impl;

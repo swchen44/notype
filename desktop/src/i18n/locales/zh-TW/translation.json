@@ -1272,6 +1272,46 @@
         "label": "顯示新功能",
         "description": "notype 更新後顯示版本資訊"
       }
+    },
+    "transfer": {
+      "title": "匯出與匯入設定",
+      "scope": "UTF-8 YAML 包含設定、共用與 server 提示詞、詞彙及模型資料夾參照；不含歷史、用量、日誌與模型檔案。",
+      "includeKeys": "包含 App 儲存的 API key（預設不勾選）",
+      "plaintext": "這份 YAML 將含有明文 API key，請妥善保管。家目錄 .env 只匯出變數名稱，不匯出其中的值。",
+      "export": "匯出 YAML",
+      "import": "匯入 YAML",
+      "saved": "已匯出設定。",
+      "cancelled": "已取消，原有設定保持不變。",
+      "preview": "匯入預覽",
+      "replace": "確認後將整份取代設定並重新啟動 notype。請先檢查差異與 key 的處理方式；不會搬移模型，也不會自動測試 API。",
+      "changes": "變更欄位",
+      "noChanges": "沒有可見的設定差異。",
+      "before": "目前設定",
+      "after": "匯入設定",
+      "keys": "連線 key 處理方式",
+      "omittedKeys": "檔案未附 key 時，僅相同連線 ID、canonical API 位址與驗證方式可保留原 App key；移除或變更的連線不會自動沿用。",
+      "folderConflict": "此電腦無法使用這個模型資料夾，或路徑不安全。請先選擇現有資料夾；不會搬移或下載模型。",
+      "chooseFolder": "選擇模型資料夾",
+      "cancel": "取消匯入",
+      "confirm": "取代設定並重新啟動",
+      "restarting": "已準備設定，正在重新啟動 notype…",
+      "keyEffects": {
+        "kept": "保留原 key",
+        "replaced": "取代 key",
+        "added": "新增 key",
+        "cleared": "清除原 key",
+        "missing": "無 App key，可能使用 .env 參照",
+        "removed": "移除連線及其 App key"
+      },
+      "errors": {
+        "stale": "YAML 檔案或目前設定已變更。請取消並重新匯入，檢查最新預覽。",
+        "busy": "notype 忙碌中，或設定尚未儲存完成。請等待錄音、處理及下載結束後重試。",
+        "invalid": "YAML 格式、版本或設定內容無效，或已超過限制；未匯入任何設定。",
+        "space": "儲存空間不足，原有設定保持不變。",
+        "failed": "檔案操作失敗，原有設定保持不變。請檢查檔案存取權限後重試。"
+      },
+      "audioConflict": "匯入的音訊裝置無法使用。可改用系統預設裝置，再檢查更新後的預覽。",
+      "defaultAudio": "改用系統預設音訊裝置"
     }
   },
   "footer": {

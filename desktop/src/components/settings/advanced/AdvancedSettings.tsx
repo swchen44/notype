@@ -15,6 +15,7 @@ import { AccelerationSelector } from "../AccelerationSelector";
 import { LazyStreamClose } from "../LazyStreamClose";
 import { FillerWordRemoval } from "../FillerWordRemoval";
 import { VadBackendSelector } from "../VadBackendSelector";
+import { SettingsTransfer } from "./SettingsTransfer";
 
 export const AdvancedSettings: React.FC = () => {
   const { t } = useTranslation();
@@ -23,6 +24,7 @@ export const AdvancedSettings: React.FC = () => {
 
   return (
     <div className="max-w-3xl w-full mx-auto space-y-6">
+      <SettingsTransfer />
       <SettingsGroup title={t("settings.advanced.groups.app")}>
         <StartHidden descriptionMode="tooltip" grouped={true} />
         <AutostartToggle descriptionMode="tooltip" grouped={true} />

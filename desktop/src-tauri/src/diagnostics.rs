@@ -37,6 +37,8 @@ macro_rules! labels {
 
 labels!("Allowlisted product stages. Callers record stage boundaries, never session IDs, keyboard text, model names or content.", Phase {
     Startup => "startup",
+    SettingsExport => "settings-export",
+    SettingsImport => "settings-import",
     CaptureTiming => "capture-timing",
     ShortcutAccepted => "shortcut-accepted",
     ShortcutDispatch => "shortcut-dispatch",

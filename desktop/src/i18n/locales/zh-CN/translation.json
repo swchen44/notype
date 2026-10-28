@@ -1272,6 +1272,46 @@
         "label": "显示新功能",
         "description": "notype 更新后显示发行说明"
       }
+    },
+    "transfer": {
+      "title": "导出与导入设置",
+      "scope": "UTF-8 YAML 包含设置、共用与 server 提示词、词汇及模型文件夹引用；不含历史、用量、日志与模型文件。",
+      "includeKeys": "包含 App 保存的 API key（默认不勾选）",
+      "plaintext": "这份 YAML 将包含明文 API key，请妥善保管。用户目录 .env 只导出变量名称，不导出其中的值。",
+      "export": "导出 YAML",
+      "import": "导入 YAML",
+      "saved": "已导出设置。",
+      "cancelled": "已取消，原有设置保持不变。",
+      "preview": "导入预览",
+      "replace": "确认后将整份替换设置并重新启动 notype。请先检查差异与 key 的处理方式；不会移动模型，也不会自动测试 API。",
+      "changes": "变更字段",
+      "noChanges": "没有可见的设置差异。",
+      "before": "当前设置",
+      "after": "导入设置",
+      "keys": "连接 key 处理方式",
+      "omittedKeys": "文件未附 key 时，仅相同连接 ID、canonical API 地址与验证方式可保留原 App key；移除或变更的连接不会自动沿用。",
+      "folderConflict": "此电脑无法使用这个模型文件夹，或路径不安全。请先选择现有文件夹；不会移动或下载模型。",
+      "chooseFolder": "选择模型文件夹",
+      "cancel": "取消导入",
+      "confirm": "替换设置并重新启动",
+      "restarting": "已准备设置，正在重新启动 notype…",
+      "keyEffects": {
+        "kept": "保留原 key",
+        "replaced": "替换 key",
+        "added": "新增 key",
+        "cleared": "清除原 key",
+        "missing": "无 App key，可能使用 .env 引用",
+        "removed": "移除连接及其 App key"
+      },
+      "errors": {
+        "stale": "YAML 文件或当前设置已变更。请取消并重新导入，检查最新预览。",
+        "busy": "notype 忙碌中，或设置尚未保存完成。请等待录音、处理及下载结束后重试。",
+        "invalid": "YAML 格式、版本或设置内容无效，或已超出限制；未导入任何设置。",
+        "space": "存储空间不足，原有设置保持不变。",
+        "failed": "文件操作失败，原有设置保持不变。请检查文件访问权限后重试。"
+      },
+      "audioConflict": "导入的音频设备无法使用。可改用系统默认设备，再检查更新后的预览。",
+      "defaultAudio": "改用系统默认音频设备"
     }
   },
   "footer": {

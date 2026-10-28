@@ -76,22 +76,43 @@ The user then confirmed the new Gemini key was ready in home `.env`. A fresh
 read-only official compatibility-models request returned HTTP200 and60 IDs in439ms
 at2026-10-28T07:32:17.779Z. The candidate's actual model-list button also succeeded
 and displayed home `.env` as the source, without showing its value. This validates
-authentication and model listing only. Generation was not attempted: the user
-requires a confirmed free model AND project quota; project Free-tier confirmation
-remains pending. No fee or generation-success claim follows from models listing.
+authentication and model listing only. The user then explicitly confirmed a
+Free-tier key/project. Native local.5 generation succeeded at 2026-10-28 18:07:53
+Taiwan with `gemini-3.1-flash-lite`: requested thinking OFF, explicit mandatory
+minimum `minimal` (the previously accepted fallback), received input50/output1.
+Actual API fee remains unknown. Master AI stays OFF and no connection is active.
+The saved verification profile keeps the home `.env` reference; no real key was
+typed or exported. Generation stopped after this success.
+
+Earlier native short/exact-returned `gemini-2.5-flash-lite` tests failed; two owned
+one-shot synthetic diagnostics returned HTTP404, one with an array error root.
+Read-only native metadata returned200 and did not prove compatibility generation.
+No definitive retirement/server cause is claimed. Total five synthetic generation
+attempts: three App calls (two failed/one success), two standalone404 diagnostics.
+Earlier missing usage remains unknown in cumulative counters; nothing was reset.
+Free Standard eligibility and minimum controls were checked against official
+[pricing](https://ai.google.dev/gemini-api/docs/pricing) and
+[OpenAI compatibility](https://ai.google.dev/gemini-api/docs/openai) documentation.
 
 ## Remaining work and delivery boundary
 
-YAML export/import is **not implemented**. Scope is settings/prompts/vocabulary,
+YAML export/import source is implemented; native restart acceptance is pending.
+Scope is settings/prompts/vocabulary,
 optional keys, excluding histories/model files, with difference/conflict preview.
 The user has since confirmed App-stored keys only (home `.env` variable names,
 never their values), whole replacement after preview/confirmation, and preservation
 of unchanged original bound App keys when omitted. The bounded YAML codec and
-provider archive/replacement foundations now have focused source tests; they are
-not yet a complete transfer UI/transaction and are not in this candidate binary.
+provider archive/replacement, fixed-domain journal, startup recovery and Advanced
+UI now have focused source tests. None is in the running local.5 candidate binary.
+Latest source gates: focused Rust37 plus actual native AppSettings2, rendered
+UI125 (including transfer6), frontend lint/build and focused Clippy. The native
+default projection regression initially failed on retained legacy shortcut
+fields, then passed after limiting physical parsing to four active bindings.
+No home secrets, public API, microphone or real user settings are used by these
+transfer tests. New parser dependencies add six crates/eleven audited notices.
 See the [transfer design](../settings-transfer-design.md).
 
-Native transfer UI/restart acceptance, Gemini generation, company networking,
+Native transfer UI/restart acceptance, company networking,
 microphone/full ASR sessions and clean-host installation remain unverified here.
 Published **v0.1.1-local.2 is unchanged** and does not contain these source/local
 candidate changes. This receipt does not represent a new GitHub Release ZIP.

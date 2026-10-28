@@ -40,6 +40,11 @@ mod provider_models;
 mod runtime_startup;
 mod secure_input;
 mod settings;
+mod settings_journal;
+mod settings_journal_files;
+mod settings_transfer;
+mod settings_transfer_native;
+mod settings_yaml;
 mod shortcut;
 mod signal_handle;
 mod transcription_coordinator;
@@ -751,6 +756,12 @@ pub fn run(cli_args: CliArgs) {
 
     let specta_builder = Builder::<tauri::Wry>::new()
         .commands(collect_commands![
+            settings_transfer_native::export_settings_yaml,
+            settings_transfer_native::preview_settings_import,
+            settings_transfer_native::resolve_settings_import_folder,
+            settings_transfer_native::resolve_settings_import_audio,
+            settings_transfer_native::cancel_settings_import,
+            settings_transfer_native::apply_settings_import,
             offline_bootstrap_native::get_bootstrap_status,
             offline_bootstrap_native::retry_offline_bootstrap,
             shortcut::change_binding,
@@ -1033,6 +1044,10 @@ pub fn run(cli_args: CliArgs) {
         // A future stable facade adapter must preserve explicit data overrides.
         .manage(cli_args.clone())
         .setup(move |app| {
+            if let Err(code)=settings_transfer_native::recover_startup(app.handle()) {
+                settings_transfer_native::recovery_failure_notice();
+                return Err(code.into());
+            }
             // Structured collection starts OFF/uninitialized. Load only its
             // dedicated bounded preference before retaining any startup event.
             let diagnostic_preference = portable::app_data_dir(app.handle()).ok()
@@ -1283,6 +1298,11 @@ pub fn run(cli_args: CliArgs) {
             _ => {}
         })
         .invoke_handler(move |invoke| {
+            let _serial=settings_transfer_native::command_guard();
+            if settings_transfer_native::pending() {
+                invoke.resolver.reject("settings-transfer-busy");
+                return true;
+            }
             if offline_bootstrap::blocked() && !offline_bootstrap::recovery_command(invoke.message.command()) {
                 invoke.resolver.reject("bootstrap-incomplete");
                 return true;

@@ -1,6 +1,30 @@
 # 測試規範
 
-## YAML syntax boundary (#34, transfer not yet wired)
+## YAML settings transfer (#34)
+
+The source now connects Advanced settings to native file selection, a redacted
+preview, confirmed restart and startup recovery. `settings-journal` tests the
+transaction/space/admission boundary; `settings-journal-files` tests actual owned
+files, locks, interrupted write prefixes and external-edit rejection.
+`settings-transfer` round-trips Chinese YAML, rejects redacted/unknown inputs,
+reopens actual provider/App/root/diagnostics stores and preserves SQLite/model
+sentinels. It also distinguishes known App autosave from unrelated disk changes.
+`settings-transfer.ui.mjs` mounts the actual component with IPC doubles; six cases
+cover default key exclusion, plaintext notice, cancel/stale, audio/model conflicts,
+three locales and restart. These mocks do not establish native restart acceptance.
+
+```powershell
+cargo test --release --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test settings-yaml --test settings-journal --test settings-journal-files --test settings-transfer
+cargo clippy --release --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test settings-yaml --test settings-journal --test settings-journal-files --test settings-transfer -- -D warnings
+node --test --test-concurrency=1 tests/integration/settings-transfer.ui.mjs
+```
+
+`tests/unittest/settings_transfer_native.rs` is compiled by the actual native
+library: `cargo test --release --manifest-path desktop/src-tauri/Cargo.toml --lib
+--features tauri/custom-protocol settings_transfer_native::tests`. It checks real
+AppSettings default import and rejects invalid typed/ranged/product settings.
+The regression first failed on retained legacy shortcut fields, then passed after
+restricting physical-key parsing to the four active scene/stop bindings.
 
 `settings-yaml` exercises the bounded production codec source with owned synthetic
 values. It covers real YAML/Chinese/multiline/numeric round-trip, literal variable
@@ -14,9 +38,10 @@ cargo test --locked --manifest-path tests/integration/desktop-contracts/Cargo.to
 cargo clippy --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test settings-yaml -- -D warnings
 ```
 
-The pinned codec dependency is currently registered only in the portable test
-harness. Native dependency/notices and cross-store integration acceptance are
-required when connecting it to the App. It is not in the local.5 executable.
+The pinned codec is now registered in both native and portable manifests. Six
+added registry crates and eleven license files have been audited against crate
+checksums; inclusion in a newly verified package is a separate acceptance gate.
+The running local.5 executable does not contain this source.
 
 `provider-config` additionally verifies backend-only archive key exclusion/inclusion,
 fixed home-variable references and prepared whole-provider replacement. Omitted

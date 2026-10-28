@@ -6,7 +6,7 @@
 
 使用者已解鎖；舊版已正常結束，本機 `local.5` 已啟動。Computer Use 已驗證兩分頁、三場景特調皆 None、AI server 無選取／關閉為灰燈，以及同一既有 Qwen 模型待載入灰燈→載入中黃燈→已載入綠燈；未開啟麥克風、未儲存／啟用連線。現有 profile、模型及 key 保留，不需移除。
 
-YAML 正在實作：codec／provider archive／prepared replacement 的 27 項聚焦測試與 Clippy 已通過，尚未接上整份交易及 UI。政策已全部確認：勾選含 key 時僅帶 App 儲存值，`.env` 僅變數名稱參考；預覽後確認整份取代；未附 key 時保留原連線 key，但 ID／canonical API 位址／驗證方式變更不得自動沿用。見 [完整計畫](https://github.com/swchen44/notype/issues/34#issuecomment-6465488263)／[設計及測試範圍](docs/settings-transfer-design.md)。Gemini 新 key 已在 helper 與實際 App 取得模型清單（HTTP200、60 IDs），不代表生成或免費額度驗收。使用者限定免費模型及專案額度；專案 Free tier 確認待答，暫不生成。使用者對後續 Astra 審查的明確豁免維持有效；原 root checkout 仍凍結，整合 checkout 在 `D:/git/notype-impl-worktrees/usability-followup`。
+YAML 來源已接上進階設定、原生預覽／衝突處理、整份取代與重啟前 journal，原生檔案對話框及重啟／新套件驗收待完成。聚焦 Rust37、實際 native AppSettings2、rendered UI125（含 transfer6）、lint／build／聚焦 Clippy 通過。未附 key 僅保留同 ID／canonical route／auth 的原 App key，`.env` 永不讀值匯出。新的六個依賴與十一份授權檔已核對；新套件需更新 inventory。Gemini 已在 local.5 的實際 App 測試成功：gemini-3.1-flash-lite、最低 minimal、input50/output1，費用未知，停止額外生成；先前失敗未知用量保留。使用者已明確確認免費額度。見 [完整計畫](https://github.com/swchen44/notype/issues/34#issuecomment-6465488263)／[設計](docs/settings-transfer-design.md)／[驗證](docs/verification/server-tuning-status.md)。Astra 豁免仍有效，原 root 凍結，整合 checkout 在 D:/git/notype-impl-worktrees/usability-followup。
 
 GitHub Release **v0.1.1-local.2 保持原樣**，不含本次來源／本機候選版變更。新 ZIP 尚未發布，#33／#34 與真實環境驗收均不得冒稱完成。以下為歷史 checkpoint。
 

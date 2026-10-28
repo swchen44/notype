@@ -80,7 +80,10 @@ pub fn get_diagnostic_status() -> DiagnosticStatus {
 /// enables only after the dedicated preference is successfully saved.
 #[tauri::command]
 #[specta::specta]
-pub async fn set_diagnostics_enabled(enabled: bool) -> DiagnosticStatus {
+pub async fn set_diagnostics_enabled(app: AppHandle, enabled: bool) -> DiagnosticStatus {
+    let Ok(_activity) = crate::settings_transfer_native::activity(&app) else {
+        return service::global().status().into();
+    };
     service::global().set_enabled(enabled).into()
 }
 
@@ -156,6 +159,7 @@ pub async fn export_diagnostic_report(
     app: AppHandle,
     report_id: String,
 ) -> Result<DiagnosticExport, String> {
+    let _activity = crate::settings_transfer_native::activity(&app)?;
     let ticket = service::global()
         .begin_export(&report_id)
         .map_err(str::to_string)?;

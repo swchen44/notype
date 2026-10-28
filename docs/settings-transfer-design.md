@@ -1,6 +1,6 @@
 # YAML settings transfer design (#34)
 
-Status: design preparation; transfer is not implemented. Accepted decisions are
+Status: transfer source is implemented; native restart/package acceptance is pending. Accepted decisions are
 [recorded in issue #34](https://github.com/swchen44/notype/issues/34#issuecomment-6462790837).
 The user has waived further Astra plan reviews. Existing settings/tuning source
 and local candidate acceptance remain separate from this planned feature.
@@ -49,7 +49,7 @@ precedes opening the affected stores, initializing hotkeys/audio or starting mod
 work. Other domains must not observe partly imported values.
 
 The journal uses fixed App-owned target filenames and atomic staging/commit with
-recovery/rollback; YAML cannot supply target paths. History and usage databases
+forward recovery; YAML cannot supply target paths. History and usage databases
 are never transaction targets. File errors, stale previews or interrupted apply
 retain/recover the previous complete settings or the complete confirmed settings,
 never a silent mixture. Existing settings cache/autosave and single-instance
@@ -104,3 +104,40 @@ Clippy and complete composed CI. Native Windows build, file-dialog/preview/resta
 Computer Use, actual offline/clean-profile transfer, dependency notices and a new
 verified package are separate acceptance gates. The previous immutable package
 assembly assumptions must be re-audited if a parser/lockfile dependency changes.
+
+## Implementation and startup sequence
+
+`settings_transfer.rs` owns the strict versioned archive, retired credential-field
+exclusion, redacted preview and disk baseline. `settings_yaml.rs` owns bounded YAML
+syntax. `settings_journal.rs` is the fixed-domain transaction state machine;
+`settings_journal_files.rs` supplies atomic files, an OS owner lock and Windows
+space preflight. `settings_transfer_native.rs` owns file dialogs, typed AppSettings
+validation, model/audio conflicts, preview tickets and restart admission. No
+credential-capable archive type implements Debug or enters an ordinary IPC DTO.
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant UI as Advanced settings
+    participant T as Native transfer
+    participant J as Journal
+    participant S as Next startup
+    U->>UI: Import YAML
+    UI->>T: Select and validate
+    T-->>UI: Masked before/after, changes, key effects, conflicts
+    U->>UI: Resolve conflicts and confirm whole replacement/restart
+    UI->>T: Apply opaque preview ID
+    T->>T: Recheck file/cache/disk; freeze idle admission
+    T->>J: Stage confirmed intent (four fixed files)
+    T->>T: Restart; old plugin cache flushes old settings
+    S->>J: Acquire process owner lock; recover known old/new prefix
+    S->>S: Open settings, diagnostics, models and runtime
+```
+
+The runtime holds the OS lock for its lifetime, including headless instances.
+The successor briefly waits for the old process's handles before recovery. Every
+domain baseline is checked before the first replacement; an unexpected external
+edit fails closed. An already committed cleanup marker never replays settings.
+App autosave may only publish its known preview cache, preserving envelope
+metadata. This is process-interruption recovery, not a tested power-loss guarantee.
+Non-Windows filesystem contracts run in CI; native macOS/Linux delivery is pending.

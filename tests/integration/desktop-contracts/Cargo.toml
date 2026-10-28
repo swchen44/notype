@@ -34,6 +34,18 @@ path = "../bootstrap_preflight.rs"
 name = "settings-yaml"
 path = "../../unittest/settings_yaml.rs"
 
+[[test]]
+name = "settings-journal"
+path = "../../unittest/settings_journal.rs"
+
+[[test]]
+name = "settings-journal-files"
+path = "../settings_journal.rs"
+
+[[test]]
+name = "settings-transfer"
+path = "../settings_transfer.rs"
+
 [[bin]]
 name = "notype-provider-probe"
 path = "../provider_probe_main.rs"

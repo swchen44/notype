@@ -146,10 +146,10 @@ jobs:
         run: cargo +1.99.1 test --locked --no-fail-fast --manifest-path tests/integration/desktop-contracts/Cargo.toml --test provider-bootstrap --test offline-bootstrap-store --test runtime-startup --test bootstrap-preflight
       - name: Lint bootstrap placement and runtime ownership without native dependencies
         run: cargo +1.99.1 clippy --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test provider-bootstrap --test offline-bootstrap-store --test runtime-startup --test bootstrap-preflight -- -D warnings
-      - name: Exercise bounded YAML syntax without App or credential access
+      - name: Exercise bounded settings transfer and interrupted recovery without user data
         run: |
-          cargo +1.99.1 test --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test settings-yaml
-          cargo +1.99.1 clippy --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test settings-yaml -- -D warnings
+          cargo +1.99.1 test --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test settings-yaml --test settings-journal --test settings-journal-files --test settings-transfer
+          cargo +1.99.1 clippy --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test settings-yaml --test settings-journal --test settings-journal-files --test settings-transfer -- -D warnings
       - name: Check platform adapter formatting
         run: cargo +1.99.1 fmt --manifest-path crates/notype-platform/Cargo.toml -- --check
       - name: Exercise the native launch policy without Tauri or speech engines

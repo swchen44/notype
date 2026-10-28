@@ -257,6 +257,7 @@ pub async fn test_text_connection(
 ) -> Result<(), String> {
     use notype_core::{CancellationToken, Scenario, TextFailure, TextRequest};
     crate::offline_bootstrap::admit()?;
+    let _activity = crate::settings_transfer_native::activity(&app)?;
     let store = connection_activity_store(&app)?;
     let current = configuration_store(&app)?
         .view()
@@ -388,6 +389,7 @@ pub async fn list_text_models(
     request: ModelListRequest,
 ) -> Result<ModelListResult, String> {
     crate::offline_bootstrap::admit()?;
+    let _activity = crate::settings_transfer_native::activity(&app)?;
     model_discovery()
         .query(configuration_store(&app)?, request, &CurrentUserReader)
         .await
@@ -410,6 +412,7 @@ pub async fn export_history_csv(
     workflow: State<'_, Arc<DesktopWorkflow>>,
 ) -> Result<HistoryCsvExportResult, String> {
     use tauri_plugin_dialog::DialogExt;
+    let activity = crate::settings_transfer_native::activity(&app)?;
     let selected = app
         .dialog()
         .file()
@@ -427,6 +430,7 @@ pub async fn export_history_csv(
         .map_err(|_| "history-csv-invalid-destination".to_owned())?;
     let sessions = workflow.sessions().clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
+        let _activity = activity;
         sessions.export_csv(
             &destination,
             &NativeCsvSpace,
@@ -563,6 +567,9 @@ pub(crate) fn begin_scenario_recording(
     context: notype_core::SourceContext,
 ) -> Result<u64, String> {
     crate::offline_bootstrap::admit()?;
+    if crate::settings_transfer_native::pending() {
+        return Err("settings-transfer-busy".into());
+    }
     let preferences = settings::get_settings(app);
     let profile = crate::workflow::recognition::RecognitionProfile::new(
         preferences.recognition_mode.into(),
@@ -657,6 +664,7 @@ pub async fn retry_history_entry_processing(
     id: String,
 ) -> Result<SessionDto, String> {
     crate::offline_bootstrap::admit()?;
+    let _activity = crate::settings_transfer_native::activity(&app)?;
     let configuration = read_configuration(&app).unwrap_or_default();
     let glossary = settings::get_settings(&app).custom_words;
     workflow
@@ -681,9 +689,11 @@ pub fn choose_history_original(
 #[tauri::command]
 #[specta::specta]
 pub async fn deliver_history_entry(
+    app: AppHandle,
     workflow: State<'_, Arc<DesktopWorkflow>>,
     id: String,
 ) -> Result<SessionDto, String> {
+    let _activity = crate::settings_transfer_native::activity(&app)?;
     workflow
         .deliver(&id)
         .await

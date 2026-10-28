@@ -1303,7 +1303,7 @@ pub fn update_checks_effectively_enabled(settings: &AppSettings) -> bool {
 }
 
 pub fn write_settings(app: &AppHandle, mut settings: AppSettings) {
-    if crate::offline_bootstrap::blocked() {
+    if crate::offline_bootstrap::blocked() || crate::settings_transfer_native::pending() {
         return;
     }
     settings.auto_submit = false;

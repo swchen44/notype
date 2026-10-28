@@ -73,7 +73,7 @@ pub fn display_path(path: &Path) -> String {
     let text = path.to_string_lossy();
     #[cfg(windows)]
     {
-        return text.strip_prefix(r"\\?\").unwrap_or(&text).to_owned();
+        text.strip_prefix(r"\\?\").unwrap_or(&text).to_owned()
     }
     #[cfg(not(windows))]
     {
@@ -499,7 +499,7 @@ impl Filesystem {
         }
         #[cfg(windows)]
         {
-            return Ok(windows_io::writable(root));
+            Ok(windows_io::writable(root))
         }
         #[cfg(unix)]
         {

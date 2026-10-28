@@ -1273,6 +1273,46 @@
           "details": "notype's local speech-to-text is built on transcribe.cpp and ggml. Thanks to the amazing work by Georgi Gerganov and contributors."
         }
       }
+    },
+    "transfer": {
+      "title": "Export and import settings",
+      "scope": "UTF-8 YAML includes settings, shared and server prompts, vocabulary and model folder references. History, usage, logs and model files are excluded.",
+      "includeKeys": "Include API keys saved in this App (off by default)",
+      "plaintext": "This YAML will contain plaintext API keys. Store it securely. Values from home .env are never exported; only variable names are included.",
+      "export": "Export YAML",
+      "import": "Import YAML",
+      "saved": "Settings exported.",
+      "cancelled": "Cancelled; existing settings were kept.",
+      "preview": "Import preview",
+      "replace": "Confirming replaces all settings and restarts notype. Review the changes and key effects first. Model files will not be moved. No API test is performed.",
+      "changes": "Changed fields",
+      "noChanges": "No visible setting changes.",
+      "before": "Current settings",
+      "after": "Imported settings",
+      "keys": "Connection key effects",
+      "omittedKeys": "If keys are omitted, an existing App key is retained only for the same connection ID, canonical API address and authentication. Removed or changed connections cannot inherit it.",
+      "folderConflict": "The model folder is unavailable or unsafe on this computer. Choose an existing folder before confirming. Models will not be moved or downloaded.",
+      "chooseFolder": "Choose model folder",
+      "cancel": "Cancel import",
+      "confirm": "Replace settings and restart",
+      "restarting": "Settings staged. Restarting notype…",
+      "keyEffects": {
+        "kept": "existing key retained",
+        "replaced": "key replaced",
+        "added": "key added",
+        "cleared": "existing key cleared",
+        "missing": "no App key; .env reference may apply",
+        "removed": "connection and its App key removed"
+      },
+      "errors": {
+        "stale": "The YAML file or current settings changed. Cancel and import again to review a fresh preview.",
+        "busy": "notype is busy or a preference has not finished saving. Wait for recording, processing and downloads to finish, then retry.",
+        "invalid": "The YAML is invalid, unsupported or exceeds the limits. No settings were imported.",
+        "space": "There is not enough storage space. Existing settings were kept.",
+        "failed": "The file operation failed. Existing settings were kept. Check file access and try again."
+      },
+      "audioConflict": "An imported audio device is unavailable. Use system defaults and review the updated preview.",
+      "defaultAudio": "Use system default audio devices"
     }
   },
   "footer": {
