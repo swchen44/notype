@@ -604,6 +604,21 @@
         "succeeded": "AI 已启用，最近连接测试成功",
         "failed": "AI 已启用，最近连接测试失败"
       }
+    },
+    "settingsTabs": {
+      "title": "文字整理设置",
+      "servers": "AI server 设置",
+      "prompts": "场景共用提示词"
+    },
+    "tuning": {
+      "title": "此 server 的特调提示词",
+      "hint": "三种场景可各自附加补充规则到共用提示词。None 仅使用共用提示词；保存连接后应用。",
+      "scene": "特调场景",
+      "mode": "Server 特调",
+      "none": "None — 仅使用共用提示词",
+      "custom": "自定义补充规则",
+      "rules": "补充规则",
+      "invalid": "补充规则不可空白或含 NUL 字符，最多 8,192 UTF-8 字节；与共用提示词合并后最多 32,768 字节。"
     }
   },
   "tray": {

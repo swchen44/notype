@@ -604,6 +604,21 @@
         "succeeded": "AI 已啟用，最近連線測試成功",
         "failed": "AI 已啟用，最近連線測試失敗"
       }
+    },
+    "settingsTabs": {
+      "title": "文字整理設定",
+      "servers": "AI server 設定",
+      "prompts": "場景共用提示詞"
+    },
+    "tuning": {
+      "title": "此 server 的特調提示詞",
+      "hint": "三種場景可各自附加補充規則到共用提示詞。None 僅使用共用提示詞；儲存連線後套用。",
+      "scene": "特調場景",
+      "mode": "Server 特調",
+      "none": "None — 僅使用共用提示詞",
+      "custom": "自訂補充規則",
+      "rules": "補充規則",
+      "invalid": "補充規則不可空白或含 NUL 字元，最多 8,192 UTF-8 位元組；與共用提示詞合併後最多 32,768 位元組。"
     }
   },
   "tray": {

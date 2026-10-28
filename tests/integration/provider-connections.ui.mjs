@@ -424,12 +424,16 @@ test("prompt saving preserves the connection collection and an unsaved model edi
     .getByLabel("Model ID (manual entry)", { exact: true })
     .fill("unsaved-model");
   await page
+    .getByRole("tab", { name: "Shared scenario prompts", exact: true })
+    .click();
+  await page
     .getByLabel("Editable prompt", { exact: true })
     .fill("New dictation rules");
   await page
     .getByRole("button", { name: "Save this prompt", exact: true })
     .click();
   await page.getByText("Saved locally", { exact: true }).waitFor();
+  await page.getByRole("tab", { name: "AI servers", exact: true }).click();
   assert.equal(
     await page
       .getByLabel("Model ID (manual entry)", { exact: true })
@@ -447,6 +451,92 @@ test("prompt saving preserves the connection collection and an unsaved model edi
   assert.equal(
     await page.evaluate(() => window.configuration.connections[0].model),
     "unsaved-model",
+  );
+});
+
+test("scene tuning and secret drafts survive tabs and save independently without activating or probing", async (t) => {
+  const page = await providerConnectionsFixture(t, "en", [
+    { ...savedConnection, authentication: "bearer" },
+  ]);
+  await page
+    .getByRole("button", { name: "Edit Company writing", exact: true })
+    .click();
+  const scene = page.getByLabel("Tuning scenario", { exact: true });
+  const mode = page.getByLabel("Server tuning", { exact: true });
+  const prompt = page.getByLabel("Supplementary rules", { exact: true });
+  assert.equal(await mode.inputValue(), "none");
+  await mode.selectOption("custom");
+  await prompt.fill("DICTATION_SUPPLEMENT");
+  await scene.selectOption("ask");
+  assert.equal(await mode.inputValue(), "none");
+  await mode.selectOption("custom");
+  await prompt.fill("ASK_SUPPLEMENT");
+  await page
+    .getByLabel("App key action", { exact: true })
+    .selectOption("replace");
+  await page.getByLabel("API key", { exact: true }).fill("synthetic-draft-key");
+  await page
+    .getByRole("tab", { name: "Shared scenario prompts", exact: true })
+    .click();
+  await page
+    .getByLabel("Editable prompt", { exact: true })
+    .fill("UNSAVED_SHARED");
+  await page.getByRole("tab", { name: "AI servers", exact: true }).click();
+  assert.equal(await prompt.inputValue(), "ASK_SUPPLEMENT");
+  assert.equal(
+    await page.getByLabel("API key", { exact: true }).inputValue(),
+    "synthetic-draft-key",
+  );
+  await scene.selectOption("dictation");
+  assert.equal(await prompt.inputValue(), "DICTATION_SUPPLEMENT");
+  await page
+    .getByRole("button", { name: "Save connection", exact: true })
+    .click();
+  await page.getByText("Connection settings saved.", { exact: true }).waitFor();
+  const payload = await page.evaluate(
+    () => window.calls.find((c) => c.cmd === "save_text_connection").args,
+  );
+  assert.deepEqual(payload.connection.prompt_tuning, {
+    dictation: "DICTATION_SUPPLEMENT",
+    translation: null,
+    ask: "ASK_SUPPLEMENT",
+  });
+  await mode.selectOption("none");
+  await page
+    .getByRole("button", { name: "Save connection", exact: true })
+    .click();
+  await page.waitForFunction(
+    () =>
+      window.calls.filter((c) => c.cmd === "save_text_connection").length === 2,
+  );
+  assert.deepEqual(
+    await page.evaluate(
+      () => window.configuration.connections[0].prompt_tuning,
+    ),
+    { dictation: null, translation: null, ask: "ASK_SUPPLEMENT" },
+  );
+  await page
+    .getByRole("tab", { name: "Shared scenario prompts", exact: true })
+    .click();
+  assert.equal(
+    await page.getByLabel("Editable prompt", { exact: true }).inputValue(),
+    "UNSAVED_SHARED",
+  );
+  assert.deepEqual(
+    await page.evaluate(() =>
+      window.calls.filter((c) =>
+        [
+          "activate_text_connection",
+          "test_text_connection",
+          "list_text_models",
+        ].includes(c.cmd),
+      ),
+    ),
+    [],
+  );
+  assert.equal(
+    await page.evaluate(() => window.settings.post_process_enabled),
+    false,
   );
 });
 
@@ -553,7 +643,19 @@ for (const [language, edit, label, view] of [
       await page.getByRole("button", { name: view, exact: true }).waitFor();
       assert.doesNotMatch(
         await page.locator("body").innerText(),
-        /notype\.connections|currently unavailable|目前無法顯示|\?\?/,
+        /notype\.(connections|tuning|settingsTabs)|currently unavailable|目前無法顯示|\?\?/,
+      );
+      assert.equal(await page.getByRole("tab").count(), 2);
+      await page.getByRole("tab").first().focus();
+      await page.keyboard.press("ArrowRight");
+      assert.equal(
+        await page.getByRole("tab").nth(1).getAttribute("aria-selected"),
+        "true",
+      );
+      await page.keyboard.press("Home");
+      assert.equal(
+        await page.getByRole("tab").first().getAttribute("aria-selected"),
+        "true",
       );
       assert.equal(
         await page.evaluate(

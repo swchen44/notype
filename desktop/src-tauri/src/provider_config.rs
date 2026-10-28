@@ -10,6 +10,9 @@ pub mod capabilities;
 pub mod credentials;
 #[path = "provider_config_files.rs"]
 pub mod files;
+#[path = "provider_prompt_tuning.rs"]
+mod prompt_tuning;
+pub use prompt_tuning::ConnectionPromptTuning;
 
 /// Fixed configuration failures; no URL, path, provider message or credential.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -91,6 +94,9 @@ pub struct CapabilityDeclaration {
 /// Editable connection fields. No current or resolved credential is returned.
 #[derive(Clone, Serialize, Deserialize, Type)]
 pub struct ConnectionDraft {
+    /// Independent optional supplements appended to the shared scene prompts.
+    #[serde(default)]
+    pub prompt_tuning: ConnectionPromptTuning,
     /// Stable opaque backend-generated ID, never the display name.
     pub id: String,
     /// Trimmed text-only presentation name, at most128 scalars/512 bytes.
@@ -526,6 +532,7 @@ impl ConnectionStore {
                 ""
             };
             let draft = ConnectionDraft {
+                prompt_tuning: ConnectionPromptTuning::default(),
                 id: new_id(),
                 display_name: name.trim().into(),
                 kind,
@@ -709,6 +716,7 @@ fn resolve_record(
         TextAuthentication, TextConfiguration, TextProviderProfile, TextTransport,
     };
     let endpoint = canonical_chat(&draft)?;
+    let prompts = draft.prompt_tuning.compose(&state.prompts)?;
     let binding = binding(&draft)?;
     let resolution = capabilities::resolve(&draft)?;
     if generation && draft.model.trim().is_empty() {
@@ -779,7 +787,7 @@ fn resolve_record(
         request_parameters: Some(parameters),
         credential_source: Some(source.into()),
         bypass_proxy: draft.kind == ConnectionKind::Local,
-        prompts: state.prompts.clone(),
+        prompts,
         translation: state.translation.clone(),
         ..Default::default()
     };
@@ -859,6 +867,7 @@ fn validate_store(state: &StoredSettings) -> Result<(), ConfigError> {
     let mut ids = std::collections::HashSet::new();
     for record in &state.connections {
         validate_draft(&record.draft)?;
+        record.draft.prompt_tuning.compose(&state.prompts)?;
         if !ids.insert(&record.draft.id) {
             return Err(ConfigError("configuration-store-invalid"));
         }
@@ -910,6 +919,7 @@ fn validate_translation(value: &TranslationSettings) -> Result<(), ConfigError> 
     Ok(())
 }
 fn validate_draft(value: &ConnectionDraft) -> Result<(), ConfigError> {
+    value.prompt_tuning.validate()?;
     if value.id.is_empty()
         || value.id.len() > 64
         || !value

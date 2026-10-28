@@ -605,6 +605,21 @@
         "succeeded": "AI enabled; last connection test succeeded",
         "failed": "AI enabled; last connection test failed"
       }
+    },
+    "settingsTabs": {
+      "title": "Text processing settings",
+      "servers": "AI servers",
+      "prompts": "Shared scenario prompts"
+    },
+    "tuning": {
+      "title": "Server prompt tuning",
+      "hint": "Each scenario optionally appends supplementary rules to its shared prompt. None uses only the shared prompt. Save the connection to apply.",
+      "scene": "Tuning scenario",
+      "mode": "Server tuning",
+      "none": "None — shared prompt only",
+      "custom": "Custom supplementary rules",
+      "rules": "Supplementary rules",
+      "invalid": "Enter nonblank supplementary rules, without NUL characters, up to 8,192 UTF-8 bytes. The combined prompt must fit within 32,768 bytes."
     }
   },
   "tray": {

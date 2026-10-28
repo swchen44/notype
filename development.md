@@ -296,6 +296,7 @@ notype/
 | 前端入口 | [main.tsx](desktop/src/main.tsx)、[App.tsx](desktop/src/App.tsx) | 掛載及主要介面組合 |
 | IPC／前端狀態 | [bindings.ts](desktop/src/bindings.ts)、[settingsStore.ts](desktop/src/stores/settingsStore.ts)、[modelStore.ts](desktop/src/stores/modelStore.ts) | 命令型別與 UI 狀態 |
 | 連線設定 | [ConnectionEditor.tsx](desktop/src/components/settings/post-processing/ConnectionEditor.tsx)、[ModelIdList.tsx](desktop/src/components/settings/post-processing/ModelIdList.tsx) | 多連線編輯、模型清單參考 |
+| Server 特調 | [ConnectionPromptTuning.tsx](desktop/src/components/settings/post-processing/ConnectionPromptTuning.tsx)、[provider_prompt_tuning.rs](desktop/src-tauri/src/provider_prompt_tuning.rs) | 三場景獨立補充規則、長度驗證與 session 提示詞組合 |
 | 模型與診斷 UI | [ModelFolderControl.tsx](desktop/src/components/settings/models/ModelFolderControl.tsx)、[DiagnosticsSupport.tsx](desktop/src/components/settings/about/DiagnosticsSupport.tsx) | 模型位置、診斷偏好與匯出 |
 | 語系 | [i18n/index.ts](desktop/src/i18n/index.ts)、[locales/](desktop/src/i18n/locales/) | 載入及語系資源 |
 | 原生入口 | [main.rs](desktop/src-tauri/src/main.rs)、[lib.rs](desktop/src-tauri/src/lib.rs) | 程式入口、Tauri setup、服務組裝 |

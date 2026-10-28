@@ -56,6 +56,11 @@ export function endpointPreview(
 /** Project only command input fields; view metadata cannot become request data. */
 export function connectionDraft(view: ConnectionView): ConnectionDraft {
   return {
+    prompt_tuning: {
+      dictation: view.prompt_tuning?.dictation ?? null,
+      translation: view.prompt_tuning?.translation ?? null,
+      ask: view.prompt_tuning?.ask ?? null,
+    },
     id: view.id,
     display_name: view.display_name,
     kind: view.kind,

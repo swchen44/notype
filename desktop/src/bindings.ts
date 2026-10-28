@@ -1451,7 +1451,9 @@ export type CapabilityDeclaration = {
   temperature_supported: boolean;
   top_p_supported: boolean;
 };
+export type ConnectionPromptTuning = { dictation: string | null; translation: string | null; ask: string | null };
 export type ConnectionDraft = {
+  prompt_tuning: ConnectionPromptTuning;
   id: string; display_name: string; kind: ConnectionKind; dialect: ProviderDialect;
   address_mode: AddressMode; api_address: string; models_endpoint: string | null;
   model: string; authentication: "none" | "bearer"; timeout_ms: number;

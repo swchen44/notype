@@ -13,6 +13,123 @@ mod workflow;
 use provider_config::*;
 use std::sync::Arc;
 
+#[tokio::test]
+async fn saved_scene_supplements_reach_only_the_matching_loopback_system_message() {
+    use notype_core::{RecognitionMode, Scenario, SessionService};
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    struct NeverHome;
+    impl credentials::CredentialReader for NeverHome {
+        fn read(&self, _: credentials::PublicKey) -> Result<Option<String>, ConfigError> {
+            panic!("local anonymous fixture must not read credentials");
+        }
+    }
+    for (scenario, supplement) in [
+        (Scenario::Dictation, "DICTATION_ONLY"),
+        (Scenario::Translation, "TRANSLATION_ONLY"),
+        (Scenario::Ask, "ASK_ONLY"),
+    ] {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = format!("http://{}/v1", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move {
+            let (mut stream, _) =
+                tokio::time::timeout(std::time::Duration::from_secs(5), listener.accept())
+                    .await
+                    .unwrap()
+                    .unwrap();
+            let mut bytes = Vec::new();
+            let mut buffer = [0; 4096];
+            let (end, length) = loop {
+                let size = stream.read(&mut buffer).await.unwrap();
+                assert!(size > 0);
+                bytes.extend_from_slice(&buffer[..size]);
+                if let Some(end) = bytes.windows(4).position(|p| p == b"\r\n\r\n") {
+                    let header = std::str::from_utf8(&bytes[..end]).unwrap().to_lowercase();
+                    assert!(header.starts_with("post /v1/chat/completions http/1.1"));
+                    assert!(!header.contains("authorization:"));
+                    let length = header
+                        .lines()
+                        .find_map(|line| {
+                            line.strip_prefix("content-length:")
+                                .map(|s| s.trim().parse::<usize>().unwrap())
+                        })
+                        .unwrap();
+                    break (end + 4, length);
+                }
+            };
+            while bytes.len() < end + length {
+                let size = stream.read(&mut buffer).await.unwrap();
+                assert!(size > 0);
+                bytes.extend_from_slice(&buffer[..size]);
+            }
+            let request: serde_json::Value =
+                serde_json::from_slice(&bytes[end..end + length]).unwrap();
+            let body = r#"{"choices":[{"message":{"role":"assistant","content":"Synthetic result."},"finish_reason":"stop"}]}"#;
+            stream.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",body.len(),body).as_bytes()).await.unwrap();
+            assert!(
+                tokio::time::timeout(std::time::Duration::from_millis(75), listener.accept())
+                    .await
+                    .is_err(),
+                "unexpected additional request"
+            );
+            request
+        });
+        let directory = tempfile::tempdir().unwrap();
+        let store = ConnectionStore::open(Arc::new(files::FileStorage::new(
+            directory.path().join("connections.json"),
+        )))
+        .unwrap();
+        let mut draft = store
+            .create(
+                0,
+                "Local fixture".into(),
+                ConnectionKind::Local,
+                ProviderDialect::Generic,
+            )
+            .unwrap()
+            .connections
+            .remove(0)
+            .connection;
+        draft.api_address = address;
+        draft.model = "synthetic-model".into();
+        draft.capability_declaration = Some(CapabilityDeclaration {
+            kind: "non_reasoning".into(),
+            minimum_effort: None,
+            supported_efforts: vec![],
+            temperature_supported: true,
+            top_p_supported: true,
+        });
+        draft.prompt_tuning = ConnectionPromptTuning {
+            dictation: Some("DICTATION_ONLY".into()),
+            translation: Some("TRANSLATION_ONLY".into()),
+            ask: Some("ASK_ONLY".into()),
+        };
+        let id = draft.id.clone();
+        store.save(1, draft, KeyAction::Keep).unwrap();
+        store.activate(2, Some(id)).unwrap();
+        let config = store.resolve_active(&NeverHome).unwrap();
+        let expected = config.prompt(scenario).to_owned();
+        assert!(expected.ends_with(supplement));
+        let workflow =
+            workflow::DesktopWorkflow::new(SessionService::in_memory().unwrap(), Arc::new(|| {}));
+        let generation = workflow
+            .begin(RecognitionMode::TraditionalEnglish, None)
+            .unwrap();
+        workflow
+            .capture_processing_snapshot(generation, scenario, config.clone(), vec![])
+            .unwrap();
+        workflow
+            .finish(generation, "Synthetic source.", config, vec![])
+            .await
+            .unwrap();
+        let request = server.await.unwrap();
+        assert_eq!(request["messages"][1]["role"], "system");
+        assert_eq!(request["messages"][1]["content"], expected);
+        for other in ["DICTATION_ONLY", "TRANSLATION_ONLY", "ASK_ONLY"] {
+            assert_eq!(expected.contains(other), other == supplement);
+        }
+    }
+}
+
 #[test]
 fn actual_file_store_reopens_safe_records_and_rejects_corrupt_collection_identity() {
     let directory = tempfile::tempdir().unwrap();
@@ -27,10 +144,22 @@ fn actual_file_store_reopens_safe_records_and_rejects_corrupt_collection_identit
         )
         .unwrap();
     let id = first.connections[0].connection.id.clone();
-    store.activate(1, Some(id.clone())).unwrap();
+    let mut connection = first.connections[0].connection.clone();
+    connection.prompt_tuning.translation = Some("PERSISTED_TRANSLATION_SUPPLEMENT".into());
+    store.save(1, connection, KeyAction::Keep).unwrap();
+    store.activate(2, Some(id.clone())).unwrap();
     drop(store);
     let reopened = ConnectionStore::open(Arc::new(files::FileStorage::new(path.clone()))).unwrap();
     assert_eq!(reopened.view().unwrap().active_connection_id, Some(id));
+    let tuning = &reopened.view().unwrap().connections[0]
+        .connection
+        .prompt_tuning;
+    assert_eq!(
+        tuning.translation.as_deref(),
+        Some("PERSISTED_TRANSLATION_SUPPLEMENT")
+    );
+    assert!(tuning.dictation.is_none());
+    assert!(tuning.ask.is_none());
     let good = std::fs::read(&path).unwrap();
     drop(reopened);
     for duplicate in [true, false] {

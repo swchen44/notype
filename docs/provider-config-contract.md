@@ -26,6 +26,7 @@ type CapabilityDeclaration = {
   top_p_supported: boolean;
 };
 type ConnectionDraft = {
+  prompt_tuning: { dictation: string | null; translation: string | null; ask: string | null };
   id: string; display_name: string; kind: ConnectionKind; dialect: ProviderDialect;
   address_mode: AddressMode; api_address: string; models_endpoint: string | null;
   model: string; authentication: "none" | "bearer"; timeout_ms: number;
@@ -98,6 +99,26 @@ resolved source. Missing capability saves successfully with `unresolved` preview
 generation is unavailable until an exact fact or explicit declaration resolves it.
 Known mandatory OFF maps to its minimum with `mandatory_minimum`; it never says OFF
 was honored. All new records have blank models, including provider presets.
+
+## Per-server prompt tuning (#34)
+
+Each connection has three independent optional supplements in `prompt_tuning`.
+All default to null (UI: None). Effective scene instructions consist of the shared
+scene prompt, two newlines, and that scene's supplement. Null uses the shared prompt
+byte for byte. Other scenes and connections are unaffected. The effective prompts
+are owned by the same immutable processing snapshot as the selected connection;
+editing settings during a session does not change that session's instructions.
+
+Supplements must be nonblank, contain no NUL and fit within 8,192 UTF-8 bytes each.
+Combined prompts must fit within the existing 32,768-byte limit. Both connection
+and shared-prompt saves validate all affected combinations before committing.
+Errors `prompt-tuning-invalid` and `prompt-tuning-too-long` expose no prompt text;
+failed mutations preserve the revision and durable bytes. A connection test still
+uses its fixed bounded probe prompt rather than the user's task instructions.
+
+The settings UI has AI servers and Shared scenario prompts tabs. Both panels stay
+mounted when hidden to retain unsaved form/key drafts; switching tabs never saves,
+activates a connection, changes the master switch or sends an API request.
 
 Model results are reference IDs only: Copy never edits, saves, activates or sends
 generation. Use a fresh request ID for each explicit query; one in-flight per

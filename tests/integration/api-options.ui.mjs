@@ -145,6 +145,9 @@ test("a rejected save keeps the edit and supports an explicit retry without raw 
 test("prompt reset and translation mutation preserve the saved connection collection", async (t) => {
   const page = await editor(t);
   await page
+    .getByRole("tab", { name: "Shared scenario prompts", exact: true })
+    .click();
+  await page
     .getByRole("button", { name: "Restore this default prompt", exact: true })
     .click();
   await page

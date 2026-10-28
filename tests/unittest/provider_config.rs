@@ -36,6 +36,211 @@ fn draft(dialect: ProviderDialect) -> ConnectionDraft {
 }
 
 #[test]
+fn connection_tuning_appends_each_scene_and_is_frozen_with_its_server_snapshot() {
+    struct NeverHome;
+    impl credentials::CredentialReader for NeverHome {
+        fn read(&self, _: credentials::PublicKey) -> Result<Option<String>, ConfigError> {
+            panic!("anonymous fixture must not read credentials");
+        }
+    }
+    let store = store();
+    let mut connection = store
+        .create(
+            0,
+            "Tuned".into(),
+            ConnectionKind::Provider,
+            ProviderDialect::Deepseek,
+        )
+        .unwrap()
+        .connections
+        .remove(0)
+        .connection;
+    connection.model = "synthetic-model".into();
+    connection.authentication = Authentication::None;
+    let id = connection.id.clone();
+    let shared = store.view().unwrap().prompts;
+    let mut value = serde_json::to_value(connection).unwrap();
+    value["prompt_tuning"] = serde_json::json!({"dictation":"DICTATION_TUNING_SENTINEL","translation":null,"ask":"ASK_TUNING_SENTINEL"});
+    let connection = serde_json::from_value(value).unwrap();
+    store.save(1, connection, KeyAction::Keep).unwrap();
+    store.activate(2, Some(id.clone())).unwrap();
+    let frozen = store.resolve_active(&NeverHome).unwrap();
+    assert!(frozen.prompts.dictation.starts_with(&shared.dictation));
+    assert!(frozen
+        .prompts
+        .dictation
+        .ends_with("DICTATION_TUNING_SENTINEL"));
+    assert_eq!(frozen.prompts.translation, shared.translation);
+    assert!(frozen.prompts.ask.starts_with(&shared.ask));
+    assert!(frozen.prompts.ask.ends_with("ASK_TUNING_SENTINEL"));
+    store
+        .prompt(
+            3,
+            notype_core::Scenario::Dictation,
+            Some("NEW_SHARED_PROMPT".into()),
+        )
+        .unwrap();
+    let current = store.resolve_active(&NeverHome).unwrap();
+    assert!(current.prompts.dictation.starts_with("NEW_SHARED_PROMPT"));
+    assert!(current
+        .prompts
+        .dictation
+        .ends_with("DICTATION_TUNING_SENTINEL"));
+    assert!(frozen.prompts.dictation.starts_with(&shared.dictation));
+    let view = store.view().unwrap();
+    let mut value =
+        serde_json::to_value(view.connections.into_iter().next().unwrap().connection).unwrap();
+    value["prompt_tuning"]["dictation"] = serde_json::Value::Null;
+    store
+        .save(4, serde_json::from_value(value).unwrap(), KeyAction::Keep)
+        .unwrap();
+    assert_eq!(
+        store.resolve_active(&NeverHome).unwrap().prompts.dictation,
+        "NEW_SHARED_PROMPT"
+    );
+    assert!(store
+        .resolve_active(&NeverHome)
+        .unwrap()
+        .prompts
+        .ask
+        .ends_with("ASK_TUNING_SENTINEL"));
+    let other = store
+        .create(
+            5,
+            "Untuned".into(),
+            ConnectionKind::Provider,
+            ProviderDialect::Deepseek,
+        )
+        .unwrap()
+        .connections
+        .remove(1)
+        .connection;
+    assert!(other.prompt_tuning.ask.is_none());
+    let mut other = other;
+    other.model = "synthetic-model".into();
+    other.authentication = Authentication::None;
+    let other_id = other.id.clone();
+    store.save(6, other, KeyAction::Keep).unwrap();
+    store.activate(7, Some(other_id)).unwrap();
+    assert_eq!(
+        store.resolve_active(&NeverHome).unwrap().prompts.ask,
+        shared.ask
+    );
+    store.activate(8, Some(id)).unwrap();
+    assert!(store
+        .resolve_active(&NeverHome)
+        .unwrap()
+        .prompts
+        .ask
+        .ends_with("ASK_TUNING_SENTINEL"));
+}
+
+#[test]
+fn invalid_tuning_and_composed_overflow_leave_saved_revision_unchanged() {
+    let store = store();
+    let first = store
+        .create(
+            0,
+            "Bounded".into(),
+            ConnectionKind::Provider,
+            ProviderDialect::Deepseek,
+        )
+        .unwrap();
+    let mut connection = first.connections[0].connection.clone();
+    assert!(connection.prompt_tuning.dictation.is_none());
+    for text in ["   ".to_string(), "bad\0prompt".into(), "x".repeat(8193)] {
+        connection.prompt_tuning.dictation = Some(text);
+        assert_eq!(
+            store
+                .save(1, connection.clone(), KeyAction::Keep)
+                .err()
+                .unwrap()
+                .0,
+            "prompt-tuning-invalid"
+        );
+        assert_eq!(store.view().unwrap().revision, 1);
+    }
+    connection.prompt_tuning.dictation = Some("x".repeat(8192));
+    store.save(1, connection, KeyAction::Keep).unwrap();
+    let before = store.view().unwrap();
+    assert_eq!(
+        store
+            .prompt(2, notype_core::Scenario::Dictation, Some("s".repeat(32768)))
+            .err()
+            .unwrap()
+            .0,
+        "prompt-tuning-too-long"
+    );
+    assert_eq!(store.view().unwrap().revision, 2);
+    assert_eq!(
+        store.view().unwrap().prompts.dictation,
+        before.prompts.dictation
+    );
+    // The final byte bound includes the separator; nothing is silently truncated.
+    store
+        .prompt(2, notype_core::Scenario::Dictation, Some("s".repeat(24574)))
+        .unwrap();
+    assert_eq!(store.view().unwrap().revision, 3);
+}
+
+#[test]
+fn tuning_storage_failure_preserves_durable_and_current_prompts() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    #[derive(Default)]
+    struct FallibleStorage {
+        data: Storage,
+        fail: AtomicBool,
+    }
+    impl ConfigurationStorage for FallibleStorage {
+        fn load(&self) -> Result<Option<Vec<u8>>, ConfigError> {
+            self.data.load()
+        }
+        fn commit(&self, bytes: &[u8]) -> Result<(), ConfigError> {
+            if self.fail.load(Ordering::SeqCst) {
+                return Err(ConfigError("configuration-storage-failed"));
+            }
+            self.data.commit(bytes)
+        }
+    }
+    let storage = Arc::new(FallibleStorage::default());
+    let store = ConnectionStore::open(storage.clone()).unwrap();
+    let mut connection = store
+        .create(
+            0,
+            "Retained".into(),
+            ConnectionKind::Provider,
+            ProviderDialect::Deepseek,
+        )
+        .unwrap()
+        .connections
+        .remove(0)
+        .connection;
+    let before = storage.load().unwrap();
+    connection.prompt_tuning.ask = Some("MUST_NOT_PUBLISH".into());
+    storage.fail.store(true, Ordering::SeqCst);
+    assert_eq!(
+        store.save(1, connection, KeyAction::Keep).err().unwrap().0,
+        "configuration-storage-failed"
+    );
+    assert_eq!(store.view().unwrap().revision, 1);
+    assert!(store.view().unwrap().connections[0]
+        .connection
+        .prompt_tuning
+        .ask
+        .is_none());
+    assert_eq!(storage.load().unwrap(), before);
+    assert!(ConnectionStore::open(storage)
+        .unwrap()
+        .view()
+        .unwrap()
+        .connections[0]
+        .connection
+        .prompt_tuning
+        .ask
+        .is_none());
+}
+
+#[test]
 fn bounded_collection_cas_and_explicit_active_removal_preserve_global_settings() {
     let store = store();
     let first = store

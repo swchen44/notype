@@ -1,5 +1,23 @@
 # 測試規範
 
+## Per-server tuning and settings tabs (#34)
+
+`provider-config` verifies scene/server independence, None, frozen snapshots,
+UTF-8 byte limits, composed prompt overflow and storage-failure rollback.
+`provider-config-store` reopens the actual file store and sends three synthetic
+scenes through the production workflow to owned loopback HTTP, inspecting the
+effective system message. No home credential or public provider is used.
+
+```powershell
+cargo test --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test provider-config --test provider-config-store
+node --test --test-concurrency=1 tests/integration/provider-connections.ui.mjs tests/integration/api-options.ui.mjs tests/integration/footer-status.ui.mjs
+```
+
+The rendered tests use the actual components and IPC doubles: tab switching keeps
+unsaved key/model/shared/tuning drafts; saving or clearing one scene preserves the
+others. They also exercise translated narrow layouts and keyboard tab navigation.
+Native App compilation/UI and live provider checks are reported separately.
+
 ## Session delivery and usability (#31)
 
 The confirmed session/settings seams cover AI off in all three scenarios, automatic

@@ -18,6 +18,7 @@ import {
 import { Input } from "../../ui/Input";
 import { Button } from "../../ui/Button";
 import { ModelIdList } from "./ModelIdList";
+import { ConnectionPromptTuning } from "./ConnectionPromptTuning";
 
 export function ConnectionEditor({
   connection,
@@ -120,7 +121,15 @@ export function ConnectionEditor({
     (declaration && !declaration.top_p_supported && parsedTopP.value !== null);
   const effortValid =
     draft.effort === null || /^[a-z0-9_-]{1,32}$/.test(draft.effort);
+  const tuningValid = Object.values(draft.prompt_tuning).every(
+    (value) =>
+      value === null ||
+      (value.trim().length > 0 &&
+        new TextEncoder().encode(value).length <= 8192 &&
+        !value.includes("\0")),
+  );
   const valid =
+    tuningValid &&
     numbersValid &&
     declarationValid &&
     replacementValid &&
@@ -616,6 +625,15 @@ export function ConnectionEditor({
             </p>
           )}
         </details>
+        <ConnectionPromptTuning
+          value={draft.prompt_tuning}
+          onChange={(prompt_tuning) => edit({ prompt_tuning })}
+        />
+        {!tuningValid && (
+          <p role="alert" className="text-sm">
+            {t("notype.tuning.invalid")}
+          </p>
+        )}
         <Button
           disabled={!valid}
           onClick={() => void onSave(candidate, keyAction)}
