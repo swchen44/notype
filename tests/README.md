@@ -1,5 +1,14 @@
 # 測試規範
 
+## GitHub release draft (#36, #39)
+
+`node --test tests/unittest/release-controller.test.mjs tests/integration/release-controller.test.mjs`
+checks the real draft controller with synthetic owned files and a GitHub adapter
+double. It covers safe version/main input, tag/release collision, asset checksum,
+remote digest mismatch and an incomplete draft after upload failure. These tests
+do not invoke GitHub, compile a native App or establish Windows host acceptance;
+the manually dispatched Windows action and actual draft verification are separate.
+
 ## Dictation fluency (#35)
 
 `tests/unittest/dictation_prompt.rs` verifies restoring the dictation prompt

@@ -1,0 +1,159 @@
+﻿name: Build Windows offline release draft
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version without v (example: 0.1.2-rc.1)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-release-draft
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build and verify offline ZIP on Windows
+    runs-on: windows-latest
+    timeout-minutes: 120
+    outputs:
+      artifact-id: ${{ steps.artifact.outputs.artifact-id }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.15.0'
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: '1.2.22'
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.99.1 --profile minimal
+      - name: Validate source and release version before building
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: node scripts/release/release-controller.mjs preflight
+      - name: Run release and offline package contracts
+        run: |
+          node --test tests/unittest/release-controller.test.mjs tests/integration/release-controller.test.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node --test tests/unittest/release-native.test.mjs tests/integration/release-native.test.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node --test tests/unittest/release_assembly_policy.test.mjs tests/unittest/release_pe_closure.test.mjs tests/integration/release_assembly.test.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Exercise desktop workflow and HTTP contracts
+        env:
+          CARGO_TARGET_DIR: ${{ runner.temp }}/notype-contract-target
+        run: cargo +1.99.1 test --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test desktop-workflow --test desktop-provider
+      - name: Remove this job's contract target
+        shell: pwsh
+        run: |
+          $base = [IO.Path]::GetFullPath($env:RUNNER_TEMP).TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
+          $path = [IO.Path]::GetFullPath((Join-Path $env:RUNNER_TEMP 'notype-contract-target'))
+          if (-not $path.StartsWith($base, [StringComparison]::OrdinalIgnoreCase) -or (Split-Path -Leaf $path) -cne 'notype-contract-target') { throw 'unsafe-target-path' }
+          $item = Get-Item -LiteralPath $path -Force
+          if (-not $item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'unsafe-target-directory' }
+          Remove-Item -LiteralPath $path -Recurse -Force
+      - name: Build the current native App and matching runtime
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File scripts/release/build-native.ps1 -SourceRevision $env:GITHUB_SHA -OutputRoot (Join-Path $env:RUNNER_TEMP 'notype-native')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Remove this job's native build target
+        shell: pwsh
+        run: |
+          $base = [IO.Path]::GetFullPath($env:RUNNER_TEMP).TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
+          if (-not (Test-Path -LiteralPath (Join-Path $env:RUNNER_TEMP 'notype-native/native-build.json') -PathType Leaf)) { throw 'native-output-missing' }
+          foreach ($name in @('notype-native-build', 'notype-native-cargo-home', 'notype-native-ort-cache')) {
+            $path = [IO.Path]::GetFullPath((Join-Path $env:RUNNER_TEMP $name))
+            if (-not $path.StartsWith($base, [StringComparison]::OrdinalIgnoreCase) -or (Split-Path -Leaf $path) -cne $name) { throw 'unsafe-target-path' }
+            if (-not (Test-Path -LiteralPath $path)) { continue }
+            $item = Get-Item -LiteralPath $path -Force
+            if (-not $item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'unsafe-target-directory' }
+            Remove-Item -LiteralPath $path -Recurse -Force
+          }
+      - name: Download pinned public baseline
+        shell: pwsh
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP 'notype-baseline.zip'
+          Invoke-WebRequest -Uri 'https://github.com/swchen44/notype/releases/download/v0.1.1-local.7/notype-0.1.1-local.7-offline-win-x64.zip' -OutFile $archive
+          python scripts/release/unpack-baseline.py --archive $archive --destination (Join-Path $env:RUNNER_TEMP 'notype-baseline')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Remove-Item -LiteralPath $archive -Force
+      - name: Assemble and verify complete offline ZIP
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          $vs = & "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe" -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (-not $vs) { throw 'visual-studio-not-found' }
+          $toolset = (Get-Content -LiteralPath (Join-Path $vs 'VC/Auxiliary/Build/Microsoft.VCToolsVersion.default.txt') -Raw).Trim()
+          if ($toolset -cnotmatch '^\d+\.\d+\.\d+$') { throw 'invalid-msvc-toolset' }
+          $native = Get-Content -LiteralPath (Join-Path $env:RUNNER_TEMP 'notype-native/native-build.json') -Raw | ConvertFrom-Json
+          if ($native.tools.msvc -cne $toolset) { throw 'dumpbin-toolset-mismatch' }
+          $dumpbin = Join-Path $vs "VC/Tools/MSVC/$toolset/bin/Hostx64/x64/dumpbin.exe"
+          if (-not (Test-Path -LiteralPath $dumpbin -PathType Leaf)) { throw 'dumpbin-not-found' }
+          node scripts/release/assemble-offline.mjs --baseline (Join-Path $env:RUNNER_TEMP 'notype-baseline') --native (Join-Path $env:RUNNER_TEMP 'notype-native') --source $env:GITHUB_SHA --version $env:RELEASE_VERSION --output (Join-Path $env:RUNNER_TEMP 'notype-assembled') --dumpbin $dumpbin
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Transfer verified output to draft job
+        id: artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: notype-offline-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/notype-assembled/assets/*
+            ${{ runner.temp }}/notype-assembled/assembly-report.json
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+  draft:
+    name: Verify uploaded assets and create draft only
+    needs: build
+    if: ${{ github.ref == 'refs/heads/main' && github.repository == 'swchen44/notype' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.15.0'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.build.outputs.artifact-id }}
+          path: ${{ runner.temp }}/notype-assembled
+      - name: Create and verify incomplete draft, then mark ready for human review
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ inputs.version }}
+          RELEASE_ASSEMBLY_DIR: ${{ runner.temp }}/notype-assembled
+        run: node scripts/release/release-controller.mjs publish
+
+  cleanup:
+    name: Remove transient workflow artifact
+    if: ${{ always() && needs.build.outputs.artifact-id != '' }}
+    needs: [build, draft]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: Delete only this run's temporary artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_ID: ${{ needs.build.outputs.artifact-id }}
+        shell: bash
+        run: |
+          [[ "$ARTIFACT_ID" =~ ^[0-9]+$ ]] || exit 1
+          gh api --method DELETE "repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID"
