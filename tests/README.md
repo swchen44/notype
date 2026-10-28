@@ -8,6 +8,10 @@ double. It covers safe version/main input, tag/release collision, asset checksum
 remote digest mismatch and an incomplete draft after upload failure. These tests
 do not invoke GitHub, compile a native App or establish Windows host acceptance;
 the manually dispatched Windows action and actual draft verification are separate.
+`release-smoke.test.mjs` tests the isolated data environment, a real owned child
+with a bounded timeout, and the requirement that the requested EXE belongs to the
+freshly validated extraction. The action separately runs `--list-models` on that
+actual extracted EXE; this does not exercise microphone input or recognition.
 
 ## Dictation fluency (#35)
 

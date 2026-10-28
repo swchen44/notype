@@ -1,6 +1,6 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -17,7 +17,7 @@ async function fixture(t) {
   const entries = new Map([[`notype-${version}-offline-win-x64.zip`,Buffer.from('zip fixture')],['Windows11-README.md',Buffer.from('readme')],['VERIFICATION.md',Buffer.from('verification')]]);
   for (const [name, bytes] of entries) await writeFile(join(assets,name), bytes);
   await writeFile(join(assets, 'SHA256SUMS.txt'), [...entries].map(([n,b]) => `${hash(b)}  ${n}\n`).join(''));
-  await writeFile(join(root,'assembly-report.json'), JSON.stringify({source,version,archive:{file:`notype-${version}-offline-win-x64.zip`,bytes:entries.values().next().value.length,sha256:hash(entries.values().next().value)}}));
+  await writeFile(join(root,'assembly-report.json'), JSON.stringify({source,version,checks:['zip-crc-sha','fresh-extraction','bundled-cli','native-headless-list-models'],archive:{file:`notype-${version}-offline-win-x64.zip`,bytes:entries.values().next().value.length,sha256:hash(entries.values().next().value)}}));
   return root;
 }
 function fakeGitHub(options={}) {
@@ -67,4 +67,11 @@ test('temporary missing remote digest is retried before the draft is marked comp
   gh.getDraft=async()=>{const draft=await get(); if(++reads===1) draft.assets=draft.assets.map(a=>({...a,digest:null})); return draft;};
   await publishDraft({input,artifactRoot:root,github:gh,wait:async()=>{waits++;}});
   assert.equal(waits,1); assert.equal(gh.state.writes.at(-1),'finalize');
+});
+
+test('publishing requires a successful isolated native smoke receipt',async t=>{
+  const root=await fixture(t);const gh=fakeGitHub();
+  const report=JSON.parse(await readFile(join(root,'assembly-report.json'),'utf8'));
+  report.checks=[]; await writeFile(join(root,'assembly-report.json'),JSON.stringify(report));
+  await assert.rejects(publishDraft({input,artifactRoot:root,github:gh}));assert.deepEqual(gh.state.writes,[]);
 });

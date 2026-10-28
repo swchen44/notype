@@ -46,6 +46,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node --test tests/unittest/release-native.test.mjs tests/integration/release-native.test.mjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node --test tests/unittest/release-smoke.test.mjs tests/integration/release-smoke.test.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node --test tests/unittest/release_assembly_policy.test.mjs tests/unittest/release_pe_closure.test.mjs tests/integration/release_assembly.test.mjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Exercise desktop workflow and HTTP contracts
@@ -106,6 +108,10 @@ jobs:
           if (-not (Test-Path -LiteralPath $dumpbin -PathType Leaf)) { throw 'dumpbin-not-found' }
           node scripts/release/assemble-offline.mjs --baseline (Join-Path $env:RUNNER_TEMP 'notype-baseline') --native (Join-Path $env:RUNNER_TEMP 'notype-native') --source $env:GITHUB_SHA --version $env:RELEASE_VERSION --output (Join-Path $env:RUNNER_TEMP 'notype-assembled') --dumpbin $dumpbin
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Smoke-test the verified extracted App with isolated data
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: node scripts/release/smoke-native.mjs
       - name: Transfer verified output to draft job
         id: artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

@@ -395,7 +395,7 @@ bun run build:portable
 
 維護者在 GitHub 的 **Actions → Build Windows offline release draft → Run workflow** 選擇 `main`，輸入不含 `v` 的版本，例如 `0.1.2-rc.1`。作業只接受目前 main 的確切 commit，且版本對應的 tag 或 Release 已存在時會停止；不覆蓋既有檔案。
 
-GitHub 的 Windows runner 會執行契約測試、重新編譯程式與其原生函式庫，從固定雜湊的既有離線包取得經驗證的共用元件，核對依賴、授權與內容後組裝 ZIP 並進行獨立解壓檢查。輸出再由獨立 job 檢查檔案及 GitHub 回報的 SHA-256，建立 **prerelease 草稿**，不會自動公開。來源依賴或 runtime 不符合受控基準時會停止，須更新並驗證依賴，不能強行沿用舊檔。
+GitHub 的 Windows runner 會執行契約測試、重新編譯程式與其原生函式庫，從固定雜湊的既有離線包取得經驗證的共用元件，核對依賴、授權與內容後組裝 ZIP 並進行獨立解壓檢查。通過檢查的解壓版 EXE 會以獨立測試資料執行 `--list-models`，最長 120 秒，逾時會終止該程序樹；這不等於真人錄音或辨識驗收。輸出再由獨立 job 檢查檔案及 GitHub 回報的 SHA-256，建立 **prerelease 草稿**，不會自動公開。來源依賴或 runtime 不符合受控基準時會停止，須更新並驗證依賴，不能強行沿用舊檔。
 
 下載和解壓結果、版本、變更與尚待實機驗收項目須由維護者檢查，確認後再自行發布草稿。若上傳或核對失敗，已建立的草稿會標示 `INCOMPLETE`；請先檢查並處理該草稿，再重新使用版本。執行不使用個人的 API key 或文字資料。跨 job 的暫存 artifact 於執行結束後刪除；若清理工作未執行或失敗，該 artifact 設定一天後到期。GitHub-hosted runner 的臨時檔在 job 結束後隨 runner 回收。
 

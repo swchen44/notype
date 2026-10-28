@@ -35,7 +35,9 @@ export async function publishDraft({ input, artifactRoot, github, wait = ms => n
   const assets = [];
   for (const name of names) assets.push({name, ...await digestFile(join(assetsDir,name))});
   const report = JSON.parse(await readFile(join(artifactRoot, 'assembly-report.json'), 'utf8'));
+  const requiredChecks = ['zip-crc-sha','fresh-extraction','bundled-cli','native-headless-list-models'];
   if (report.source !== release.source || report.version !== release.version ||
+      !Array.isArray(report.checks) || requiredChecks.some(check => !report.checks.includes(check)) ||
       report.archive?.file !== names[0] || report.archive?.bytes !== assets[0].size ||
       report.archive?.sha256 !== assets[0].digest) throw Error('assembly-report-mismatch');
   const sums = await readFile(assets[3].path, 'utf8');
@@ -65,7 +67,7 @@ export async function publishDraft({ input, artifactRoot, github, wait = ms => n
   }
   if (!verified) throw Error('uploaded-asset-unavailable');
   if (await github.mainHead() !== release.source) throw Error('release-source-changed');
-  const body = `# notype ${release.version} — Windows 11 測試版\n\n來源：${release.source}\n\n下載完整離線 ZIP 與 SHA256SUMS.txt，在目標 Windows 11 電腦核對雜湊後完整解壓，執行 Start-notype.cmd。ZIP 已包含語音模型及執行環境；文字整理需要連線至自行設定的 AI server。\n\nZIP SHA-256：\`${assets[0].digest}\`\n\n本次完成自動建置及檔案完整性檢查。乾淨 Windows 11、真人麥克風、公司內網、目標應用程式及人工語音品質仍需實機驗收。草稿需維護者檢查後才發布。\n`;
+  const body = `# notype ${release.version} — Windows 11 測試版\n\n來源：${release.source}\n\n下載完整離線 ZIP 與 SHA256SUMS.txt，在目標 Windows 11 電腦核對雜湊後完整解壓，執行 Start-notype.cmd。ZIP 已包含語音模型及執行環境；文字整理需要連線至自行設定的 AI server。\n\nZIP SHA-256：\`${assets[0].digest}\`\n\n本次完成自動建置、檔案完整性檢查與隔離資料的原生 --list-models 啟動檢查。乾淨 Windows 11、真人麥克風、公司內網、目標應用程式及人工語音品質仍需實機驗收。草稿需維護者檢查後才發布。\n`;
   await github.finalize(id, body);
   return {tag:release.tag, source:release.source, id, assets};
 }
