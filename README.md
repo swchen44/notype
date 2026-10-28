@@ -41,7 +41,7 @@ notype 是為繁體中文／英文與簡體中文／英文混合口述設計的�
 
 ### 下載、核對、解壓
 
-1. 在可連線的電腦開啟 [v0.1.1-local.7 Release](https://github.com/swchen44/notype/releases/tag/v0.1.1-local.7)。目前 repo 為 private，下載帳號需要有存取權限。
+1. 在可連線的電腦開啟 [v0.1.1-local.7 Release](https://github.com/swchen44/notype/releases/tag/v0.1.1-local.7)。notype 的 GitHub 儲存庫目前為公開。
 2. 手動下載 [完整離線 ZIP](https://github.com/swchen44/notype/releases/download/v0.1.1-local.7/notype-0.1.1-local.7-offline-win-x64.zip) 與 [SHA256SUMS.txt](https://github.com/swchen44/notype/releases/download/v0.1.1-local.7/SHA256SUMS.txt)。Release 另附 `Windows11-README.md` 操作說明及 `VERIFICATION.md` 驗證紀錄。如果目標電腦無法連網，將這兩個檔案透過公司允許的方式轉移到目標電腦；完整包已包含語音模型及執行環境。
 3. 在下載資料夾開啟 PowerShell，核對 ZIP 的 SHA-256：
 

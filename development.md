@@ -348,7 +348,7 @@ sequenceDiagram
 
 | 工作 | 工具與前置條件 |
 | --- | --- |
-| 來源與 Node 契約 | Git、private repo 存取權、Node.js 22.15.0 以上及 npm；CI 使用 22.15.0 |
+| 來源與 Node 契約 | Git、公開 repo 的網路存取、Node.js 22.15.0 以上及 npm；CI 使用 22.15.0 |
 | 桌面前端 | Bun，依 `desktop/bun.lock` 安裝；目前 CI 使用 1.2.22 |
 | Rust 契約 | Rust toolchain／Cargo；核心宣告 rust-version 1.89，目前核心 CI 使用 1.99.1 |
 | Windows 原生 | Rust MSVC、Visual Studio C++ Build Tools、Windows SDK、CMake、相依 crate 所需 LLVM／libclang 與原生函式庫 |
