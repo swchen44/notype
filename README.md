@@ -4,7 +4,7 @@
 
 notype 是為繁體中文／英文與簡體中文／英文混合口述設計的桌面語音輸入工具。透過快捷鍵開始說話，在本機完成語音辨識，保留可查閱、複製及匯出的文字歷史；需要整理、翻譯或代寫時，再接上自己選擇的文字 AI 服務。
 
-[下載 Windows 11 測試版](https://github.com/swchen44/notype/releases/tag/v0.1.1-local.1) · [安裝與啟動](#安裝與啟動) · [第一次使用](#第一次使用) · [開發者手冊](development.md)
+[下載 Windows 11 測試版](https://github.com/swchen44/notype/releases/tag/v0.1.1-local.2) · [安裝與啟動](#安裝與啟動) · [第一次使用](#第一次使用) · [開發者手冊](development.md)
 
 ## 為什麼使用 notype
 
@@ -16,7 +16,7 @@ notype 是為繁體中文／英文與簡體中文／英文混合口述設計的�
 - **模型與資料可獨立保存**：指定已有模型資料夾；文字歷史與設定放在程式資料夾之外。
 - **結果可回查與研究**：保留原稿、處理結果、字數、耗時與模型資訊，並匯出 UTF-8 BOM CSV。
 
-目前發佈版以 **錄音 → 本機辨識 → 歷史 → 複製**為主要驗收流程。正在驗證的 [#31 候選版本](https://github.com/swchen44/notype/issues/31) 加入原稿自動輸入、Notepad++、獨立詞彙表與連線用量；尚未包含在上方的舊版下載中。真人辨識品質與公司環境仍有待測項目，見[驗證狀態](#windows-11-測試版與驗證狀態)。
+本測試版提供 **錄音 → 本機辨識 → 可選文字處理 → 歷史 → 原目標交付／複製**。已驗證標準 Windows 文字欄與 Notepad++ adapter；自動輸入仍須維持原文件及輸入位置。真人錄音完整流程、辨識品質與公司環境有待實機驗收，見[驗證狀態](#windows-11-測試版與驗證狀態)。
 
 ## 三種使用場景
 
@@ -28,7 +28,7 @@ notype 是為繁體中文／英文與簡體中文／英文混合口述設計的�
 
 三個場景的提示詞可分別編輯、保存與還原預設。未設定或無法連線文字服務時，已辨識的原稿仍可從歷史複製。
 
-候選版本的「啟用 AI 文字處理」開關同時控制三個場景：關閉時都只輸入原稿；啟用後使用選定的一筆連線。API 失敗或逾時會嘗試交付原稿，取消則不交付。原視窗、文件或游標改變時保留結果；不確定是否寫入時不會重送。
+本版的「啟用 AI 文字處理」開關同時控制三個場景：關閉時都只輸入原稿；啟用後使用選定的一筆連線。API 失敗或逾時會嘗試交付原稿，取消則不交付。原視窗、文件或游標改變時保留結果；不確定是否寫入時不會重送。
 
 ## 安裝與啟動
 
@@ -41,18 +41,18 @@ notype 是為繁體中文／英文與簡體中文／英文混合口述設計的�
 
 ### 下載、核對、解壓
 
-1. 開啟 [v0.1.1-local.1 Release](https://github.com/swchen44/notype/releases/tag/v0.1.1-local.1)。目前 repo 為 private，需要有存取權限。
-2. 下載 `notype-0.1.1-local.1-offline-win-x64.zip` 與 `SHA256SUMS.txt`。Release 另附 `Windows11-README.md` 操作說明及 `VERIFICATION.md` 驗證紀錄。
+1. 開啟 [v0.1.1-local.2 Release](https://github.com/swchen44/notype/releases/tag/v0.1.1-local.2)。目前 repo 為 private，需要有存取權限。
+2. 下載 `notype-0.1.1-local.2-offline-win-x64.zip` 與 `SHA256SUMS.txt`。Release 另附 `Windows11-README.md` 操作說明及 `VERIFICATION.md` 驗證紀錄。
 3. 在下載資料夾開啟 PowerShell，核對 ZIP 的 SHA-256：
 
    ```powershell
-   Get-FileHash .\notype-0.1.1-local.1-offline-win-x64.zip -Algorithm SHA256
+   Get-FileHash .\notype-0.1.1-local.2-offline-win-x64.zip -Algorithm SHA256
    ```
 
    應與 `SHA256SUMS.txt` 的 ZIP 那一列相同。本版 ZIP 雜湊：
 
    ```text
-   f3f4711968eb11efcceefd6f8a11200e024b72d9a6895de507c7b93cd505628a
+   6a2a6d1875dcc5e2f5013e32b508e4738cf8afe045674e7c3cb6fb01843343b5
    ```
 
 4. 曾使用舊版時，先從系統匣選「結束」，關閉既有 notype 實例。
@@ -65,7 +65,7 @@ notype 是為繁體中文／英文與簡體中文／英文混合口述設計的�
 預設設定與文字歷史位於 `%APPDATA%\io.github.swchen44.notype`。若要使用獨立測試目錄，在**解壓資料夾的命令提示字元（CMD）**執行：
 
 ```bat
-set "NOTYPE_DATA_DIR=%LOCALAPPDATA%\notype\local-trial-0.1.1-local.1"
+set "NOTYPE_DATA_DIR=%LOCALAPPDATA%\notype\local-trial-0.1.1-local.2"
 call ".\Start-notype.cmd"
 ```
 
@@ -76,7 +76,7 @@ call ".\Start-notype.cmd"
 1. 在設定確認麥克風與語音模型，選擇「繁體中文＋英文」或「簡體中文＋英文」辨識模式。
 2. 先在自有空白測試輸入框試用。短按鍵盤**右側 Alt** 開始口述，例如「明天下午三點，我們 review 這個 PR」。
 3. 再按停止鍵結束錄音，預設也是右 Alt；不需持續按住。處理期間等待辨識完成。
-4. 開啟文字歷史，查看原稿並複製，再手動貼到需要的 App。
+4. 原目標仍有效時，結果會嘗試自動輸入；不支援的 App 或目標改變時，從歷史複製。Notepad++ 會暫用剪貼簿並還原，請先在空白文件確認。
 
 | 操作 | 預設快捷鍵 |
 | --- | --- |
@@ -100,9 +100,9 @@ call ".\Start-notype.cmd"
 
 **匯出歷史。** 原稿與處理結果分別保留，並顯示錄音秒數、兩種字數、耗時及模型。CSV 使用 UTF-8 BOM，一個歷史 ID 一列，合計多次 API 呼叫的已知 tokens 與實收費用，列出使用過的模型／effort。缺資料時保留部分或未知，費用按幣別分開，不把未知當作零或由牌價估算。
 
-**候選版本的簡易歷史與詞彙表。** 歷史預設只列時間與處理後文字，無處理結果時列原稿；搜尋只找這段文字並反白，其他資訊與操作在「進階」中展開。「自訂詞彙」有獨立選單與表格，支援增刪修改、搜尋、批次刪除及 UTF-8 CSV 匯入／匯出。CSV 第一列為 `word`，每列一個詞；前後空白與英文大小寫不會產生重複詞。
+**本版的簡易歷史與詞彙表。** 歷史預設只列時間與處理後文字，無處理結果時列原稿；搜尋只找這段文字並反白，其他資訊與操作在「進階」中展開。「自訂詞彙」有獨立選單與表格，支援增刪修改、搜尋、批次刪除及 UTF-8 CSV 匯入／匯出。CSV 第一列為 `word`，每列一個詞；前後空白與英文大小寫不會產生重複詞。
 
-**候選版本的連線測試與用量。** 每筆連線可輸入 key、核對遮罩後的頭尾、測試連線與清除用量；左下角顯示 AI 開關、目前目的地及最近實際測試狀態。用量從此 App 開始追蹤或最近清除起累計，包含測試連線；清除不刪歷史。只有 provider 實際回報的金額會計入，未回報就顯示未知。測試按鈕會向該端點發送一次短文字請求。
+**本版的連線測試與用量。** 每筆連線可輸入 key、核對遮罩後的頭尾、測試連線與清除用量；左下角顯示 AI 開關、目前目的地及最近實際測試狀態。用量從此 App 開始追蹤或最近清除起累計，包含測試連線；清除不刪歷史。只有 provider 實際回報的金額會計入，未回報就顯示未知。測試按鈕會向該端點發送一次短文字請求。
 
 ## 回報問題
 
@@ -112,8 +112,16 @@ call ".\Start-notype.cmd"
 
 ## Windows 11 測試版與驗證狀態
 
-v0.1.1-local.1 已通過完整包稽核與[遠端四資產雜湊核對](https://github.com/swchen44/notype/issues/14#issuecomment-6436789781)。這涵蓋套件完整性，不等同所有電腦上的實機驗收。
+v0.1.1-local.2 的來源檢查、Windows contracts、原生編譯、完整 ZIP／獨立解壓及逐檔雜湊核對已完成。驗證細節見 [#31 紀錄](docs/verification/usability.md)。這涵蓋指定來源及測試環境，不等同所有電腦的驗收。
 
-本版仍需驗收：原生介面與快捷鍵／系統匣、實體麥克風與中英辨識品質、模型換資料夾／重裝沿用、CSV 在 Excel 的呈現、診斷介面與匯出隱私、真實 API／公司網路，以及乾淨 Windows 11 首次離線啟動。瀏覽器、VS Code、Teams、Outlook、Windows Terminal 自動輸入亦未完成新版五 App 驗收；macOS／Linux 桌面版尚未交付。
+| 已執行 | 範圍 |
+| --- | --- |
+| Windows／Linux 契約與 rendered UI | 原稿交付／取消、歷史搜尋、詞彙表 CSV／去重、連線測試／用量／遲到回覆等 |
+| 實際 Windows 操作 | Notepad++ 中英／Emoji／換行貼上及剪貼簿還原；原生歷史／詞彙 CSV 匯出；本機 HTTP 成功／429；關閉隱藏及重新喚回 |
+| 完整離線包 | ZIP 1,053,413,929 bytes；完整解壓、逐檔 SHA／CRC 及 bundled CLI 完整性檢查 |
+
+仍需實機驗收：真人錄音／右 Alt 延遲與秒數、繁中＋英文／簡中＋英文品質、裝置拔除與睡眠、真實模型搬移／重裝沿用、Excel CSV 呈現、診斷開關／清除／匯出隱私、真實 API／公司 TLS／Proxy／斷線，以及無開發工具的乾淨 Windows 11 首次離線啟動。瀏覽器、VS Code、Teams、Outlook、Windows Terminal 自動輸入未完成新版驗收；macOS／Linux 桌面版尚未交付。
+
+已知問題：[模型就緒後可能仍顯示忙碌提示 #30](https://github.com/swchen44/notype/issues/30)，保留追蹤；提示本身不代表模型不可用。若無法套用或辨識，請附錯誤代碼及重現步驟回報。
 
 完整的**已測／未測／失敗矩陣與人工檢查步驟**保留在[開發者手冊](development.md#驗證狀態與待測清單)。設計、架構、流程／時序圖、開發環境及程式碼導覽也請由該手冊開始。

@@ -1,12 +1,12 @@
 # Windows 11 開發接手
 
-## 目前 checkpoint：d6通過、private prerelease已發布，接續人工驗收（2026-10-27）
+## 目前 checkpoint：P31 已交付 Windows 11 測試包（2026-10-28）
 
-使用者要求的完整tested／untested／failed清單以[README](README.md#windows-11-測試版與驗證狀態)為單一入口；詳細來源與歷史見[驗證紀錄](docs/verification/delivery-v8-preparation.md)。[唯一一次d6整體PASSED](https://github.com/swchen44/notype/issues/14#issuecomment-6436494208)已由root獨立核對：四個內容證明全部重新通過、公開Node exit0、全部7個child attempts exit0、3個monitor驗證退役、所有Workers terminal、accounting完整，最終handoff為13ms。所有d2／d3／d4／d5舊失敗與未知歷史仍保留。
+[v0.1.1-local.2](https://github.com/swchen44/notype/releases/tag/v0.1.1-local.2) 產品來源 `d7d28645ec275c0b64b8590cc9013ffcc21f422c`，新原生 App、完整離線 ZIP／獨立解壓已核對。簡易歷史、自訂詞彙、AI 連線測試／用量、原稿 fallback 及 Notepad++ 受保護貼上見 [#31](https://github.com/swchen44/notype/issues/31)／[驗證紀錄](docs/verification/usability.md)。使用者明確豁免本輪 Astra 計畫審查，獨立 Spec／Standards 最終均無未解必修項。
 
-[private prerelease已發布](https://github.com/swchen44/notype/releases/tag/v0.1.1-local.1)，包含同一ZIP、`SHA256SUMS.txt`、`Windows11-README.md`、`VERIFICATION.md`；[四個遠端資產的大小與GitHub SHA-256均已核對](https://github.com/swchen44/notype/issues/14#issuecomment-6436789781)，repo維持private。接續由使用者在正式Windows11電腦依README人工清單驗收；GUI、人聲、品質、公司服務與其他未測項目持續保留。
+使用者從系統匣結束舊版、完整解壓新包後啟動；不需刪除模型、設定、歷史或 .env。真人錄音／快捷鍵延遲、公司環境、乾淨 Windows 11、其他五 App 仍待驗收，見 [README](README.md#windows-11-測試版與驗證狀態)。#30 忙碌提示保留追蹤，不以文案掩蓋 runtime admission。
 
-此文件commit僅更新狀態；root建置checkout仍凍結T=`a7fc1d79822544e6f4858cb32bcd809067367cc3`，App實編譯A=`a180a2360009448cdf6e2f4f8e7363e0eb2dbf30`不變。所有舊失敗與outputs保留；以下checkpoint是歷史，時態與下一步以本節及README為準。
+原始 root checkout 保持凍結；整合在 feature/usability-followup。舊版 v0.1.1-local.1、失敗紀錄與原有模型不變。後續文件 SHA 與上方實編譯 SHA 分開記錄。以下均為歷史 checkpoint。
 
 ## 歷史 checkpoint（保留原文）
 

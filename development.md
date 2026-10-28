@@ -26,7 +26,7 @@ notype 的基本工作單位是一次**語音 session**：開始錄音、停止�
 | 保留觀測的不確定性 | tokens／費用可為完整、部分或未知，實收金額按幣別保存 | 無回報不當成零，不以牌價推算；取消不構成沒有用量的證據 |
 | 配送與個人資料分離 | portable 程式、模型資料夾、設定／歷史分開 | 模型由使用者自行搬移；App 選取與重新掃描不代替搬移 |
 
-本版先交付 Windows amd64 的錄音／本機辨識／歷史／複製。macOS／Linux 桌面版及五 App 自動輸入完整驗收屬後續範圍。10～20秒錄音停止至交付 p95≤5秒仍是待驗證目標。決策依據見 [portable 配送 ADR](docs/adr/0001-portable-npm-distribution.md)、[歷史與錄音分離 ADR](docs/adr/0002-text-history-independent-of-audio.md)、[共用核心 ADR](docs/adr/0003-shared-core-platform-adapters.md)。
+本版交付 Windows amd64 的錄音／本機辨識／歷史／複製與受保護的標準文字欄／Notepad++ 輸入。macOS／Linux 桌面版及五 App 自動輸入完整驗收屬後續範圍。10～20秒錄音停止至交付 p95≤5秒仍是待驗證目標。決策依據見 [portable 配送 ADR](docs/adr/0001-portable-npm-distribution.md)、[歷史與錄音分離 ADR](docs/adr/0002-text-history-independent-of-audio.md)、[共用核心 ADR](docs/adr/0003-shared-core-platform-adapters.md)。
 
 ## 架構與責任邊界
 
@@ -387,7 +387,7 @@ bun run build:portable
 
 [core-contracts.yml](.github/workflows/core-contracts.yml) 執行核心與 rendered UI 契約；[provider-probe-windows.yml](.github/workflows/provider-probe-windows.yml) 負責 Windows probe。Workflow 有 path filter、scope 或 skipped artifact job；須核對實際 run，不能把契約 CI 當作桌面成品、公司服務或所有 OS 通過。
 
-工作使用 [GitHub Issues](https://github.com/swchen44/notype/issues)，依 [triage labels](docs/agents/triage-labels.md) 分類。先讀 [AGENTS](AGENTS.md)、[GLOSSARY](GLOSSARY.md)、相關 [ADRs](docs/adr/)；新實作計畫須取得實際 GPT-6-Astra APPROVED、0項未解問題，流程見 [plan-review](docs/agents/plan-review.md)。保留上游脈絡，但 notype 工作留在本 repo tracker。
+工作使用 [GitHub Issues](https://github.com/swchen44/notype/issues)，依 [triage labels](docs/agents/triage-labels.md) 分類。先讀 [AGENTS](AGENTS.md)、[GLOSSARY](GLOSSARY.md)、相關 [ADRs](docs/adr/)；一般新實作計畫依 [plan-review](docs/agents/plan-review.md) 取得 GPT-6-Astra 審查；#31 已獲使用者明確豁免，仍完成規格、unit／integration 及獨立 Spec／Standards 審查。保留上游脈絡，但 notype 工作留在本 repo tracker。
 
 ## 設定、憑證與配送
 
@@ -405,15 +405,24 @@ bun run build:portable
 
 ## 目前交付與來源
 
+[v0.1.1-local.2](https://github.com/swchen44/notype/releases/tag/v0.1.1-local.2) 直接編譯產品來源 `d7d28645ec275c0b64b8590cc9013ffcc21f422c`；之後的文件 commit 不冒充二進位編譯來源。App 59,353,088 bytes，SHA-256 `e456219eb59d625680c452bdf6a1f987bbe6d1d3262ca1610b95eea063a33419`；ZIP 1,053,413,929 bytes，1,722 files／1,581,582,522 expanded bytes，SHA-256 `6a2a6d1875dcc5e2f5013e32b508e4738cf8afe045674e7c3cb6fb01843343b5`。
+
+完整包重用已逐檔驗證的 runtime／模型，模型 pin 未變；不讀取或搬移使用者已有模型。完整 staged bundle、bundled Node `--offline-bundle --check`、嚴格 ZIP32 inventory／CRC／SHA 與實際獨立解壓已通過。外層四資產以 Release checksum 核對；產品測試及限制見 [#31 receipt](docs/verification/usability.md)。
+
+### 舊版來源與歷史（v0.1.1-local.1）
+
 [v0.1.1-local.1 private prerelease](https://github.com/swchen44/notype/releases/tag/v0.1.1-local.1) 的 ZIP 為1,062,634,288 bytes，含1,721 files／1,581,238,542 expanded bytes。完整性與[四個遠端資產雜湊](https://github.com/swchen44/notype/issues/14#issuecomment-6436789781)已核對。這次純文件重整沒有重新建置、更換或上傳該版本。
 
 App 實際編譯來源為 `a180a2360009448cdf6e2f4f8e7363e0eb2dbf30`（A），在 R7 編譯，由 R10 驗證並獨立封存；原生測試與組裝來源為 `a7fc1d79822544e6f4858cb32bcd809067367cc3`（T）。A→T 僅根目錄 README 與既有 cfg(test) 模組的一行 ReadySignal 匯入不同，不宣稱 App 由 T 重新編譯；文件 commit 亦不代表重新建置。
 
 [R10原生四階段／兩項計量測試](https://github.com/swchen44/notype/issues/14#issuecomment-6431337535)、[d6完整性成功](https://github.com/swchen44/notype/issues/14#issuecomment-6436494208)及[交付歷史](docs/verification/delivery-v8-preparation.md)各自記錄不同範圍。原 d2 extract、d3／d4／d5失敗仍保留，成功不回填未知觀測或改寫舊失敗。
 
+
 ## 驗證狀態與待測清單
 
-以下保留先前 README 的完整矩陣與人工檢查步驟；這些是對應來源／版本的證據，不是這次文件變更重新執行測試的結果。
+目前版本的 CI、原生與成品證據以 [#31 驗證紀錄](docs/verification/usability.md) 為準。已確認原生歷史／詞彙 CSV 匯出、本機 HTTP 成功／429 狀態、Notepad++ 貼上／還原／目標變更與主視窗隱藏／喚回；不是完整麥克風 session、外部 API 或乾淨主機驗收。
+
+以下保留 **v0.1.1-local.1 歷史矩陣**；其中「本輪」指當時的舊版驗證，不可解讀為新版重新執行。未測項目持續適用，除非 #31 明確記錄更新證據。
 
 | 範圍 | 實際狀態 | 證據與限制 |
 | --- | --- | --- |
