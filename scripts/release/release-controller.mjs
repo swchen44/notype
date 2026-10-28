@@ -1,10 +1,9 @@
-const SAFE_VERSION = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
+import { validateVersion } from './assembly-policy.mjs';
 
 /** Validate the public release input before any writes to GitHub. */
 export function validateReleaseInput({ version, ref, source, main, repository }) {
-  const match = typeof version === 'string' && version.match(SAFE_VERSION);
-  if (!match || version.length > 64 || (match[1] && match[1].split('.').some(part => /^0\d+$/.test(part))) ||
-      ref !== 'refs/heads/main' || repository !== 'swchen44/notype' ||
+  try { validateVersion(version); } catch { throw new Error('invalid-release-input'); }
+  if (ref !== 'refs/heads/main' || repository !== 'swchen44/notype' ||
       !/^[a-f0-9]{40}$/.test(source) || source !== main) throw new Error('invalid-release-input');
   return { version, tag: `v${version}`, source };
 }

@@ -1,6 +1,23 @@
 ﻿import test from 'node:test';
 import assert from 'node:assert/strict';
 import { validateReleaseInput } from '../../scripts/release/release-controller.mjs';
+import { validateVersion } from '../../scripts/release/assembly-policy.mjs';
+import { validatePin } from '../../packages/notype/lib/manifest.mjs';
+
+test('preflight and assembly agree with the product manifest on prerelease casing',()=>{
+  const source='a'.repeat(40), input={ref:'refs/heads/main',source,main:source,repository:'swchen44/notype'};
+  const pin=version=>({name:'notype-win32-x64',version,manifest:'payload.json',sha256:'b'.repeat(64)});
+  for (const version of ['1.2.3','1.2.3-rc.1']) {
+    assert.doesNotThrow(()=>validateReleaseInput({...input,version}));
+    assert.doesNotThrow(()=>validateVersion(version));
+    assert.doesNotThrow(()=>validatePin(pin(version)));
+  }
+  for (const version of ['1.2.3-RC.1','1.2.3-rc.A']) {
+    assert.throws(()=>validateReleaseInput({...input,version}));
+    assert.throws(()=>validateVersion(version));
+    assert.throws(()=>validatePin(pin(version)));
+  }
+});
 
 test('release input is limited to a safe version on exact main source', () => {
   const source = 'a'.repeat(40);

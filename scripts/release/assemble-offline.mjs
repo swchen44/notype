@@ -17,7 +17,7 @@ const json = value => Buffer.from(JSON.stringify(value,null,2)+'\n');
 const digest = data => createHash('sha256').update(data).digest('hex');
 const readJson = async file => JSON.parse(await readFile(file,'utf8'));
 const writeJson = async (file,value) => writeFile(file,json(value));
-const paths = ['desktop/src-tauri/Cargo.lock','desktop/src-tauri/Cargo.toml','desktop/src-tauri/build.rs','desktop/src-tauri/tauri.windows.conf.json','desktop/src-tauri/tauri.conf.json','.cargo','desktop/.cargo','crates/notype-platform','desktop/src-tauri/resources','packages/notype','desktop/bun.lock','desktop/package.json'];
+const paths = ['desktop/LICENSE','desktop/UPSTREAM.md','desktop/src-tauri/Cargo.lock','desktop/src-tauri/Cargo.toml','desktop/src-tauri/build.rs','desktop/src-tauri/tauri.windows.conf.json','desktop/src-tauri/tauri.conf.json','.cargo','desktop/.cargo','crates/notype-platform','desktop/src-tauri/resources','packages/notype','packages/notype-model','packages/notype-win32-x64','desktop/bun.lock','desktop/package.json'];
 
 function run(cmd,args,opts={}) { return execFileSync(cmd,args,{encoding:'utf8',windowsHide:true,timeout:20*60*1000,maxBuffer:16*1024*1024,...opts}); }
 export async function sourceGate(source,options={}) {

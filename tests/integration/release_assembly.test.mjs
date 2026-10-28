@@ -166,3 +166,46 @@ test('actual native provenance gate rejects toolchain and CRT changes before tou
   assert.equal(await readFile(path.join(args.output,'sentinel'),'utf8'),'keep');
   await assert.rejects(readFile(path.join(args.output,'assembly-report.json')));
 });
+
+test('valid source, provenance and inputs cannot replace an existing output directory',async t=>{
+  const {f,args,overrides}=await fixture(t);
+  const repo=path.join(f.ownerRoot,'valid-repo');await mkdir(path.join(repo,'desktop','src-tauri'),{recursive:true});
+  await writeFile(path.join(repo,'desktop','src-tauri','Cargo.lock'),'cargo');
+  await writeFile(path.join(repo,'desktop','bun.lock'),'bun');
+  const git=(...argv)=>{const p=spawnSync('git',argv,{cwd:repo,encoding:'utf8'});assert.equal(p.status,0,p.stderr);return p.stdout.trim();};
+  git('init','-q');git('config','user.name','fixture');git('config','user.email','fixture@example.invalid');
+  git('add','.');git('commit','-qm','fixture');
+  const head=git('rev-parse','HEAD'); args.source=head;
+  const sourceOptions={cwd:repo,baselineSource:head,cargoPin:digest('cargo'),bunPin:digest('bun')};
+  overrides.sourceGate=s=>sourceGate(s,sourceOptions);
+  const file=path.join(args.native,'native-build.json');const manifest=JSON.parse(await readFile(file,'utf8'));
+  Object.assign(manifest,{source_revision:head,cargo_lock_sha256:digest('cargo'),bun_lock_sha256:digest('bun')});
+  Object.assign(manifest.tools,{node:'22.15.0',bun:'1.2.22',rust:'1.99.1',redist_dir:'14.44.35112',cpp_source:'https://github.com/handy-computer/transcribe.cpp'});
+  await writeFile(file,JSON.stringify(manifest));
+  overrides.nativeMetadata=(m,s)=>nativeMetadata(m,s,{cargoPin:digest('cargo'),bunPin:digest('bun')});
+  await mkdir(args.output);await writeFile(path.join(args.output,'sentinel'),'untouched');
+  await assert.rejects(assemble(args,overrides),error=>error.code==='EEXIST');
+  assert.equal(await readFile(path.join(args.output,'sentinel'),'utf8'),'untouched');
+  await assert.rejects(readFile(path.join(args.output,'assembly-report.json')));
+});
+
+test('changed upstream license or provenance cannot reuse old package notices',async t=>{
+  for (const changedPath of ['desktop/LICENSE','desktop/UPSTREAM.md']) {
+    const {f,args,overrides}=await fixture(t);
+    const repo=path.join(f.ownerRoot,'notice-repo');await mkdir(path.join(repo,'desktop','src-tauri'),{recursive:true});
+    await writeFile(path.join(repo,'desktop','src-tauri','Cargo.lock'),'cargo');
+    await writeFile(path.join(repo,'desktop','bun.lock'),'bun');
+    await writeFile(path.join(repo,'desktop','LICENSE'),'old license');
+    await writeFile(path.join(repo,'desktop','UPSTREAM.md'),'old source');
+    const git=(...argv)=>{const p=spawnSync('git',argv,{cwd:repo,encoding:'utf8'});assert.equal(p.status,0,p.stderr);return p.stdout.trim();};
+    git('init','-q');git('config','user.name','fixture');git('config','user.email','fixture@example.invalid');
+    git('add','.');git('commit','-qm','baseline');const baseline=git('rev-parse','HEAD');
+    await writeFile(path.join(repo,...changedPath.split('/')),'new contents');git('add','.');git('commit','-qm','changed notice');
+    const head=git('rev-parse','HEAD');
+    overrides.sourceGate=s=>sourceGate(s,{cwd:repo,baselineSource:baseline,cargoPin:digest('cargo'),bunPin:digest('bun')});
+    await mkdir(args.output);await writeFile(path.join(args.output,'sentinel'),'keep');
+    await assert.rejects(assemble({...args,source:head},overrides),/baseline-inputs-changed/);
+    assert.equal(await readFile(path.join(args.output,'sentinel'),'utf8'),'keep');
+    await assert.rejects(readFile(path.join(args.output,'assembly-report.json')));
+  }
+});

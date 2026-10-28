@@ -393,7 +393,7 @@ bun run build:portable
 
 ## GitHub Windows Release 草稿
 
-維護者在 GitHub 的 **Actions → Build Windows offline release draft → Run workflow** 選擇 `main`，輸入不含 `v` 的版本，例如 `0.1.2-rc.1`。作業只接受目前 main 的確切 commit，且版本對應的 tag 或 Release 已存在時會停止；不覆蓋既有檔案。
+維護者在 GitHub 的 **Actions → Build Windows offline release draft → Run workflow** 選擇 `main`，輸入不含 `v` 的版本，例如 `0.1.2-rc.1`。預發行標記限小寫英文字母、數字與連字號；這是現有套件格式支援的範圍，並非所有 SemVer 寫法。作業只接受目前 main 的確切 commit，且版本對應的 tag 或 Release 已存在時會停止；不覆蓋既有檔案。
 
 GitHub 的 Windows runner 會執行契約測試、重新編譯程式與其原生函式庫，從固定雜湊的既有離線包取得經驗證的共用元件，核對依賴、授權與內容後組裝 ZIP 並進行獨立解壓檢查。通過檢查的解壓版 EXE 會以獨立測試資料執行 `--list-models`，最長 120 秒，逾時會終止該程序樹；這不等於真人錄音或辨識驗收。輸出再由獨立 job 檢查檔案及 GitHub 回報的 SHA-256，建立 **prerelease 草稿**，不會自動公開。來源依賴或 runtime 不符合受控基準時會停止，須更新並驗證依賴，不能強行沿用舊檔。
 

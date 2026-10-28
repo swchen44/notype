@@ -7,7 +7,7 @@ import { cppDlls, crtDlls, nativeNames } from './native-contract.mjs';
 export { nativeNames } from './native-contract.mjs';
 const dlls = [...cppDlls,...crtDlls];
 export function validateVersion(version) {
-  if (typeof version !== 'string' || version.length > 64 || !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/.test(version)) throw Error('invalid-version');
+  if (typeof version !== 'string' || version.length > 64 || !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9a-z-]+(?:\.[0-9a-z-]+)*))?$/.test(version)) throw Error('invalid-version');
   const pre=version.split('-').slice(1).join('-');
   if (pre && pre.split('.').some(x=>/^\d+$/.test(x) && x.length>1 && x[0]==='0')) throw Error('invalid-version');
 }

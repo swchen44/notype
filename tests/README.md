@@ -13,6 +13,10 @@ Release assembly tests also exercise actual Git source/lock gates in an owned Gi
 repository, native provenance and CRT checks, unchanged-output sentinel, a pinned
 license fixture, and malformed archive rejection under Python -O. These fixtures
 do not prove current GitHub runner CRT compatibility or legal redistribution rights.
+The existing-output case runs the actual assembler with valid source, locks and
+native provenance and verifies the sentinel survives. Release input and assembly
+share a restricted lowercase prerelease validator, tested against the actual
+package manifest validator; this does not claim support for every SemVer spelling.
 `release-smoke.test.mjs` tests the isolated data environment, a real owned child
 with a bounded timeout, and the requirement that the requested EXE belongs to the
 freshly validated extraction. The action separately runs `--list-models` on that
