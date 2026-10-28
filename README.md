@@ -116,7 +116,7 @@ call ".\Start-notype.cmd"
 
 v0.1.1-local.2 的來源檢查、Windows contracts、原生編譯、完整 ZIP／獨立解壓及逐檔雜湊核對已完成。驗證細節見 [#31 紀錄](docs/verification/usability.md)。這涵蓋指定來源及測試環境，不等同所有電腦的驗收。
 
-後續本機候選版 `0.1.1-local.5` 已加入 AI server 狀態顯示、設定分頁及每個 server 的三場景獨立特調提示詞；來源測試、原生編譯及檔案核對已完成，Windows 畫面驗收待續。這些變更**尚未包入上述 Release**；YAML 設定匯入／匯出與新的 Gemini key 驗證也仍待完成，詳見[驗證與待辦紀錄](docs/verification/server-tuning-status.md)。
+後續本機候選版 `0.1.1-local.5` 已加入 AI server 狀態顯示、設定分頁及每個 server 的三場景獨立特調提示詞；來源測試、原生編譯、檔案核對及指定畫面檢查已完成。這些變更**尚未包入上述 Release**；YAML 設定匯入／匯出仍在實作。新的 Gemini key 已通過驗證與模型清單查詢，免費額度內的生成驗證仍待完成，詳見[驗證與待辦紀錄](docs/verification/server-tuning-status.md)。
 
 | 已執行 | 範圍 |
 | --- | --- |

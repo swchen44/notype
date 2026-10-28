@@ -30,6 +30,10 @@ path = "../bootstrap_preflight.rs"
 
 [workspace]
 
+[[test]]
+name = "settings-yaml"
+path = "../../unittest/settings_yaml.rs"
+
 [[bin]]
 name = "notype-provider-probe"
 path = "../provider_probe_main.rs"
@@ -66,6 +70,7 @@ path = "../history_metrics_dto.rs"
 notype-core = { path = "../../../crates/notype-core" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+serde-saphyr = { version = "=2.0.0", default-features = false, features = ["serialize", "deserialize"] }
 sha2 = "0.10"
 specta = { version = "=2.0.0-rc.22", features = ["derive"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }

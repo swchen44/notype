@@ -7,11 +7,114 @@ mod diagnostics;
 #[allow(dead_code)]
 #[path = "../../desktop/src-tauri/src/provider_config.rs"]
 mod provider_config;
+#[allow(dead_code)]
+#[path = "../../desktop/src-tauri/src/settings_yaml.rs"]
+mod settings_yaml;
 #[allow(dead_code, unused_imports)]
 #[path = "../../desktop/src-tauri/src/workflow.rs"]
 mod workflow;
 use provider_config::*;
 use std::sync::Arc;
+
+#[test]
+fn actual_provider_archive_yaml_reopens_with_optional_keys_without_changing_source_files() {
+    use provider_config::archive::ProviderArchive;
+    let directory = tempfile::tempdir().unwrap();
+    let source = directory.path().join("provider_connections_v2.json");
+    let history = directory.path().join("sessions.db");
+    let _sessions = notype_core::SessionService::open(&history).unwrap();
+    let store = ConnectionStore::open(Arc::new(files::FileStorage::new(source.clone()))).unwrap();
+    let mut draft = store
+        .create(
+            0,
+            "語言研究".into(),
+            ConnectionKind::Provider,
+            ProviderDialect::Deepseek,
+        )
+        .unwrap()
+        .connections
+        .remove(0)
+        .connection;
+    let id = draft.id.clone();
+    draft.model = "fixture-model".into();
+    draft.temperature = Some(0.0);
+    draft.prompt_tuning.dictation = Some("保留 OpenAI 原文。".into());
+    draft.prompt_tuning.translation = Some("保留原文格式。".into());
+    store
+        .save(
+            1,
+            draft,
+            KeyAction::Replace {
+                value: "SYNTHETIC_ARCHIVE_KEY".into(),
+            },
+        )
+        .unwrap();
+    store
+        .prompt(
+            2,
+            notype_core::Scenario::Ask,
+            Some("SHARED_ASK_RULES".into()),
+        )
+        .unwrap();
+    store.activate(3, Some(id.clone())).unwrap();
+    drop(store);
+    let reopened =
+        ConnectionStore::open(Arc::new(files::FileStorage::new(source.clone()))).unwrap();
+    let source_before = std::fs::read(&source).unwrap();
+    let history_before = std::fs::read(&history).unwrap();
+    for include_keys in [false, true] {
+        let snapshot = reopened.archive(include_keys).unwrap();
+        let text = settings_yaml::render(&serde_json::to_value(snapshot).unwrap()).unwrap();
+        assert!(text.contains("語言研究"));
+        assert!(text.contains("DEEPSEEK_API_KEY"));
+        assert_eq!(text.contains("SYNTHETIC_ARCHIVE_KEY"), include_keys);
+        let exported = directory.path().join(if include_keys {
+            "included.yaml"
+        } else {
+            "excluded.yaml"
+        });
+        std::fs::write(&exported, text.as_bytes()).unwrap();
+        let archive: ProviderArchive = serde_json::from_value(
+            settings_yaml::parse(&std::fs::read(&exported).unwrap()).unwrap(),
+        )
+        .unwrap();
+        archive.validate().unwrap();
+        assert_eq!(archive.active_connection_id.as_deref(), Some(id.as_str()));
+        assert_eq!(archive.prompts.ask, "SHARED_ASK_RULES");
+        assert_eq!(archive.connections[0].temperature, Some(0.0));
+        assert_eq!(
+            archive.connections[0].prompt_tuning.dictation.as_deref(),
+            Some("保留 OpenAI 原文。")
+        );
+        assert_eq!(archive.app_keys.is_some(), include_keys);
+        let prepared = reopened.replacement(&archive).unwrap();
+        let next_path = directory.path().join(if include_keys {
+            "restored-included.json"
+        } else {
+            "restored-excluded.json"
+        });
+        ConfigurationStorage::commit(&files::FileStorage::new(next_path.clone()), &prepared)
+            .unwrap();
+        let next = ConnectionStore::open(Arc::new(files::FileStorage::new(next_path))).unwrap();
+        struct NeverHome;
+        impl credentials::CredentialReader for NeverHome {
+            fn read(&self, _: credentials::PublicKey) -> Result<Option<String>, ConfigError> {
+                panic!("restored App key must not fall back to home");
+            }
+        }
+        assert_eq!(
+            next.resolve_active(&NeverHome)
+                .unwrap()
+                .credential_source
+                .as_deref(),
+            Some("app")
+        );
+        assert_eq!(next.view().unwrap().revision, 5);
+    }
+    assert_eq!(std::fs::read(&source).unwrap(), source_before);
+    assert_eq!(std::fs::read(&history).unwrap(), history_before);
+    assert_eq!(reopened.view().unwrap().revision, 4);
+}
 
 #[tokio::test]
 async fn saved_scene_supplements_reach_only_the_matching_loopback_system_message() {

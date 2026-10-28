@@ -64,24 +64,34 @@ no compile errors. No dependencies or lockfiles changed.
 - Local candidate: `0.1.1-local.5`, complete 1,695-file application inventory verified.
 - Application manifest SHA-256: `64be72d8573e6c663da53fe30d2ced85be135fbb1c27b39794378cc5294cc20c`.
 
-The new candidate has **not been launched or visually accepted**: Computer Use
-could not activate the existing old App; a fresh capture established that Windows
-was locked. UI input stopped and the user was asked to unlock. The original App,
-settings, model folder and master OFF/no-active-server preference were retained.
-No real Gemini request was made during this implementation. The user's new Gemini
-development key is not ready; an earlier model-list HTTP200 concerned the value
-then in home `.env`, not the new key and not successful generation/free-tier proof.
+After the user confirmed unlock, the old App was quit normally and this candidate
+was launched with the existing profile/model folder. Computer Use verified the AI
+server/no-selection gray state with master OFF, both tabs and three independent
+tuning scenes defaulting to None. The same previously selected Qwen model was
+loaded without opening the microphone: Not loaded/gray -> Loading/amber ->
+Loaded/green; normal idle unload later returned to Not loaded/gray. No active AI
+connection was chosen and no settings/prompt/key were saved during these checks.
+
+The user then confirmed the new Gemini key was ready in home `.env`. A fresh
+read-only official compatibility-models request returned HTTP200 and60 IDs in439ms
+at2026-10-28T07:32:17.779Z. The candidate's actual model-list button also succeeded
+and displayed home `.env` as the source, without showing its value. This validates
+authentication and model listing only. Generation was not attempted: the user
+requires a confirmed free model AND project quota; project Free-tier confirmation
+remains pending. No fee or generation-success claim follows from models listing.
 
 ## Remaining work and delivery boundary
 
 YAML export/import is **not implemented**. Scope is settings/prompts/vocabulary,
 optional keys, excluding histories/model files, with difference/conflict preview.
 The user has since confirmed App-stored keys only (home `.env` variable names,
-never their values) and whole replacement after preview/confirmation. One policy
-remains pending: preserve unchanged bound App keys or clear all App keys when the
-incoming file omits them. See the [transfer design](../settings-transfer-design.md).
+never their values), whole replacement after preview/confirmation, and preservation
+of unchanged original bound App keys when omitted. The bounded YAML codec and
+provider archive/replacement foundations now have focused source tests; they are
+not yet a complete transfer UI/transaction and are not in this candidate binary.
+See the [transfer design](../settings-transfer-design.md).
 
-New native UI acceptance, the new Gemini key/generation check, company networking,
+Native transfer UI/restart acceptance, Gemini generation, company networking,
 microphone/full ASR sessions and clean-host installation remain unverified here.
 Published **v0.1.1-local.2 is unchanged** and does not contain these source/local
 candidate changes. This receipt does not represent a new GitHub Release ZIP.

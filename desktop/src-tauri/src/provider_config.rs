@@ -13,6 +13,8 @@ pub mod files;
 #[path = "provider_prompt_tuning.rs"]
 mod prompt_tuning;
 pub use prompt_tuning::ConnectionPromptTuning;
+#[path = "provider_archive.rs"]
+pub(crate) mod archive;
 
 /// Fixed configuration failures; no URL, path, provider message or credential.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -4,9 +4,9 @@
 
 產品來源 `6e3e61461b1a4bd58d96bbcf7e449df1d55327e0` 位於 `feature/settings-tabs-transfer`，包含 #33 左下角 AI server 名稱／狀態與模型「選取／載入」區分，以及 #34 的兩分頁、每個 server 三場景獨立特調（預設 None，附加到共用提示詞）。[完整 ALL CI40630433546](https://github.com/swchen44/notype/actions/runs/40630433546) 兩個 jobs 已成功；本機相關 Rust42、UI32、Clippy／lint／build／格式通過。原生編譯及本機 `0.1.1-local.5` 完整檔案核對已完成，詳見[驗證紀錄](docs/verification/server-tuning-status.md)。
 
-Windows 鎖定，Computer Use 已停止，等待使用者解鎖後才可繼續原生畫面驗證。舊 App 尚未結束；新候選版未啟動，重新啟動時須先正常結束舊版，避免 single-instance 只喚回舊 App。不要終止其他 App，不操作登入／安全畫面。不需移除模型、歷史、設定或 `.env`。
+使用者已解鎖；舊版已正常結束，本機 `local.5` 已啟動。Computer Use 已驗證兩分頁、三場景特調皆 None、AI server 無選取／關閉為灰燈，以及同一既有 Qwen 模型待載入灰燈→載入中黃燈→已載入綠燈；未開啟麥克風、未儲存／啟用連線。現有 profile、模型及 key 保留，不需移除。
 
-YAML 尚未實作；已確認包含設定、提示詞、詞彙、可選 key，不含歷史／模型檔。使用者已決定：勾選含 key 時只匯出 App 儲存的 key，`.env` 僅保留變數名稱參考、不讀取值；匯入預覽差異及衝突後，確認整份取代。新 async 問題待答：匯入檔未含 key 時，相同 ID／位址／驗證方式才保留現有 key，或全部清除 App key？不要猜測，見 [YAML 設計及測試範圍](docs/settings-transfer-design.md)。Gemini 新 development key 與 Windows 解鎖仍未確認，不再請求 Gemini／操作 UI；先前 HTTP200 僅為舊值的模型清單。使用者對後續 Astra 審查的明確豁免維持有效；原 root checkout 仍凍結，整合 checkout 在 `D:/git/notype-impl-worktrees/usability-followup`。
+YAML 正在實作：codec／provider archive／prepared replacement 的 27 項聚焦測試與 Clippy 已通過，尚未接上整份交易及 UI。政策已全部確認：勾選含 key 時僅帶 App 儲存值，`.env` 僅變數名稱參考；預覽後確認整份取代；未附 key 時保留原連線 key，但 ID／canonical API 位址／驗證方式變更不得自動沿用。見 [完整計畫](https://github.com/swchen44/notype/issues/34#issuecomment-6465488263)／[設計及測試範圍](docs/settings-transfer-design.md)。Gemini 新 key 已在 helper 與實際 App 取得模型清單（HTTP200、60 IDs），不代表生成或免費額度驗收。使用者限定免費模型及專案額度；專案 Free tier 確認待答，暫不生成。使用者對後續 Astra 審查的明確豁免維持有效；原 root checkout 仍凍結，整合 checkout 在 `D:/git/notype-impl-worktrees/usability-followup`。
 
 GitHub Release **v0.1.1-local.2 保持原樣**，不含本次來源／本機候選版變更。新 ZIP 尚未發布，#33／#34 與真實環境驗收均不得冒稱完成。以下為歷史 checkpoint。
 

@@ -27,11 +27,11 @@ Files, revisions and settings changed since preview require a new preview. No
 connection query, test, generation, model download or microphone request is sent
 by preview or apply.
 
-**Pending data policy:** when incoming YAML omits keys, the user is choosing
-between retaining keys only for an unchanged connection identity/canonical route/
-authentication binding, or clearing all stored App keys. No implementation may
-silently choose either. Imported explicit keys still require valid route/auth
-binding, and arbitrary `.env` variable names cannot select new secrets to read.
+When incoming YAML omits keys, preserve the destination's original App key only
+for the same stable connection ID, canonical API route and authentication binding.
+A changed route/authentication/identity cannot inherit it and must be flagged in
+the preview. Explicitly included keys replace that exported key state; an included
+empty map means no App keys. Arbitrary `.env` variable names cannot select secrets.
 
 ## Authorities and apply boundary
 
@@ -84,7 +84,7 @@ Unit tests belong in `tests/unittest/`:
 - Export with key inclusion OFF/ON, including legacy secret-bearing fields and
   a home reader that panics if invoked; variable references remain references.
 - Independent three-scene tuning, prompts, vocabulary and translation round-trip.
-- Key omission/binding policy after the user's answer; redacted credential diffs.
+- Confirmed key omission/binding retention and redacted credential diffs.
 - Difference/conflict classification, stale previews and cancel/no-write.
 
 Integration tests belong in `tests/integration/`:

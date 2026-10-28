@@ -36,6 +36,190 @@ fn draft(dialect: ProviderDialect) -> ConnectionDraft {
 }
 
 #[test]
+fn provider_archive_excludes_keys_by_default_and_includes_only_bound_app_values() {
+    let store = store();
+    let mut connection = store
+        .create(
+            0,
+            "匯出測試".into(),
+            ConnectionKind::Provider,
+            ProviderDialect::Deepseek,
+        )
+        .unwrap()
+        .connections
+        .remove(0)
+        .connection;
+    let id = connection.id.clone();
+    connection.model = "fixture".into();
+    connection.prompt_tuning.ask = Some("SERVER_RULES".into());
+    store
+        .save(
+            1,
+            connection,
+            KeyAction::Replace {
+                value: "SYNTHETIC_APP_SECRET_SENTINEL".into(),
+            },
+        )
+        .unwrap();
+    store.activate(2, Some(id.clone())).unwrap();
+    let excluded = store.archive(false).unwrap();
+    let text = serde_json::to_string(&excluded).unwrap();
+    assert!(!text.contains("SYNTHETIC_APP_SECRET_SENTINEL"));
+    assert!(!text.contains("app_keys"));
+    assert_eq!(
+        excluded.home_key_variables.get(&id).map(String::as_str),
+        Some("DEEPSEEK_API_KEY")
+    );
+    assert_eq!(
+        excluded.connections[0].prompt_tuning.ask.as_deref(),
+        Some("SERVER_RULES")
+    );
+    assert_eq!(excluded.active_connection_id.as_deref(), Some(id.as_str()));
+    let included = store.archive(true).unwrap();
+    assert_eq!(
+        included
+            .app_keys
+            .as_ref()
+            .unwrap()
+            .get(&id)
+            .map(String::as_str),
+        Some("SYNTHETIC_APP_SECRET_SENTINEL")
+    );
+    assert!(!serde_json::to_string(&store.view().unwrap())
+        .unwrap()
+        .contains("SYNTHETIC_APP_SECRET_SENTINEL"));
+    assert_eq!(store.view().unwrap().revision, 3);
+}
+
+#[test]
+fn provider_archive_validates_references_identity_routes_and_explicit_empty_keys() {
+    use provider_config::archive::ProviderArchive;
+    let store = store();
+    store
+        .create(
+            0,
+            "No App key".into(),
+            ConnectionKind::Provider,
+            ProviderDialect::Gemini,
+        )
+        .unwrap();
+    let archive = store.archive(true).unwrap();
+    assert!(archive.app_keys.as_ref().unwrap().is_empty());
+    assert_eq!(
+        archive
+            .home_key_variables
+            .values()
+            .map(String::as_str)
+            .collect::<Vec<_>>(),
+        vec!["GEMINI_API_KEY"]
+    );
+    archive.validate().unwrap();
+    let original = serde_json::to_value(archive).unwrap();
+    let id = original["connections"][0]["id"].as_str().unwrap();
+    let mut unknown = original.clone();
+    unknown["fixture_marker"] = serde_json::json!(true);
+    assert!(serde_json::from_value::<ProviderArchive>(unknown).is_err());
+    for (path, replacement) in [
+        ("home", serde_json::json!({(id):"ANOTHER_SECRET_NAME"})),
+        ("keys", serde_json::json!({"unknown-id":"SYNTHETIC_KEY"})),
+        ("active", serde_json::json!("unknown-id")),
+        (
+            "endpoint",
+            serde_json::json!("https://secret@other.example/v1"),
+        ),
+    ] {
+        let mut value = original.clone();
+        match path {
+            "home" => value["home_key_variables"] = replacement,
+            "keys" => value["app_keys"] = replacement,
+            "active" => value["active_connection_id"] = replacement,
+            "endpoint" => value["connections"][0]["api_address"] = replacement,
+            _ => unreachable!(),
+        }
+        let invalid: ProviderArchive = serde_json::from_value(value).unwrap();
+        assert!(invalid.validate().is_err());
+    }
+    assert_eq!(store.view().unwrap().revision, 1);
+}
+
+#[test]
+fn replacement_keeps_only_unchanged_bound_app_keys_when_omitted_without_mutating_live_state() {
+    let store = store();
+    let mut draft = store
+        .create(
+            0,
+            "Original".into(),
+            ConnectionKind::Provider,
+            ProviderDialect::Deepseek,
+        )
+        .unwrap()
+        .connections
+        .remove(0)
+        .connection;
+    let id = draft.id.clone();
+    draft.model = "fixture".into();
+    store
+        .save(
+            1,
+            draft,
+            KeyAction::Replace {
+                value: "SYNTHETIC_RETAINED_KEY".into(),
+            },
+        )
+        .unwrap();
+    let mut omitted = store.archive(false).unwrap();
+    omitted.connections[0].model = "different-model".into();
+    omitted.connections[0].api_address = "https://api.deepseek.com/".into();
+    let prepared: serde_json::Value =
+        serde_json::from_slice(&store.replacement(&omitted).unwrap()).unwrap();
+    assert_eq!(
+        prepared["connections"][0]["key"]["value"],
+        "SYNTHETIC_RETAINED_KEY"
+    );
+    assert_eq!(prepared["revision"], 3);
+    assert_eq!(store.view().unwrap().revision, 2);
+    assert_eq!(
+        store.view().unwrap().connections[0].connection.model,
+        "fixture"
+    );
+    let mut explicit_empty = omitted.clone();
+    explicit_empty.app_keys = Some(Default::default());
+    let cleared: serde_json::Value =
+        serde_json::from_slice(&store.replacement(&explicit_empty).unwrap()).unwrap();
+    assert!(cleared["connections"][0]["key"].is_null());
+    for change in ["route", "auth", "identity"] {
+        let mut changed = omitted.clone();
+        match change {
+            "route" => changed.connections[0].api_address = "https://other.example/v1".into(),
+            "auth" => changed.connections[0].authentication = Authentication::None,
+            "identity" => changed.connections[0].id = "new-identity".into(),
+            _ => unreachable!(),
+        }
+        changed.home_key_variables.clear();
+        if change == "identity" {
+            changed
+                .home_key_variables
+                .insert("new-identity".into(), "DEEPSEEK_API_KEY".into());
+        }
+        let target: serde_json::Value =
+            serde_json::from_slice(&store.replacement(&changed).unwrap()).unwrap();
+        assert!(target["connections"][0]["key"].is_null());
+    }
+    let mut explicit = omitted;
+    explicit.app_keys = Some(
+        [(id, "SYNTHETIC_IMPORTED_KEY".into())]
+            .into_iter()
+            .collect(),
+    );
+    let replaced: serde_json::Value =
+        serde_json::from_slice(&store.replacement(&explicit).unwrap()).unwrap();
+    assert_eq!(
+        replaced["connections"][0]["key"]["value"],
+        "SYNTHETIC_IMPORTED_KEY"
+    );
+}
+
+#[test]
 fn connection_tuning_appends_each_scene_and_is_frozen_with_its_server_snapshot() {
     struct NeverHome;
     impl credentials::CredentialReader for NeverHome {

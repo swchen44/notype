@@ -30,7 +30,7 @@ notype 的基本工作單位是一次**語音 session**：開始錄音、停止�
 
 ## 架構與責任邊界
 
-最新 AI server 狀態、設定分頁與特調提示詞的來源／原生編譯／待驗收邊界，見 [#33／#34 驗證紀錄](docs/verification/server-tuning-status.md)。[YAML 移轉設計與測試範圍](docs/settings-transfer-design.md)已記錄 App key 匯出及整份取代決定；未含 key 時的處理仍待確認，尚未實作。
+最新 AI server 狀態、設定分頁與特調提示詞的來源／原生編譯／指定畫面驗收邊界，見 [#33／#34 驗證紀錄](docs/verification/server-tuning-status.md)。[YAML 移轉設計與測試範圍](docs/settings-transfer-design.md)已記錄全部資料政策；codec／provider archive 的來源基礎已有測試，整份交易、UI 及交付仍在實作。
 
 正式 App 使用 **Rust + Tauri 2 + React／TypeScript + SQLite**。桌面來源基於固定 Handy fork，來源與 MIT 授權見 [UPSTREAM](desktop/UPSTREAM.md)／[LICENSE](desktop/LICENSE)。下圖描述現有模組責任，不表示所有平台或實機場景均已驗收。
 

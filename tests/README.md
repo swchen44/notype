@@ -1,5 +1,31 @@
 # 測試規範
 
+## YAML syntax boundary (#34, transfer not yet wired)
+
+`settings-yaml` exercises the bounded production codec source with owned synthetic
+values. It covers real YAML/Chinese/multiline/numeric round-trip, literal variable
+references, duplicate keys (including conversion collisions), zero aliases/anchors,
+unsupported tags/include/merge, multidocuments, malformed UTF-8, structure/byte
+limits and fixed errors without excerpts. It reads no files or credentials and
+does not establish domain import, atomic settings application or a working UI.
+
+```powershell
+cargo test --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test settings-yaml
+cargo clippy --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test settings-yaml -- -D warnings
+```
+
+The pinned codec dependency is currently registered only in the portable test
+harness. Native dependency/notices and cross-store integration acceptance are
+required when connecting it to the App. It is not in the local.5 executable.
+
+`provider-config` additionally verifies backend-only archive key exclusion/inclusion,
+fixed home-variable references and prepared whole-provider replacement. Omitted
+keys preserve only the same ID/canonical route/authentication binding; explicit
+empty/included key maps clear/replace that exported state, without live writes.
+`provider-config-store` uses actual owned FileStorage and SQLite with Chinese YAML
+round-trip, prepared target reopen/NeverHome credential resolution, and unchanged
+source settings/history bytes. These are foundations, not full multi-store import.
+
 ## Per-server tuning and settings tabs (#34)
 
 `provider-config` verifies scene/server independence, None, frozen snapshots,
