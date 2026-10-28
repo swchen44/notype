@@ -703,6 +703,80 @@ test("connection counters preserve exact currencies and partial data, failed cle
   );
 });
 
+for (const [language, button, cases] of [
+  [
+    "en",
+    "Test connection",
+    [
+      [
+        "provider-rate-limit",
+        "Connection test rate limited. Wait before trying again.",
+      ],
+      [
+        "provider-auth",
+        "Connection test authentication failed. Check the API key.",
+      ],
+      [
+        "Bearer PRIVATE_TEST_ERROR token=SYNTHETIC",
+        "The connection test did not complete. Check the connection settings and service status.",
+      ],
+    ],
+  ],
+  [
+    "zh-TW",
+    "測試連線",
+    [
+      ["provider-rate-limit", "測試請求過於頻繁，請稍後再試。"],
+      ["provider-auth", "連線測試認證失敗，請檢查 API 金鑰。"],
+      [
+        "Bearer PRIVATE_TEST_ERROR token=SYNTHETIC",
+        "連線測試未完成，請檢查連線設定與服務狀態。",
+      ],
+    ],
+  ],
+  [
+    "zh-CN",
+    "测试连接",
+    [
+      ["provider-rate-limit", "测试请求过于频繁，请稍后再试。"],
+      ["provider-auth", "连接测试认证失败，请检查 API 密钥。"],
+      [
+        "Bearer PRIVATE_TEST_ERROR token=SYNTHETIC",
+        "连接测试未完成，请检查连接设置与服务状态。",
+      ],
+    ],
+  ],
+])
+  test(`explicit connection test ${language} errors never claim speech text was saved`, async (t) => {
+    const page = await providerConnectionsFixture(t, language, [
+      savedConnection,
+    ]);
+    for (const [code, copy] of cases) {
+      await page.evaluate((code) => {
+        window.testMode = "fail";
+        window.testError = code;
+      }, code);
+      await page.getByRole("button", { name: button, exact: true }).click();
+      await page.getByRole("note").waitFor();
+      assert.doesNotMatch(
+        await page.locator("body").innerText(),
+        /原稿已保存|original is saved|transcript.*saved/i,
+      );
+      await page.getByRole("note").getByText(copy, { exact: true }).waitFor();
+      assert.doesNotMatch(
+        await page.locator("body").innerText(),
+        /原稿已保存|original is saved|transcript.*saved|notype\.usability\.testErrors|PRIVATE_TEST_ERROR|token=SYNTHETIC/i,
+      );
+    }
+    assert.equal(
+      await page.evaluate(
+        () =>
+          window.calls.filter((c) => c.cmd === "test_text_connection").length,
+      ),
+      3,
+    );
+  });
+
 for (const [language, heading, search, empty] of [
   ["zh-TW", "字典", "搜尋詞彙", "沒有符合的詞彙。"],
   ["zh-CN", "词典", "搜索词汇", "没有符合的词汇。"],

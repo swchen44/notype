@@ -148,10 +148,13 @@ export async function providerConnectionsFixture(
             window.testResults[args.id] = {
               test_success: window.testMode !== "fail",
               test_error:
-                window.testMode === "fail" ? "provider-timeout" : null,
+                window.testMode === "fail"
+                  ? (window.testError ?? "provider-timeout")
+                  : null,
               tested_at_ms: 1793200000000,
             };
-            if (window.testMode === "fail") throw "provider-timeout";
+            if (window.testMode === "fail")
+              throw window.testError ?? "provider-timeout";
             return null;
           }
           if (cmd === "clear_connection_usage") {

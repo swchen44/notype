@@ -8,6 +8,31 @@ import {
 import { connectionConfigurationChanged } from "@/hooks/useConnectionActivity";
 import { Button } from "../../ui/Button";
 
+// Explicit connection tests have no speech session or saved transcript.
+const TEST_ERROR_KEYS = new Map<string, string>([
+  ["provider-auth", "auth"],
+  ["provider-permission", "permission"],
+  ["provider-rate-limit", "rateLimit"],
+  ["provider-balance", "balance"],
+  ["provider-context", "context"],
+  ["provider-timeout", "timeout"],
+  ["processing-timeout", "timeout"],
+  ["provider-validation", "validation"],
+  ["provider-unavailable", "unavailable"],
+  ["provider-transport", "transport"],
+  ["provider-protocol", "protocol"],
+  ["processing-invalid-response", "protocol"],
+  ["provider-oversize", "oversize"],
+  ["processing-cancelled", "cancelled"],
+  ["configuration-required", "configuration"],
+  ["configuration-credentials-unavailable", "credentials"],
+  ["configuration-capability-required", "options"],
+  ["configuration-route-invalid", "validation"],
+  ["configuration-invalid-options", "options"],
+  ["configuration-storage-failed", "storage"],
+  ["history-storage-failed", "storage"],
+]);
+
 export function ConnectionActivity({
   id,
   revision,
@@ -108,9 +133,9 @@ export function ConnectionActivity({
       </p>
       {activity?.test_error && (
         <p role="note">
-          {t(`notype.errors.${activity.test_error}`, {
-            defaultValue: t("notype.usability.testFailed"),
-          })}
+          {t(
+            `notype.usability.testErrors.${TEST_ERROR_KEYS.get(activity.test_error) ?? "unknown"}`,
+          )}
         </p>
       )}
       <div className="flex gap-2">
