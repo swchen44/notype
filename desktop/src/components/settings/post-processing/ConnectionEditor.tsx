@@ -158,86 +158,101 @@ export function ConnectionEditor({
       className="space-y-4 border-t border-mid-gray/30 pt-4"
     >
       <h3 className="font-semibold">{t("notype.connections.editor")}</h3>
+      <p className="text-sm text-text/70">
+        {t("notype.connections.editorHint")}
+      </p>
       <fieldset disabled={busy} className="space-y-3 min-w-0">
-        <label className="flex flex-col gap-1 text-sm">
-          {t("notype.connections.name")}
-          <Input
-            aria-label={t("notype.connections.name")}
-            value={draft.display_name}
-            onChange={(event) => edit({ display_name: event.target.value })}
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          {t("notype.connections.kind")}
-          <select
-            aria-label={t("notype.connections.kind")}
-            className="border rounded p-2 bg-background"
-            value={draft.kind}
-            onChange={(event) =>
-              edit({ kind: event.target.value as ConnectionKind })
-            }
-          >
-            {(["provider", "custom", "local"] as const).map((value) => (
-              <option key={value} value={value}>
-                {t("notype.connections.kinds." + value)}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <label className="flex flex-col gap-1 text-sm">
+            {t("notype.connections.name")}
+            <Input
+              aria-label={t("notype.connections.name")}
+              value={draft.display_name}
+              onChange={(event) => edit({ display_name: event.target.value })}
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            {t("notype.connections.kind")}
+            <select
+              aria-label={t("notype.connections.kind")}
+              className="border rounded p-2 bg-background"
+              value={draft.kind}
+              onChange={(event) =>
+                edit({ kind: event.target.value as ConnectionKind })
+              }
+            >
+              {(["provider", "custom", "local"] as const).map((value) => (
+                <option key={value} value={value}>
+                  {t("notype.connections.kinds." + value)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            {t("notype.connections.dialect")}
+            <select
+              aria-label={t("notype.connections.dialect")}
+              className="border rounded p-2 bg-background"
+              value={draft.dialect}
+              onChange={(event) =>
+                edit({ dialect: event.target.value as ProviderDialect })
+              }
+            >
+              {(
+                [
+                  "generic",
+                  "deepseek",
+                  "openrouter",
+                  "gemini",
+                  "ollama_openai",
+                ] as const
+              ).map((value) => (
+                <option key={value} value={value}>
+                  {t("notype.connections.dialects." + value)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            {t("notype.connections.addressMode")}
+            <select
+              aria-label={t("notype.connections.addressMode")}
+              className="border rounded p-2 bg-background"
+              value={draft.address_mode}
+              onChange={(event) =>
+                edit({ address_mode: event.target.value as AddressMode })
+              }
+            >
+              <option value="base_url">
+                {t("notype.connections.baseUrl")}
               </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          {t("notype.connections.dialect")}
-          <select
-            aria-label={t("notype.connections.dialect")}
-            className="border rounded p-2 bg-background"
-            value={draft.dialect}
-            onChange={(event) =>
-              edit({ dialect: event.target.value as ProviderDialect })
-            }
-          >
-            {(
-              [
-                "generic",
-                "deepseek",
-                "openrouter",
-                "gemini",
-                "ollama_openai",
-              ] as const
-            ).map((value) => (
-              <option key={value} value={value}>
-                {t("notype.connections.dialects." + value)}
+              <option value="full_chat_endpoint">
+                {t("notype.connections.fullEndpoint")}
               </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          {t("notype.connections.addressMode")}
-          <select
-            aria-label={t("notype.connections.addressMode")}
-            className="border rounded p-2 bg-background"
-            value={draft.address_mode}
-            onChange={(event) =>
-              edit({ address_mode: event.target.value as AddressMode })
-            }
-          >
-            <option value="base_url">{t("notype.connections.baseUrl")}</option>
-            <option value="full_chat_endpoint">
-              {t("notype.connections.fullEndpoint")}
-            </option>
-          </select>
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          {t("notype.connections.address")}
-          <Input
-            aria-label={t("notype.connections.address")}
-            value={draft.api_address}
-            autoComplete="off"
-            spellCheck={false}
-            onChange={(event) => edit({ api_address: event.target.value })}
-          />
-        </label>
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            {t("notype.connections.address")}
+            <Input
+              aria-label={t("notype.connections.address")}
+              value={draft.api_address}
+              placeholder={
+                draft.address_mode === "base_url"
+                  ? "https://example.com/v1"
+                  : "https://example.com/v1/chat/completions"
+              }
+              autoComplete="off"
+              spellCheck={false}
+              onChange={(event) => edit({ api_address: event.target.value })}
+            />
+          </label>
+        </div>
         <p className="text-sm text-text/70">
           {t("notype.connections.endpointPreview")}:{" "}
           {endpoint ?? t("notype.connections.invalidEndpoint")}
+        </p>
+        <p className="text-sm text-text/70">
+          {t("notype.connections.addressHint")}
         </p>
         {draft.address_mode === "full_chat_endpoint" && (
           <label className="flex flex-col gap-1 text-sm">
@@ -259,28 +274,6 @@ export function ConnectionEditor({
           </p>
         )}
         <label className="flex flex-col gap-1 text-sm">
-          {t("notype.text.model")}
-          <Input
-            aria-label={t("notype.text.model")}
-            value={draft.model}
-            autoComplete="off"
-            spellCheck={false}
-            onChange={(event) => edit({ model: event.target.value })}
-          />
-        </label>
-        <ModelIdList
-          connection={candidate}
-          keyAction={keyAction}
-          revision={revision}
-          disabled={
-            busy ||
-            !numbersValid ||
-            !replacementValid ||
-            bindingInvalid ||
-            endpoint === null
-          }
-        />
-        <label className="flex flex-col gap-1 text-sm">
           {t("notype.text.authentication")}
           <select
             aria-label={t("notype.text.authentication")}
@@ -294,6 +287,8 @@ export function ConnectionEditor({
               if (event.target.value === "none") {
                 setKeyMode("clear");
                 setReplacement("");
+              } else {
+                setKeyMode("keep");
               }
             }}
           >
@@ -307,6 +302,30 @@ export function ConnectionEditor({
         </p>
         {draft.authentication === "bearer" && (
           <div className="space-y-3">
+            <label className="flex flex-col gap-1 text-sm">
+              {t("notype.connections.apiKey")}
+              <Input
+                aria-label={t("notype.connections.apiKey")}
+                type="password"
+                autoComplete="new-password"
+                placeholder={t("notype.connections.keyPlaceholder")}
+                disabled={keyMode === "clear"}
+                value={replacement}
+                onChange={(event) => {
+                  setReplacement(event.target.value);
+                  setKeyMode(event.target.value.length ? "replace" : "keep");
+                }}
+              />
+              <span
+                className="font-mono break-all"
+                aria-label={t("notype.usability.keyPreview")}
+              >
+                {replacement ? maskApiKey(replacement) : ""}
+              </span>
+            </label>
+            <p className="text-sm text-text/70">
+              {t("notype.connections.keyEntryHint")}
+            </p>
             <p className="text-sm text-text/70">
               {t("notype.connections.keyPriority")}
             </p>
@@ -330,24 +349,6 @@ export function ConnectionEditor({
                 </option>
               </select>
             </label>
-            {keyMode === "replace" && (
-              <label className="flex flex-col gap-1 text-sm">
-                {t("notype.connections.replacementKey")}
-                <Input
-                  aria-label={t("notype.connections.replacementKey")}
-                  type="password"
-                  autoComplete="new-password"
-                  value={replacement}
-                  onChange={(event) => setReplacement(event.target.value)}
-                />
-                <span
-                  className="font-mono break-all"
-                  aria-label={t("notype.usability.keyPreview")}
-                >
-                  {replacement ? maskApiKey(replacement) : ""}
-                </span>
-              </label>
-            )}
             {bindingInvalid && (
               <p role="alert" className="text-sm">
                 {t("notype.connections.bindingChanged")}
@@ -360,6 +361,28 @@ export function ConnectionEditor({
             )}
           </div>
         )}
+        <label className="flex flex-col gap-1 text-sm">
+          {t("notype.text.model")}
+          <Input
+            aria-label={t("notype.text.model")}
+            value={draft.model}
+            autoComplete="off"
+            spellCheck={false}
+            onChange={(event) => edit({ model: event.target.value })}
+          />
+        </label>
+        <ModelIdList
+          connection={candidate}
+          keyAction={keyAction}
+          revision={revision}
+          disabled={
+            busy ||
+            !numbersValid ||
+            !replacementValid ||
+            bindingInvalid ||
+            endpoint === null
+          }
+        />
         <label className="flex gap-2 text-sm">
           <input
             type="checkbox"

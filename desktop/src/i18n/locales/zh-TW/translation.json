@@ -392,7 +392,13 @@
         "openrouter": "OpenRouter",
         "gemini": "Gemini OpenAI 相容",
         "ollama_openai": "Ollama OpenAI 相容"
-      }
+      },
+      "createHint": "先建立連線，接著在開啟的「連線設定」填 API 位址、key 與模型。之後可按每筆連線的「編輯」修改其他設定。",
+      "editorHint": "請設定下方 API 位址、API key 與模型，再儲存。Thinking 與其他模型參數在下方。",
+      "apiKey": "API key",
+      "keyPlaceholder": "輸入 key；留空保留目前設定",
+      "keyEntryHint": "輸入 key 後，按「儲存連線」才會替換 App 金鑰。留空保留目前設定；要刪除金鑰，請在「App 金鑰操作」明確選擇清除。",
+      "addressHint": "Base URL 會自動補上 /chat/completions；「完整 Chat Completions 網址」會直接使用你填寫的完整路徑。"
     },
     "text": {
       "title": "文字整理",

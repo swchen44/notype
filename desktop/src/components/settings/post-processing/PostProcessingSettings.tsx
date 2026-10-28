@@ -37,6 +37,19 @@ export const PostProcessingSettings = () => {
   const [ready, setReady] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editorVersion, setEditorVersion] = useState(0);
+  const [editorVisit, setEditorVisit] = useState(0);
+  const editorAnchor = useRef<HTMLDivElement>(null);
+  const openEditor = (id: string) => {
+    setSelectedId(id);
+    setEditorVisit((value) => value + 1);
+  };
+  useEffect(() => {
+    if (!selectedId) return;
+    editorAnchor.current?.scrollIntoView({ block: "start" });
+    editorAnchor.current
+      ?.querySelector<HTMLInputElement>("input")
+      ?.focus({ preventScroll: true });
+  }, [selectedId, editorVisit]);
   const [reloadVersion, setReloadVersion] = useState(0);
   const requestEpoch = useRef(0);
   const readinessEpoch = useRef(0);
@@ -190,6 +203,9 @@ export const PostProcessingSettings = () => {
         </Button>
         {creating && (
           <div className="space-y-3 rounded-lg border border-mid-gray/30 p-4">
+            <p className="text-sm text-text/70">
+              {t("notype.connections.createHint")}
+            </p>
             <label className="flex flex-col gap-1 text-sm">
               {t("notype.connections.name")}
               <Input
@@ -257,7 +273,7 @@ export const PostProcessingSettings = () => {
                       (saved) => saved.id === connection.id,
                     ),
                 );
-                if (created) setSelectedId(created.id);
+                if (created) openEditor(created.id);
               }}
             >
               {t("notype.connections.create")}
@@ -323,7 +339,7 @@ export const PostProcessingSettings = () => {
                     aria-label={t("notype.connections.editNamed", {
                       name: connection.display_name,
                     })}
-                    onClick={() => setSelectedId(connection.id)}
+                    onClick={() => openEditor(connection.id)}
                   >
                     {t("notype.connections.edit")}
                   </Button>
@@ -350,23 +366,25 @@ export const PostProcessingSettings = () => {
         )}
       </fieldset>
       {selected && (
-        <ConnectionEditor
-          key={selected.id + ":" + editorVersion}
-          connection={selected}
-          revision={configuration.revision}
-          busy={busy}
-          onSave={async (draft, keyAction) => {
-            const updated = await mutate(() =>
-              commands.saveTextConnection(
-                configuration.revision,
-                draft,
-                keyAction,
-              ),
-            );
-            if (updated) setEditorVersion((value) => value + 1);
-            return !!updated;
-          }}
-        />
+        <div ref={editorAnchor} className="scroll-mt-4">
+          <ConnectionEditor
+            key={selected.id + ":" + editorVersion}
+            connection={selected}
+            revision={configuration.revision}
+            busy={busy}
+            onSave={async (draft, keyAction) => {
+              const updated = await mutate(() =>
+                commands.saveTextConnection(
+                  configuration.revision,
+                  draft,
+                  keyAction,
+                ),
+              );
+              if (updated) setEditorVersion((value) => value + 1);
+              return !!updated;
+            }}
+          />
+        </div>
       )}
       {message && <p role={failed ? "alert" : "status"}>{message}</p>}
       <ScenarioSettings

@@ -63,9 +63,7 @@ test("API options preserve zero temperature and send an explicit key replacement
   await page
     .getByLabel("App key action", { exact: true })
     .selectOption("replace");
-  await page
-    .getByLabel("Replacement API key", { exact: true })
-    .fill("synthetic-new-key");
+  await page.getByLabel("API key", { exact: true }).fill("synthetic-new-key");
   await page.getByLabel("Temperature", { exact: true }).fill("0");
   await page.getByLabel("Top p", { exact: true }).fill("0.5");
   await page

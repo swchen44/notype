@@ -581,7 +581,7 @@ test("saved keys and replacement input show masked head/tail without exposing fu
   await page
     .getByLabel("App key action", { exact: true })
     .selectOption("replace");
-  const input = page.getByLabel("Replacement API key", { exact: true });
+  const input = page.getByLabel("API key", { exact: true });
   await input.fill("head-private-middle-tail");
   assert.equal(await input.getAttribute("type"), "password");
   await page

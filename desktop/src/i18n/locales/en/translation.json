@@ -393,7 +393,13 @@
         "openrouter": "OpenRouter",
         "gemini": "Gemini OpenAI-compatible",
         "ollama_openai": "Ollama OpenAI-compatible"
-      }
+      },
+      "createHint": "Create the connection first. Then fill in the API address, key and model in Connection settings. Use Edit to change them later.",
+      "editorHint": "Set the API address, API key and model below, then save. Thinking and other model options are further down.",
+      "apiKey": "API key",
+      "keyPlaceholder": "Enter a key, or leave blank to keep the current setting",
+      "keyEntryHint": "Typing a key replaces the App key only when you save. Leaving this field blank keeps the current setting; use App key action to explicitly clear it.",
+      "addressHint": "Base URL adds /chat/completions automatically. Full Chat Completions URL uses the address exactly as entered."
     },
     "text": {
       "title": "Text editing",

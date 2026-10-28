@@ -351,7 +351,13 @@
         "openrouter": "OpenRouter",
         "gemini": "Gemini OpenAI 兼容",
         "ollama_openai": "Ollama OpenAI 兼容"
-      }
+      },
+      "createHint": "先创建连接，接着在打开的“连接设置”填写 API 地址、key 和模型。之后可按每个连接的“编辑”修改其他设置。",
+      "editorHint": "请设置下方 API 地址、API key 和模型，再保存。Thinking 和其他模型参数在下方。",
+      "apiKey": "API key",
+      "keyPlaceholder": "输入 key；留空保留当前设置",
+      "keyEntryHint": "输入 key 后，按“保存连接”才会替换 App 密钥。留空保留当前设置；要删除密钥，请在“App 密钥操作”中明确选择清除。",
+      "addressHint": "Base URL 会自动补上 /chat/completions；“完整 Chat Completions 地址”会直接使用你填写的完整路径。"
     },
     "text": {
       "title": "文字整理",
