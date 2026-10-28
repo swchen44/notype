@@ -4,7 +4,7 @@
 
 notype 是為繁體中文／英文與簡體中文／英文混合口述設計的桌面語音輸入工具。透過快捷鍵開始說話，在本機完成語音辨識，保留可查閱、複製及匯出的文字歷史；需要整理、翻譯或代寫時，再接上自己選擇的文字 AI 服務。
 
-[下載 Windows 11 測試版](https://github.com/swchen44/notype/releases/tag/v0.1.1-local.6) · [安裝與啟動](#安裝與啟動) · [第一次使用](#第一次使用) · [開發者手冊](development.md)
+[下載 Windows 11 測試版](https://github.com/swchen44/notype/releases/tag/v0.1.1-local.7) · [安裝與啟動](#安裝與啟動) · [第一次使用](#第一次使用) · [開發者手冊](development.md)
 
 ## 為什麼使用 notype
 
@@ -41,18 +41,18 @@ notype 是為繁體中文／英文與簡體中文／英文混合口述設計的�
 
 ### 下載、核對、解壓
 
-1. 開啟 [v0.1.1-local.2 Release](https://github.com/swchen44/notype/releases/tag/v0.1.1-local.2)。目前 repo 為 private，需要有存取權限。
-2. 下載 `notype-0.1.1-local.2-offline-win-x64.zip` 與 `SHA256SUMS.txt`。Release 另附 `Windows11-README.md` 操作說明及 `VERIFICATION.md` 驗證紀錄。
+1. 在可連線的電腦開啟 [v0.1.1-local.7 Release](https://github.com/swchen44/notype/releases/tag/v0.1.1-local.7)。目前 repo 為 private，下載帳號需要有存取權限。
+2. 手動下載 [完整離線 ZIP](https://github.com/swchen44/notype/releases/download/v0.1.1-local.7/notype-0.1.1-local.7-offline-win-x64.zip) 與 [SHA256SUMS.txt](https://github.com/swchen44/notype/releases/download/v0.1.1-local.7/SHA256SUMS.txt)。Release 另附 `Windows11-README.md` 操作說明及 `VERIFICATION.md` 驗證紀錄。如果目標電腦無法連網，將這兩個檔案透過公司允許的方式轉移到目標電腦；完整包已包含語音模型及執行環境。
 3. 在下載資料夾開啟 PowerShell，核對 ZIP 的 SHA-256：
 
    ```powershell
-   Get-FileHash .\notype-0.1.1-local.2-offline-win-x64.zip -Algorithm SHA256
+   Get-FileHash .\notype-0.1.1-local.7-offline-win-x64.zip -Algorithm SHA256
    ```
 
    應與 `SHA256SUMS.txt` 的 ZIP 那一列相同。本版 ZIP 雜湊：
 
    ```text
-   6a2a6d1875dcc5e2f5013e32b508e4738cf8afe045674e7c3cb6fb01843343b5
+   b224031c3d05a2859beaadc519b8d0f9239600fefb88721b929c684c0ceb5b9b
    ```
 
 4. 曾使用舊版時，先從系統匣選「結束」，關閉既有 notype 實例。
@@ -60,12 +60,14 @@ notype 是為繁體中文／英文與簡體中文／英文混合口述設計的�
 
 不需要刪除舊模型、歷史或自己的 `.env`。更新程式時先保留個人資料，模型也可沿用既有資料夾。
 
+離線電腦可使用隨包的本機語音辨識；如啟用文字整理、翻譯或隨便問，仍須能連到所選的雲端或內網 AI server，並依服務要求設定 key。
+
 ### 獨立保存這次測試的資料
 
 預設設定與文字歷史位於 `%APPDATA%\io.github.swchen44.notype`。若要使用獨立測試目錄，在**解壓資料夾的命令提示字元（CMD）**執行：
 
 ```bat
-set "NOTYPE_DATA_DIR=%LOCALAPPDATA%\notype\local-trial-0.1.1-local.2"
+set "NOTYPE_DATA_DIR=%LOCALAPPDATA%\notype\local-trial-0.1.1-local.7"
 call ".\Start-notype.cmd"
 ```
 
@@ -92,6 +94,8 @@ call ".\Start-notype.cmd"
 
 **沿用已有模型。** 完整包的模型位於 `models`。可在設定指定已有模型資料夾並重新掃描。換位置時先結束 App，自行搬移整個模型資料夾，保留模型資訊與授權檔，再重新開啟 App 指定位置。notype 不會替你搬移或複製已有權重。
 
+**手動下載語音模型。** 完整離線包已包含此模型，通常不需另行下載。若要單獨取得 Qwen3-ASR 0.6B Q6_K，可在可連網的電腦下載[固定版本的模型檔](https://huggingface.co/handy-computer/Qwen3-ASR-0.6B-gguf/resolve/e4e16599b900eb0cb36e524514756bb92eb092b7/Qwen3-ASR-0.6B-Q6_K.gguf)，檔案大小為 690,417,824 bytes，SHA-256 為 `3b051f108f03c0c91bbe1a3b2c1ee15e3ed51e4caec2a48751b01f2a21441cc3`。請先核對檔案，再透過公司允許的方式轉移到目標電腦，放入指定模型資料夾的最上層；在 notype 的「模型」選擇該資料夾並按「重新掃描」，再選擇模型。不要將檔案放入程式安裝目錄。掃描邏輯已用測試資料驗證，手動下載後於乾淨 Windows 11 實機辨識仍待驗收。
+
 **設定文字服務。** 本機辨識不需要 key。需要整理、翻譯或隨便問時，新增 Provider、Custom 或 Local 連線，填寫 API 位址、model ID 及服務要求的 key，儲存後選一筆啟用。可查詢服務提供的模型清單作參考，model ID 仍由使用者決定；thinking 預設關閉，effort 依模型能力設定。連線與費用依所選服務而定。
 
 啟用文字 API 後，處理所需的文字會送到所選端點。通用離線包不附個人 key 或公司私有連線設定。
@@ -114,15 +118,15 @@ call ".\Start-notype.cmd"
 
 ## Windows 11 測試版與驗證狀態
 
-v0.1.1-local.6 已完成完整 CI、Windows 原生編譯、1,733 檔案的 ZIP／獨立解壓核對，以及 Computer Use 的原生 YAML 匯出、差異預覽、取消、確認套用、自動重啟與重啟後詞彙核對。這些原生測試使用獨立合成設定，不等同所有電腦或所有連線的驗收，詳見 [YAML 原生驗證](docs/verification/settings-transfer-native.md)。
+v0.1.1-local.7 已完成 CI、Windows 原生編譯、文字 API 測試，以及 1,733 檔案的 ZIP／獨立解壓核對。口述提示詞經一段合成例句實測，模型輸出仍需使用者核對。前版 local.6 曾以 Computer Use 驗證原生 YAML 匯出、差異預覽、取消、確認套用、自動重啟與重啟後詞彙；這些原生測試使用獨立合成設定，不等同所有電腦或所有連線的驗收，詳見 [YAML 原生驗證](docs/verification/settings-transfer-native.md)。
 
 本版亦包含 AI server 狀態、設定分頁及每個 server 的三場景特調提示詞。Gemini 曾於前一本機候選版以使用者確認的免費專案完成實測（gemini-3.1-flash-lite，最低 thinking；input50／output1，實際費用未知）。真人錄音、快捷鍵延遲、其他目標 App、公司內網與乾淨 Windows 11 主機仍待驗收。
 
 | 已執行 | 範圍 |
 | --- | --- |
 | Windows／Linux 契約與 rendered UI | 原稿交付／取消、歷史搜尋、詞彙表 CSV／去重、連線測試／用量／遲到回覆等 |
-| 實際 Windows 操作 | Notepad++ 中英／Emoji／換行貼上及剪貼簿還原；原生歷史／詞彙 CSV 匯出；本機 HTTP 成功／429；關閉隱藏及重新喚回 |
-| 完整離線包 | ZIP 1,053,413,929 bytes；完整解壓、逐檔 SHA／CRC 及 bundled CLI 完整性檢查 |
+| 前版實際 Windows 操作 | Notepad++ 中英／Emoji／換行貼上及剪貼簿還原；原生歷史／詞彙 CSV 匯出；本機 HTTP 成功／429；關閉隱藏及重新喚回 |
+| local.7 完整離線包 | ZIP 1,054,038,702 bytes；完整解壓、逐檔 SHA／CRC 及 bundled CLI 完整性檢查 |
 
 仍需實機驗收：真人錄音／右 Alt 延遲與秒數、繁中＋英文／簡中＋英文品質、裝置拔除與睡眠、真實模型搬移／重裝沿用、Excel CSV 呈現、診斷開關／清除／匯出隱私、真實 API／公司 TLS／Proxy／斷線，以及無開發工具的乾淨 Windows 11 首次離線啟動。瀏覽器、VS Code、Teams、Outlook、Windows Terminal 自動輸入未完成新版驗收；macOS／Linux 桌面版尚未交付。
 
