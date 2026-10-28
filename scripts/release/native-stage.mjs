@@ -87,6 +87,28 @@ function runVersion(command, args, cwd) {
   return result.stdout.trim();
 }
 
+function runGit(cwd, args) {
+  const command = process.platform === 'win32' ? 'git.exe' : 'git';
+  const result = spawnSync(command, args, { cwd, encoding: 'utf8', windowsHide: true });
+  if (result.status !== 0) throw new Error('native-git-failed');
+  return result.stdout;
+}
+
+// Tauri may rewrite Cargo.toml without changing its normalized Git blob. Never
+// restore an actual content change, an index change, or unrelated work.
+export function restoreEquivalentTauriManifest(cwd, git = runGit) {
+  const filename = 'desktop/src-tauri/Cargo.toml';
+  const statusArgs = ['status', '--porcelain=v1', '--untracked-files=all'];
+  const status = git(cwd, statusArgs).replace(/\r?\n$/, '');
+  if (status === '') return;
+  if (status !== ` M ${filename}`) throw new Error('native-source-dirty');
+  const head = git(cwd, ['rev-parse', `HEAD:${filename}`]).trim();
+  const normalized = git(cwd, ['hash-object', '--path', filename, filename]).trim();
+  if (!/^[0-9a-f]{40}$/.test(head) || head !== normalized) throw new Error('native-source-dirty');
+  git(cwd, ['restore', '--worktree', '--', filename]);
+  if (git(cwd, statusArgs) !== '') throw new Error('native-source-dirty');
+}
+
 function preflight(source, cwd) {
   const git = process.platform === 'win32' ? 'git.exe' : 'git';
   const bun = process.platform === 'win32' ? 'bun.exe' : 'bun';
@@ -106,6 +128,10 @@ async function main(args) {
   } else if (args[0] === 'stage') {
     await checkedFile(args[1], 1024 * 1024);
     const config = JSON.parse(await readFile(args[1], 'utf8'));
+    const git = process.platform === 'win32' ? 'git.exe' : 'git';
+    if (!/^[0-9a-f]{40}$/.test(config.source ?? '') || runVersion(git, ['rev-parse', 'HEAD'], process.cwd()) !== config.source)
+      throw new Error('native-source-invalid');
+    restoreEquivalentTauriManifest(process.cwd());
     const liveTools = preflight(config.source, process.cwd());
     if (liveTools.node !== config.tools?.node || liveTools.bun !== config.tools?.bun || liveTools.rust !== config.tools?.rust)
       throw new Error('native-tools-changed');

@@ -4,7 +4,8 @@ import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { stageNative } from '../../scripts/release/native-stage.mjs';
+import { spawnSync } from 'node:child_process';
+import { restoreEquivalentTauriManifest, stageNative } from '../../scripts/release/native-stage.mjs';
 
 const cpp = ['transcribe.dll', 'ggml.dll', 'ggml-base.dll', 'ggml-cpu-x64.dll', 'ggml-cpu-sse42.dll', 'ggml-cpu-sandybridge.dll', 'ggml-cpu-haswell.dll', 'ggml-cpu-skylakex.dll', 'ggml-cpu-cannonlake.dll', 'ggml-cpu-icelake.dll', 'ggml-cpu-cascadelake.dll', 'ggml-cpu-alderlake.dll'];
 const crt = ['msvcp140.dll', 'msvcp140_1.dll', 'vcruntime140.dll', 'vcruntime140_1.dll'];
@@ -53,4 +54,26 @@ test('refuses extra runtime DLLs so dynamic ORT cannot silently enter the packag
   const f = await fixture(); t.after(() => rm(f.root, { recursive: true, force: true }));
   await writeFile(path.join(f.runtime, 'onnxruntime.dll'), 'unexpected runtime');
   await assert.rejects(stageNative(f), /native-runtime-set-invalid/);
+});
+
+test('real git repository keeps genuine manifest and unrelated changes untouched', async t => {
+  const root = await mkdtemp(path.join(tmpdir(), 'notype-git-cleanup-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const git = (...args) => {
+    const result = spawnSync('git', args, { cwd: root, encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+    return result.stdout;
+  };
+  git('init', '-q'); git('config', 'user.name', 'fixture'); git('config', 'user.email', 'fixture@example.invalid');
+  const directory = path.join(root, 'desktop', 'src-tauri'); await mkdir(directory, { recursive: true });
+  const file = path.join(directory, 'Cargo.toml'); await writeFile(file, 'name = "original"\n');
+  git('add', '.'); git('commit', '-qm', 'owned fixture');
+  assert.doesNotThrow(() => restoreEquivalentTauriManifest(root));
+  await writeFile(file, 'name = "changed"\n');
+  assert.throws(() => restoreEquivalentTauriManifest(root), /native-source-dirty/);
+  assert.equal(await readFile(file, 'utf8'), 'name = "changed"\n');
+  await writeFile(path.join(root, 'other.txt'), 'keep');
+  assert.throws(() => restoreEquivalentTauriManifest(root), /native-source-dirty/);
+  assert.equal(await readFile(file, 'utf8'), 'name = "changed"\n');
+  assert.equal(await readFile(path.join(root, 'other.txt'), 'utf8'), 'keep');
 });
