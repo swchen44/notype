@@ -76,9 +76,10 @@ then in home `.env`, not the new key and not successful generation/free-tier pro
 
 YAML export/import is **not implemented**. Scope is settings/prompts/vocabulary,
 optional keys, excluding histories/model files, with difference/conflict preview.
-The user still needs to decide whether explicit key inclusion exports eligible
-resolved home keys or only App-stored keys, and whether apply selects individual
-changes or replaces the reviewed configuration. These policies were not guessed.
+The user has since confirmed App-stored keys only (home `.env` variable names,
+never their values) and whole replacement after preview/confirmation. One policy
+remains pending: preserve unchanged bound App keys or clear all App keys when the
+incoming file omits them. See the [transfer design](../settings-transfer-design.md).
 
 New native UI acceptance, the new Gemini key/generation check, company networking,
 microphone/full ASR sessions and clean-host installation remain unverified here.

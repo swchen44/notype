@@ -6,7 +6,7 @@
 
 Windows 鎖定，Computer Use 已停止，等待使用者解鎖後才可繼續原生畫面驗證。舊 App 尚未結束；新候選版未啟動，重新啟動時須先正常結束舊版，避免 single-instance 只喚回舊 App。不要終止其他 App，不操作登入／安全畫面。不需移除模型、歷史、設定或 `.env`。
 
-YAML 尚未實作；已確認包含設定、提示詞、詞彙、可選 key，不含歷史／模型檔，匯入須先預覽差異及衝突。兩個 async 問題待答：含 key 匯出是否包含實際使用的 home `.env` key，及逐項選擇或預覽後整份套用。不要猜測。Gemini 新 development key 尚未放好，不再請求 Gemini，先前 HTTP200 僅為舊值的模型清單。使用者對後續 Astra 審查的明確豁免維持有效；原 root checkout 仍凍結，整合 checkout 在 `D:/git/notype-impl-worktrees/usability-followup`。
+YAML 尚未實作；已確認包含設定、提示詞、詞彙、可選 key，不含歷史／模型檔。使用者已決定：勾選含 key 時只匯出 App 儲存的 key，`.env` 僅保留變數名稱參考、不讀取值；匯入預覽差異及衝突後，確認整份取代。新 async 問題待答：匯入檔未含 key 時，相同 ID／位址／驗證方式才保留現有 key，或全部清除 App key？不要猜測，見 [YAML 設計及測試範圍](docs/settings-transfer-design.md)。Gemini 新 development key 與 Windows 解鎖仍未確認，不再請求 Gemini／操作 UI；先前 HTTP200 僅為舊值的模型清單。使用者對後續 Astra 審查的明確豁免維持有效；原 root checkout 仍凍結，整合 checkout 在 `D:/git/notype-impl-worktrees/usability-followup`。
 
 GitHub Release **v0.1.1-local.2 保持原樣**，不含本次來源／本機候選版變更。新 ZIP 尚未發布，#33／#34 與真實環境驗收均不得冒稱完成。以下為歷史 checkpoint。
 
