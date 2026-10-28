@@ -8,6 +8,8 @@ test('native smoke environment excludes credentials and uses only owned director
   assert.equal(env.USERPROFILE,'C:/runner/notype-smoke/profile');
   assert.equal(env.APPDATA,'C:/runner/notype-smoke/roaming');
   assert.equal(env.LOCALAPPDATA,'C:/runner/notype-smoke/local');
+  assert.equal(env.HOME,undefined);
+  assert.equal(Object.hasOwn(env,'HOME'),false);
   assert.equal(env.GH_TOKEN,undefined); assert.equal(env.DEEPSEEK_API_KEY,undefined);
   assert.ok(!env.PATH.includes('notype-study'));
 });
