@@ -6,7 +6,7 @@ export function isolatedEnvironment({dataRoot, systemRoot, separator=path.delimi
   if (!dataRoot || !systemRoot) throw Error('smoke-environment-invalid');
   return {
     NOTYPE_DATA_DIR:dataRoot,
-    USERPROFILE:`${dataRoot}/profile`, HOME:`${dataRoot}/profile`,
+    USERPROFILE:`${dataRoot}/profile`,
     APPDATA:`${dataRoot}/roaming`, LOCALAPPDATA:`${dataRoot}/local`,
     TEMP:`${dataRoot}/temp`, TMP:`${dataRoot}/temp`,
     SystemRoot:systemRoot, WINDIR:systemRoot,
