@@ -25,6 +25,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
@@ -49,17 +50,21 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Exercise desktop workflow and HTTP contracts
         env:
+          CARGO_HOME: ${{ runner.temp }}/notype-contract-cargo-home
           CARGO_TARGET_DIR: ${{ runner.temp }}/notype-contract-target
         run: cargo +1.99.1 test --locked --manifest-path tests/integration/desktop-contracts/Cargo.toml --test desktop-workflow --test desktop-provider
-      - name: Remove this job's contract target
+      - name: Remove this job's contract build and Cargo cache
         shell: pwsh
         run: |
           $base = [IO.Path]::GetFullPath($env:RUNNER_TEMP).TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
-          $path = [IO.Path]::GetFullPath((Join-Path $env:RUNNER_TEMP 'notype-contract-target'))
-          if (-not $path.StartsWith($base, [StringComparison]::OrdinalIgnoreCase) -or (Split-Path -Leaf $path) -cne 'notype-contract-target') { throw 'unsafe-target-path' }
-          $item = Get-Item -LiteralPath $path -Force
-          if (-not $item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'unsafe-target-directory' }
-          Remove-Item -LiteralPath $path -Recurse -Force
+          foreach ($name in @('notype-contract-target', 'notype-contract-cargo-home')) {
+            $path = [IO.Path]::GetFullPath((Join-Path $env:RUNNER_TEMP $name))
+            if (-not $path.StartsWith($base, [StringComparison]::OrdinalIgnoreCase) -or (Split-Path -Leaf $path) -cne $name) { throw 'unsafe-target-path' }
+            if (-not (Test-Path -LiteralPath $path)) { continue }
+            $item = Get-Item -LiteralPath $path -Force
+            if (-not $item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'unsafe-target-directory' }
+            Remove-Item -LiteralPath $path -Recurse -Force
+          }
       - name: Build the current native App and matching runtime
         shell: pwsh
         run: |
