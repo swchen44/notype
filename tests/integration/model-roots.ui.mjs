@@ -245,6 +245,52 @@ test("fresh onboarding reuses reviewed models without acquisition and waits for 
   await page.waitForFunction(() => window.selected === true);
 });
 
+test("model folder busy hints follow current catalog state and clear after a successful idle refresh", async (t) => {
+  const page = await fixture(t, "settings");
+  const hint = page.getByText(
+    "Finish or cancel the current work, wait for it to finish, then retry applying the folder.",
+    { exact: true },
+  );
+  await page
+    .getByRole("button", { name: "Choose model folder", exact: true })
+    .waitFor();
+  assert.equal(await hint.count(), 0);
+  await page.evaluate(async () => {
+    window.handlers.get_model_catalog = () => {
+      throw "model-root-busy";
+    };
+    await window.modelStore.getState().loadModels();
+  });
+  await page
+    .getByRole("alert")
+    .filter({ hasText: "Finish or cancel" })
+    .waitFor();
+  await page.evaluate(async () => {
+    delete window.handlers.get_model_catalog;
+    window.catalog.root.busy = true;
+    await window.modelStore.getState().loadModels();
+  });
+  await hint.waitFor();
+  assert.equal(await page.getByRole("alert").count(), 0);
+  await page.evaluate(async () => {
+    window.catalog.root.busy = false;
+    await window.modelStore.getState().loadModels();
+  });
+  await hint.waitFor({ state: "detached" });
+  assert.equal(
+    await page
+      .getByRole("button", { name: "Choose model folder", exact: true })
+      .isEnabled(),
+    true,
+  );
+  assert.equal(
+    await page
+      .getByRole("button", { name: "Rescan models", exact: true })
+      .isEnabled(),
+    true,
+  );
+});
+
 test("a returning user with a missing saved model reaches folder recovery and retains the saved preference", async (t) => {
   const page = await fixture(t, "app", "en", {
     root: {

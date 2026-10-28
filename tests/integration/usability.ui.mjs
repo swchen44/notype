@@ -43,12 +43,14 @@ async function dictionaryFixture(
           if (cmd === "check_custom_sounds")
             return { start: false, stop: false };
           if (cmd === "get_text_configuration")
-            return {
-              schema_version: 2,
-              revision: 0,
-              connections: [],
-              active_connection_id: null,
-            };
+            return (
+              window.configuration ?? {
+                schema_version: 2,
+                revision: 0,
+                connections: [],
+                active_connection_id: null,
+              }
+            );
           if (cmd === "get_connection_activity") return [];
           if (cmd === "update_custom_words") {
             if (window.mode === "save-fail")
@@ -68,14 +70,17 @@ async function dictionaryFixture(
       root.render(
         React.createElement(
           "div",
-          { className: "flex min-h-screen" },
+          {
+            className: "flex overflow-hidden",
+            style: { height: "calc(100vh - 32px)" },
+          },
           React.createElement(Sidebar, {
             activeSection: "dictionary",
             onSectionChange: () => {},
           }),
           React.createElement(
             "main",
-            { className: "p-4 min-w-0 flex-1" },
+            { className: "p-4 min-w-0 flex-1 overflow-y-auto" },
             React.createElement(DictionarySettings),
           ),
         ),
@@ -141,6 +146,65 @@ test("dictionary navigation, table CRUD, case-insensitive duplicates and visible
     "繁體中文",
     "Docker",
   ]);
+});
+
+test("sidebar keeps readable labels and the complete connection status inside short and narrow windows", async (t) => {
+  const page = await dictionaryFixture(t);
+  await page.evaluate(
+    (connection) => {
+      window.configuration = {
+        schema_version: 2,
+        revision: 0,
+        connections: [connection],
+        active_connection_id: connection.id,
+      };
+      window.dispatchEvent(new Event("notype-text-configuration-changed"));
+    },
+    {
+      ...savedConnection,
+      display_name: "Internal writing service",
+      effective_endpoint: "https://intranet.example.test/v1/chat/completions",
+      model: "qwen/language-model-2026",
+    },
+  );
+  const sidebar = page.locator(".notype-sidebar");
+  const footer = sidebar.getByRole("region", {
+    name: "Text processing status",
+    exact: true,
+  });
+  await footer.getByText("Internal writing service", { exact: true }).waitFor();
+  for (const width of [420, 650, 580]) {
+    await page.setViewportSize({ width, height: 600 });
+    const bounds = await footer.evaluate((element) => {
+      const sidebar = element.closest(".notype-sidebar");
+      const panel = sidebar.getBoundingClientRect(),
+        status = element.getBoundingClientRect();
+      return {
+        width: panel.width,
+        bottom: status.bottom,
+        sidebarBottom: panel.bottom,
+        inside: status.top >= panel.top && status.bottom <= panel.bottom + 1,
+        linesFit: [...element.querySelectorAll("p")].every(
+          (line) => line.scrollWidth <= line.clientWidth + 1,
+        ),
+        overflow: document.documentElement.scrollWidth > window.innerWidth,
+      };
+    });
+    assert.equal(bounds.inside, true, JSON.stringify(bounds));
+    assert.ok(
+      bounds.width >= 160,
+      `sidebar width ${bounds.width} at viewport ${width}`,
+    );
+    assert.equal(
+      await sidebar.locator(".sidebar-label").first().isVisible(),
+      true,
+    );
+    assert.ok(bounds.bottom <= 568 + 1, JSON.stringify(bounds));
+    assert.equal(bounds.linesFit, true);
+    assert.equal(bounds.overflow, false);
+    await footer.getByText("AI processing: off", { exact: true }).waitFor();
+    await footer.getByText("Connection not tested", { exact: true }).waitFor();
+  }
 });
 
 test("dictionary UTF-8 CSV import/export preserves words, skips duplicates and rejects malformed files atomically", async (t) => {

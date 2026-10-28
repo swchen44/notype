@@ -165,26 +165,13 @@ a:focus-visible {
 }
 .notype-sidebar {
   background: color-mix(in srgb, var(--color-background), var(--color-text) 3%);
+  width: 176px;
+  min-width: 176px;
   flex-shrink: 0;
 }
 @media (max-width: 620px) {
   .settings-content {
     padding: 1.25rem 0.9rem 2rem;
-  }
-  .notype-sidebar {
-    width: 4rem;
-    padding-inline: 0.35rem;
-  }
-  .notype-sidebar .sidebar-label {
-    display: none;
-  }
-  .notype-sidebar .sidebar-brand {
-    font-size: 0.85rem;
-    margin: 1rem 0;
-  }
-  .notype-sidebar .sidebar-link {
-    justify-content: center;
-    padding: 0.7rem 0.35rem;
   }
   .model-card {
     padding: 1rem;

@@ -13,7 +13,7 @@ export function ConnectionStatus() {
   const status = activity.find((c) => c.connection_id === selected?.id);
   return (
     <section
-      className="mt-auto w-full border-t border-mid-gray/20 p-2 space-y-1 text-xs break-words"
+      className="mt-auto shrink-0 min-w-0 w-full border-t border-mid-gray/20 p-2 space-y-1 text-xs break-words"
       aria-label={t("notype.usability.connectionStatus")}
     >
       <p className="font-medium">

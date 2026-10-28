@@ -109,11 +109,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
     .map(([id, config]) => ({ id: id as SidebarSection, ...config }));
 
   return (
-    <div className="notype-sidebar flex flex-col w-40 h-full border-e border-mid-gray/20 items-center px-2">
-      <div className="sidebar-brand m-4 text-3xl font-semibold tracking-tight">
+    <div className="notype-sidebar flex flex-col min-h-0 h-full overflow-hidden border-e border-mid-gray/20 items-center px-2">
+      <div className="sidebar-brand shrink-0 m-4 text-3xl font-semibold tracking-tight">
         {t("app.name")}
       </div>
-      <div className="flex flex-col w-full items-center gap-1 pt-2 border-t border-mid-gray/20">
+      <div className="flex flex-col flex-1 min-h-0 overflow-y-auto w-full items-center gap-1 pt-2 border-t border-mid-gray/20">
         {availableSections.map((section) => {
           const Icon = section.icon;
           const isActive = activeSection === section.id;
@@ -125,7 +125,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               title={t(section.labelKey)}
               aria-current={isActive ? "page" : undefined}
               key={section.id}
-              className={`sidebar-link text-text flex gap-2 items-center p-2 w-full rounded-md text-left border-l-2 cursor-pointer transition-colors ${
+              className={`sidebar-link shrink-0 text-text flex gap-2 items-center p-2 w-full rounded-md text-left border-l-2 cursor-pointer transition-colors ${
                 isActive
                   ? "bg-logo-primary/10 border-logo-primary"
                   : "border-transparent hover:bg-mid-gray/10 hover:opacity-100 opacity-85"
