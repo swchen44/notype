@@ -20,10 +20,8 @@ test('restricted launcher enforces fixed command and kills its owned job on time
  const data=join(base,'notype-native-smoke'),app=join(base,'notype-assembled','extracted','app','node_modules','notype-win32-x64','app');
  mkdirSync(join(data,'profile','AppData','Roaming'),{recursive:true});mkdirSync(join(data,'profile','AppData','Local'));mkdirSync(join(data,'temp'));mkdirSync(app,{recursive:true});
  const target=join(app,'notype.exe'),src=join(base,'fixture.rs');
- // Temporary hosted diagnostic can select the old console fixture as a control.
- const subsystem=process.env.NOTYPE_FIXTURE_SUBSYSTEM || 'windows';
- assert.ok(['windows','console'].includes(subsystem));
- const prefix=subsystem==='windows' ? '#![windows_subsystem="windows"]\n' : '';
+ // Match the Windows subsystem of the packaged App under the noninteractive runner.
+ const prefix='#![windows_subsystem="windows"]\n';
  const env={SystemRoot:systemRoot,RUNNER_TEMP:base,NOTYPE_DATA_DIR:data,GH_TOKEN:"synthetic-secret"};
  const run=(args=[])=>spawnSync(helper,args,{env,timeout:12000,windowsHide:true,encoding:'utf8'});
  writeFileSync(src,prefix+'fn main() { assert!(std::env::var_os("GH_TOKEN").is_none()); assert!(std::env::var_os("HOME").is_none()); }');compile(src,target);
