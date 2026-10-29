@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, rm, cp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -50,6 +50,17 @@ test('validated artifacts produce only a completed draft after the remote digest
   assert.equal(receipt.tag,tag); assert.equal(gh.state.draft.draft,true);
   assert.equal(gh.state.draft.prerelease,true); assert.equal(gh.state.assetList.length,4);
   assert.equal(gh.state.writes.at(-1),'finalize'); assert.doesNotMatch(gh.state.draft.body,/INCOMPLETE/);
+});
+
+test('download layout must place verified assets at the controller root before any draft write',async t=>{
+  const original=await fixture(t);const root=await mkdtemp(join(tmpdir(),'notype-artifact-layout-'));t.after(()=>rm(root,{recursive:true,force:true}));
+  // Default ID-based download nests the artifact by name and cannot be published.
+  await cp(original,join(root,'notype-offline-fixture'),{recursive:true});const nested=fakeGitHub();
+  await assert.rejects(publishDraft({input,artifactRoot:root,github:nested}),{code:'ENOENT'});assert.deepEqual(nested.state.writes,[]);
+  // merge-multiple extracts the same ID-selected files directly under the root.
+  const merged=join(root,'merged');await cp(original,merged,{recursive:true});const gh=fakeGitHub();
+  const receipt=await publishDraft({input,artifactRoot:merged,github:gh});
+  assert.equal(receipt.assets.length,4);assert.equal(gh.state.writes.at(-1),'finalize');
 });
 
 test('a tag created after draft creation remains visibly incomplete',async t=>{

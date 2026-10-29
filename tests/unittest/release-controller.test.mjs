@@ -50,3 +50,15 @@ test('GitHub adapter rejects collisions and uses only literal command arguments'
   assert.equal(await gh.tagExists('v1.2.5'),true);
   assert.ok(calls.every(args=>Array.isArray(args) && args[0]==='api'));
 });
+
+// This transfer is ID-selected, so download-artifact v4 otherwise adds a name directory.
+test('draft workflow downloads the one ID-selected artifact directly into the controller root',async()=>{
+  const {readFile}=await import('node:fs/promises');
+  const workflow=await readFile(new URL('../../.github/workflows/windows-release-draft.yml',import.meta.url),'utf8');
+  const step=workflow.replace(/\r\n/g,'\n').match(/- uses: actions\/download-artifact@[^\n]+\n\s+with:\n((?:[ \t]+[^\n]+\n)+)/)?.[1];
+  assert.ok(step,'download step missing');
+  assert.match(step,/artifact-ids:\s*\$\{\{ needs\.build\.outputs\.artifact-id \}\}/);
+  assert.match(step,/path:\s*\$\{\{ runner\.temp \}\}\/notype-assembled/);
+  assert.match(step,/merge-multiple:\s*true/);
+  assert.match(workflow,/RELEASE_ASSEMBLY_DIR:\s*\$\{\{ runner\.temp \}\}\/notype-assembled/);
+});
