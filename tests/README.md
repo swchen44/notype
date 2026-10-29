@@ -27,8 +27,12 @@ with a bounded timeout, and the requirement that the requested EXE belongs to th
 freshly validated extraction. The action separately runs `--list-models` on that
 actual extracted EXE; this does not exercise microphone input or recognition.
 The synthetic Windows profile includes `AppData/Roaming` and `AppData/Local`,
-matching its `APPDATA` and `LOCALAPPDATA` values; tests simulate the known-folder
-directory requirement without using the real profile or inheriting `HOME`/keys.
+matching its `APPDATA` and `LOCALAPPDATA` values. A Windows-only native child
+calls `SHGetKnownFolderPath` to verify missing and present Roaming directory cases
+and checks that the returned directory is inside the owned profile. The smoke
+environment omits `HOME` and keys and points `NOTYPE_DATA_DIR` at owned data;
+this does not prove isolation of all OS known-folder or file access. GitHub uses
+an ephemeral runner account.
 On a local Windows reproduction, an empty profile caused the actual App to wait
 in a recovery error dialog; adding the owned Roaming directory allowed the
 unchanged local.7 EXE to exit successfully in 1.6 seconds. This is not evidence
