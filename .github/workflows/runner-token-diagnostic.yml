@@ -1,0 +1,26 @@
+name: Temporary Windows runner token diagnostic
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  token:
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Install pinned Rust
+        run: rustup toolchain install 1.99.1 --profile minimal
+      - name: Inspect runner token without emitting account paths
+        shell: pwsh
+        run: |
+          $raw = cargo +1.99.1 run --quiet --locked --manifest-path crates/notype-platform/Cargo.toml
+          if ($LASTEXITCODE -ne 0) { throw 'token-probe-build-failed' }
+          $info = ($raw -join "`n") | ConvertFrom-Json
+          $groups = & whoami /groups
+          if ($LASTEXITCODE -ne 0) { throw 'token-group-probe-failed' }
+          $labels = @($groups | Select-String -Pattern 'S-1-16-\d+' -AllMatches | ForEach-Object { $_.Matches.Value })
+          if ($labels.Count -ne 1) { throw 'token-integrity-label-unavailable' }
+          Write-Output ("normal-user={0}; integrity-sid={1}; avx2={2}; bmi2={3}" -f $info.integrity, $labels[0], $info.cpu.avx2, $info.cpu.bmi2)
