@@ -24,3 +24,11 @@ jobs:
           $labels = @($groups | Select-String -Pattern 'S-1-16-\d+' -AllMatches | ForEach-Object { $_.Matches.Value })
           if ($labels.Count -ne 1) { throw 'token-integrity-label-unavailable' }
           Write-Output ("normal-user={0}; integrity-sid={1}; avx2={2}; bmi2={3}" -f $info.integrity, $labels[0], $info.cpu.avx2, $info.cpu.bmi2)
+      - name: Test restricted runner token (temporary diagnostic)
+        shell: pwsh
+        run: |
+          $probe = Join-Path $env:RUNNER_TEMP 'notype-restricted-token-diagnostic.exe'
+          rustup run 1.99.1 rustc --edition 2024 scripts/release/runner-restricted-token-diagnostic.rs -o $probe
+          if ($LASTEXITCODE -ne 0) { throw 'restricted-token-probe-build-failed' }
+          & $probe
+          if ($LASTEXITCODE -ne 0) { throw 'restricted-token-probe-failed' }
