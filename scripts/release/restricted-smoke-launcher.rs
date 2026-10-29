@@ -43,10 +43,13 @@ fn wide(s:&OsStr)->Vec<u16>{s.encode_wide().chain(Some(0)).collect()}
  fn AssignProcessToJobObject(job:Handle,process:Handle)->i32;
  fn TerminateJobObject(job:Handle,code:u32)->i32;
  fn ResumeThread(thread:Handle)->u32;
+ fn CreateFileW(name:*const u16,access:u32,share:u32,security:Handle,disposition:u32,flags:u32,template:Handle)->Handle;
+ fn GetFileInformationByHandleEx(handle:Handle,class:u32,info:Handle,len:u32)->i32;
 }
 #[link(name="advapi32")] unsafe extern "system" {
  fn EqualSid(a:Handle,b:Handle)->i32;
- fn GetNamedSecurityInfoW(name:*const u16,object_type:u32,info:u32,owner:*mut Handle,group:*mut Handle,dacl:*mut Handle,sacl:*mut Handle,descriptor:*mut Handle)->u32;
+ fn GetSecurityInfo(handle:Handle,object_type:u32,info:u32,owner:*mut Handle,group:*mut Handle,dacl:*mut Handle,sacl:*mut Handle,descriptor:*mut Handle)->u32;
+ fn SetSecurityInfo(handle:Handle,object_type:u32,info:u32,owner:Handle,group:Handle,dacl:Handle,sacl:Handle)->u32;
  fn LookupPrivilegeValueW(system:*const u16,name:*const u16,luid:*mut Luid)->i32;
 }
 #[repr(C)] #[derive(Copy,Clone,PartialEq)] struct Luid { low:u32, high:i32 }
@@ -69,20 +72,50 @@ unsafe fn safe_token(t:Handle)->bool {
 }
 #[cfg(test_probe)] const WAIT_MS:u32=2000;
 #[cfg(not(test_probe))] const WAIT_MS:u32=115000;
-unsafe fn owned_by_token(path:&std::path::Path,t:Handle)->bool {
- let mut buf=vec![0u8;4096];let mut returned=0;
- if unsafe{GetTokenInformation(t,1,buf.as_mut_ptr().cast(),buf.len() as u32,&mut returned)}==0 || returned < size_of::<SidAttr>() as u32 {return false}
- let user=unsafe{read_unaligned(buf.as_ptr().cast::<SidAttr>())};if user.sid.is_null(){return false}
- let name=wide(path.as_os_str());let mut owner=null_mut();let mut descriptor=null_mut();
- let rc=unsafe{GetNamedSecurityInfoW(name.as_ptr(),1,1,&mut owner,null_mut(),null_mut(),null_mut(),&mut descriptor)};
- let ok=rc==0 && !owner.is_null() && unsafe{EqualSid(owner,user.sid)}!=0;
- if !descriptor.is_null(){unsafe{LocalFree(descriptor)};} ok
+#[repr(C)] struct AttributeTag { attributes:u32, reparse_tag:u32 }
+fn fail_code(stage:u32,code:u32)->! {eprintln!("error stage={} win32={}",stage,code);std::process::exit(1)}
+fn permitted_owner(is_user:bool,is_token_owner:bool)->bool {is_user || is_token_owner}
+// Only for the trusted ephemeral runner after assembly and smoke each exclusively
+// create their fixed directories. An owner check alone cannot prove freshness;
+// ancestors can race if an untrusted concurrent process can modify runner temp.
+// Assigning the owner also grants that owner implicit WRITE_DAC; DACL is untouched.
+unsafe fn normalize_owned_root(path:&std::path::Path,t:Handle) {
+ let mut user=vec![0u8;4096];let mut owner=vec![0u8;4096];let mut returned=0;
+ if unsafe{GetTokenInformation(t,1,user.as_mut_ptr().cast(),user.len() as u32,&mut returned)}==0 || returned<size_of::<SidAttr>() as u32 {fail(75)}
+ if unsafe{GetTokenInformation(t,4,owner.as_mut_ptr().cast(),owner.len() as u32,&mut returned)}==0 || returned<size_of::<Handle>() as u32 {fail(76)}
+ let user_sid=unsafe{read_unaligned(user.as_ptr().cast::<SidAttr>())}.sid;
+ let token_owner=unsafe{read_unaligned(owner.as_ptr().cast::<Handle>())};
+ if user_sid.is_null() || token_owner.is_null(){fail_code(77,0)}
+ let name=wide(path.as_os_str());
+ // OPEN_REPARSE_POINT | BACKUP_SEMANTICS; do not follow the final directory link.
+ let handle=unsafe{CreateFileW(name.as_ptr(),0x000a0080,7,null_mut(),3,0x02200000,null_mut())};
+ if handle as isize == -1 {fail(78)}
+ let mut tag=AttributeTag{attributes:0,reparse_tag:0};
+ if unsafe{GetFileInformationByHandleEx(handle,9,(&mut tag as *mut AttributeTag).cast(),size_of::<AttributeTag>() as u32)}==0 {fail(79)}
+ if tag.attributes&0x10==0 || tag.attributes&0x400!=0 {fail_code(80,0)}
+ let mut current=null_mut();let mut sd=null_mut();
+ let rc=unsafe{GetSecurityInfo(handle,1,1,&mut current,null_mut(),null_mut(),null_mut(),&mut sd)};
+ if rc!=0 {fail_code(81,rc)} if current.is_null()||sd.is_null(){fail_code(82,0)}
+ let is_user=unsafe{EqualSid(current,user_sid)}!=0;let is_default=unsafe{EqualSid(current,token_owner)}!=0;
+ if !permitted_owner(is_user,is_default){fail_code(83,0)}
+ unsafe{LocalFree(sd)};
+ if !is_user {
+  let rc=unsafe{SetSecurityInfo(handle,1,1,user_sid,null_mut(),null_mut(),null_mut())};
+  if rc!=0 {fail_code(84,rc)}
+ }
+ current=null_mut();sd=null_mut();let rc=unsafe{GetSecurityInfo(handle,1,1,&mut current,null_mut(),null_mut(),null_mut(),&mut sd)};
+ if rc!=0 {fail_code(85,rc)}
+ if current.is_null()||sd.is_null()||unsafe{EqualSid(current,user_sid)}==0 {fail_code(86,0)}
+ unsafe{LocalFree(sd);CloseHandle(handle)};
 }
+#[cfg(test)] mod tests { use super::permitted_owner; #[test] fn only_user_or_token_default_owner_is_accepted(){assert!(permitted_owner(true,false));assert!(permitted_owner(false,true));assert!(!permitted_owner(false,false));} }
 fn main(){unsafe{
  if std::env::args_os().len()!=1 {fail(50)}
  let data=std::path::PathBuf::from(std::env::var_os("NOTYPE_DATA_DIR").unwrap_or_else(||fail(51)));
  if !data.is_absolute() || data.file_name()!=Some(OsStr::new("notype-native-smoke")) {fail(52)}
- let base=data.parent().unwrap_or_else(||fail(53));
+ let runner_temp=std::path::PathBuf::from(std::env::var_os("RUNNER_TEMP").unwrap_or_else(||fail(53)));
+ if !runner_temp.is_absolute() || data!=runner_temp.join("notype-native-smoke") {fail(53)}
+ let base=runner_temp.as_path();
  let target=base.join("notype-assembled/extracted/app/node_modules/notype-win32-x64/app/notype.exe");
  let required=[data.clone(),data.join("profile/AppData/Roaming"),data.join("profile/AppData/Local"),data.join("temp"),target.clone()];
  for p in &required {let mut current=base.to_path_buf();let root_meta=std::fs::symlink_metadata(&current).unwrap_or_else(|_|fail(54));if root_meta.file_attributes()&0x400!=0 {fail(55)}
@@ -96,7 +129,8 @@ fn main(){unsafe{
  let mut vars=vec![("APPDATA",roam.into_os_string()),("LOCALAPPDATA",local.into_os_string()),("NOTYPE_DATA_DIR",data.clone().into_os_string()),("PATH",sys_path),("SystemRoot",system.clone().into_os_string()),("TEMP",temp.clone().into_os_string()),("TMP",temp.into_os_string()),("USERPROFILE",profile.into_os_string()),("WINDIR",system.into_os_string())];
  vars.sort_by_key(|(k,_)|k.to_ascii_uppercase());let mut env=Vec::<u16>::new();for (k,v) in vars {env.extend(OsStr::new(k).encode_wide());env.push(61);env.extend(v.encode_wide());env.push(0);}env.push(0);
  let mut original=null_mut();if OpenProcessToken(GetCurrentProcess(),0x8b,&mut original)==0{fail(1)}
- if !owned_by_token(&data,original) || !owned_by_token(&base.join("notype-assembled/extracted"),original) {fail(75)}
+ normalize_owned_root(&data,original);
+ normalize_owned_root(&base.join("notype-assembled/extracted"),original);
  let mut restricted=null_mut();if CreateRestrictedToken(original,5,0,null_mut(),0,null_mut(),0,null_mut(),&mut restricted)==0{fail(2)}
  let before=token_info(restricted);if before.2>8192 {let sidstr:Vec<u16>="S-1-16-8192".encode_utf16().chain(Some(0)).collect();let mut sid=null_mut();if ConvertStringSidToSidW(sidstr.as_ptr(),&mut sid)==0{fail(3)}let mut label=SidAttr{sid,attributes:0x20};let len=size_of::<SidAttr>() as u32+GetLengthSid(sid);if SetTokenInformation(restricted,25,(&mut label as *mut SidAttr).cast(),len)==0{fail(4)}LocalFree(sid);}
  if token_info(restricted)!=(0,0,8192){fail(5)}

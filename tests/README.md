@@ -44,6 +44,12 @@ in the temporary Windows runner diagnostic; that baseline check does not establi
 that a fresh build from current source passes the full release action. The runner
 uses an ephemeral account; a restricted token is not a separate account or a
 complete sandbox.
+The launcher normalizes the owners of exactly two roots only after the trusted
+ephemeral runner's assembly and smoke steps create them exclusively. It is not
+a general-purpose tool for pre-existing local directories: ownership checks do
+not prove freshness, and concurrent untrusted path changes remain out of scope.
+Only the owner field is set; the DACL is unchanged, but owner assignment confers
+implicit WRITE_DAC. Hosted owner normalization still needs an actual runner test.
 
 ## Dictation fluency (#35)
 

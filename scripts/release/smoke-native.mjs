@@ -43,7 +43,7 @@ export function runRestrictedSmoke({executable,args,env,timeoutMs}) {
       args.length!==1 || args[0]!=='--list-models' || timeoutMs!==120000) throw Error('smoke-launcher-input-invalid');
   const helper=path.join(path.dirname(env.NOTYPE_DATA_DIR),'notype-restricted-smoke.exe');
   return new Promise((resolve,reject)=>{
-    const child=spawn(helper,[],{cwd:path.dirname(helper),env,shell:false,windowsHide:true,stdio:['ignore','ignore','pipe']});
+    const child=spawn(helper,[],{cwd:path.dirname(helper),env:{...env,RUNNER_TEMP:path.dirname(env.NOTYPE_DATA_DIR)},shell:false,windowsHide:true,stdio:['ignore','ignore','pipe']});
     let stderr='',timedOut=false;
     child.stderr.on('data',chunk=>{if(stderr.length<256)stderr+=(chunk.toString('utf8')).slice(0,256-stderr.length)});
     const timer=setTimeout(()=>{timedOut=true;child.kill()},timeoutMs);

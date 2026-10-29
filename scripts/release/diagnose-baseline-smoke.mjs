@@ -21,4 +21,8 @@ const check=await runOwnedChild({executable:path.join(root,'runtime','node.exe')
 if(check.timedOut || check.exitCode!==0) throw Error('diagnostic-baseline-check-failed');
 const result=await runRestrictedSmoke({executable:path.join(root,'app','node_modules','notype-win32-x64','app','notype.exe'),args:['--list-models'],env,timeoutMs:120000});
 if(result.timedOut || result.exitCode!==0) throw Error('diagnostic-restricted-smoke-failed');
+const after=execFileSync(path.join(base,'notype-owner-diagnostic.exe'),[],{env:{RUNNER_TEMP:base,SystemRoot:systemRoot},timeout:10000,windowsHide:true,encoding:'utf8'});
+const afterLines=after.trim().split(/\r?\n/);
+if(afterLines.length!==2 || !afterLines.every(line=>/^owner (?:data|extracted) user=1 token_owner=[01] administrators=[01]$/.test(line))) throw Error('diagnostic-owner-after-invalid');
+console.log(afterLines.join('\n'));
 console.log('Pinned local.7 baseline passed; not a current-source release acceptance.');
