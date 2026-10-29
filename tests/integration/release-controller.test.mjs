@@ -83,6 +83,13 @@ test('unavailable tag verification after finalization restores incomplete state'
   assert.match(gh.state.draft.body,/INCOMPLETE/);
 });
 
+test('an ambiguous finalization error restores the incomplete marker when possible',async t=>{
+  const root=await fixture(t);const gh=fakeGitHub();const finalize=gh.finalize;let writes=0;
+  gh.finalize=async(...args)=>{await finalize(...args);if(++writes===1)throw Error('ambiguous-finalization');};
+  await assert.rejects(publishDraft({input,artifactRoot:root,github:gh}),/ambiguous-finalization/);
+  assert.equal(writes,2);assert.match(gh.state.draft.body,/INCOMPLETE/);
+});
+
 test('a failed rollback reports that manual draft inspection is required',async t=>{
   const root=await fixture(t); const gh=fakeGitHub(); let reads=0, writes=0;
   gh.tagExists=async()=>{if(++reads===3) throw Error('network');return false;};

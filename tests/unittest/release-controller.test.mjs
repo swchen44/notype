@@ -62,3 +62,19 @@ test('draft workflow downloads the one ID-selected artifact directly into the co
   assert.match(step,/merge-multiple:\s*true/);
   assert.match(workflow,/RELEASE_ASSEMBLY_DIR:\s*\$\{\{ runner\.temp \}\}\/notype-assembled/);
 });
+
+test('draft PATCH explicitly preserves the draft tag when updating its body',async()=>{
+  const tag='v0.1.2-test.1',source='a'.repeat(40);let draft={id:42,tag_name:tag,target_commitish:source,draft:true,prerelease:true,assets:[],body:'initial'};
+  const run=async args=>{
+    if(args.includes('POST'))return JSON.stringify(draft);
+    if(args.includes('PATCH')){
+      const tagField=args.find(x=>x.startsWith('tag_name='));
+      draft={...draft,tag_name:tagField?.slice('tag_name='.length) ?? 'untagged-synthetic',body:args.find(x=>x.startsWith('body=')).slice(5)};
+      return JSON.stringify(draft);
+    }
+    return JSON.stringify(draft);
+  };
+  const gh=createGitHubAdapter(run);
+  const id=await gh.createDraft({tag,source,version:'0.1.2-test.1',body:'initial'});
+  await gh.finalize(id,'final');assert.equal(draft.tag_name,tag);assert.equal(draft.body,'final');
+});
