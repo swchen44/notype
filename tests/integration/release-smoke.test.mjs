@@ -13,8 +13,8 @@ test('timed out owned child is terminated and reported',async()=>{
   assert.throws(()=>process.kill(result.pid,0));
 });
 
-import { mkdtemp,mkdir,writeFile,readFile,rm } from 'node:fs/promises';
-import { join } from 'node:path';
+import { mkdtemp,mkdir,writeFile,readFile,rm,stat } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { smokeExtractedBundle } from '../../scripts/release/smoke-native.mjs';
 const sha='a'.repeat(40), version='1.2.3-rc.1';
@@ -30,7 +30,7 @@ test('only the verified extracted executable receives the isolated list-models r
   const f=await smokeFixture(t); let inspected=0, started=0;
   const result=await smokeExtractedBundle({outputRoot:f.output,temporaryRoot:f.temp,source:sha,version,systemRoot:'C:/Windows',
     inspect:async options=>{inspected++;assert.equal(options.facadeRoot,join(f.output,'extracted','app'));return {manifest:{source:sha,version},application:{entrypoint:'app/notype.exe'}};},
-    run:async options=>{started++;assert.equal(options.executable,f.exe);assert.deepEqual(options.args,['--list-models']);assert.equal(options.timeoutMs,120000);assert.equal(options.env.GH_TOKEN,undefined);assert.equal(options.env.NOTYPE_DATA_DIR,join(f.temp,'notype-native-smoke'));return {exitCode:0,timedOut:false};}});
+    run:async options=>{started++;assert.equal(options.executable,f.exe);assert.deepEqual(options.args,['--list-models']);assert.equal(options.timeoutMs,120000);assert.equal(options.env.GH_TOKEN,undefined);assert.equal(options.env.NOTYPE_DATA_DIR,join(f.temp,'notype-native-smoke'));for(const [key,name] of [['APPDATA','Roaming'],['LOCALAPPDATA','Local']]) {const expected=join(options.env.USERPROFILE,'AppData',name);assert.equal(resolve(options.env[key]),resolve(expected));assert.ok((await stat(expected)).isDirectory());}return {exitCode:0,timedOut:false};}});
   assert.equal(result.exitCode,0);assert.equal(inspected,1);assert.equal(started,1);
 });
 

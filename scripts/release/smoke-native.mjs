@@ -7,7 +7,7 @@ export function isolatedEnvironment({dataRoot, systemRoot, separator=path.delimi
   return {
     NOTYPE_DATA_DIR:dataRoot,
     USERPROFILE:`${dataRoot}/profile`,
-    APPDATA:`${dataRoot}/roaming`, LOCALAPPDATA:`${dataRoot}/local`,
+    APPDATA:`${dataRoot}/profile/AppData/Roaming`, LOCALAPPDATA:`${dataRoot}/profile/AppData/Local`,
     TEMP:`${dataRoot}/temp`, TMP:`${dataRoot}/temp`,
     SystemRoot:systemRoot, WINDIR:systemRoot,
     PATH:[`${systemRoot}/System32`,systemRoot].join(separator),
@@ -59,7 +59,9 @@ export async function smokeExtractedBundle({outputRoot,temporaryRoot,source,vers
   if(!exeStat.isFile() || exeStat.isSymbolicLink() || exeStat.size<=0) throw Error('smoke-executable-invalid');
   const dataRoot=path.join(path.resolve(temporaryRoot),'notype-native-smoke');
   await mkdir(dataRoot); // Exclusive: never reuse or overwrite an existing user directory.
-  for(const name of ['profile','roaming','local','temp']) await mkdir(path.join(dataRoot,name));
+  await mkdir(path.join(dataRoot,'profile','AppData','Roaming'),{recursive:true});
+  await mkdir(path.join(dataRoot,'profile','AppData','Local'));
+  await mkdir(path.join(dataRoot,'temp'));
   const result=await run({executable,args:['--list-models'],env:isolatedEnvironment({dataRoot,systemRoot}),timeoutMs:120000});
   if(result.timedOut || result.exitCode!==0) throw Error(result.timedOut?'smoke-timeout':'smoke-child-failed');
   if(!report.checks.includes('native-headless-list-models')) report.checks.push('native-headless-list-models');

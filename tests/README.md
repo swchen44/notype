@@ -26,6 +26,13 @@ lock file caused its prior generic baseline-lock-changed error.
 with a bounded timeout, and the requirement that the requested EXE belongs to the
 freshly validated extraction. The action separately runs `--list-models` on that
 actual extracted EXE; this does not exercise microphone input or recognition.
+The synthetic Windows profile includes `AppData/Roaming` and `AppData/Local`,
+matching its `APPDATA` and `LOCALAPPDATA` values; tests simulate the known-folder
+directory requirement without using the real profile or inheriting `HOME`/keys.
+On a local Windows reproduction, an empty profile caused the actual App to wait
+in a recovery error dialog; adding the owned Roaming directory allowed the
+unchanged local.7 EXE to exit successfully in 1.6 seconds. This is not evidence
+that a later GitHub-hosted runner has passed the full release action.
 
 ## Dictation fluency (#35)
 
