@@ -1,6 +1,7 @@
-﻿// Temporary local.7 runner diagnostic; this is not a source-revision release acceptance.
+// Temporary local.7 runner diagnostic; this is not a source-revision release acceptance.
 import path from 'node:path';
 import { mkdir } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
 import { inspectBundle } from '../../packages/notype/lib/offline-bundle.mjs';
 import { digestFile } from './assembly-policy.mjs';
 import { isolatedEnvironment,runRestrictedSmoke,runOwnedChild } from './smoke-native.mjs';
@@ -11,6 +12,10 @@ if(await digestFile(path.join(root,'bundle.json'))!=='b07cf6cb8f1e2f54d8c975ecc3
 await inspectBundle({facadeRoot:path.join(root,'app'),execPath:path.join(root,'runtime','node.exe'),strictModels:true});
 const data=path.join(base,'notype-native-smoke');await mkdir(data);
 await mkdir(path.join(data,'profile','AppData','Roaming'),{recursive:true});await mkdir(path.join(data,'profile','AppData','Local'));await mkdir(path.join(data,'temp'));
+const diagnostic=execFileSync(path.join(base,'notype-owner-diagnostic.exe'),[],{env:{RUNNER_TEMP:base,SystemRoot:systemRoot},timeout:10000,windowsHide:true,encoding:'utf8'});
+const lines=diagnostic.trim().split(/\r?\n/);
+if(lines.length!==2 || !lines.every(line=>/^owner (?:data|extracted) user=[01] token_owner=[01] administrators=[01]$/.test(line))) throw Error('diagnostic-owner-output-invalid');
+console.log(lines.join('\n'));
 const env=isolatedEnvironment({dataRoot:data,systemRoot});
 const check=await runOwnedChild({executable:path.join(root,'runtime','node.exe'),args:[path.join(root,'app','bin','notype.mjs'),'--offline-bundle','--check'],env,timeoutMs:120000});
 if(check.timedOut || check.exitCode!==0) throw Error('diagnostic-baseline-check-failed');

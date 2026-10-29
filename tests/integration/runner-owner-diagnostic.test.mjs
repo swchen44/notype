@@ -1,0 +1,23 @@
+﻿import test from 'node:test';
+import assert from 'node:assert/strict';
+import {spawnSync} from 'node:child_process';
+import {mkdtempSync,mkdirSync,rmSync,symlinkSync,renameSync} from 'node:fs';
+import {join} from 'node:path';
+import {tmpdir} from 'node:os';
+import {fileURLToPath} from 'node:url';
+test('owner diagnostic reads only fixed new directories and rejects reparse paths', {skip:process.platform!=='win32',timeout:60000},t=>{
+ const root=mkdtempSync(join(tmpdir(),'notype-owner-test-'));t.after(()=>rmSync(root,{recursive:true,force:true}));
+ const systemRoot=process.env.SystemRoot || process.env.SYSTEMROOT;
+ const compiler={SystemRoot:systemRoot,WINDIR:systemRoot,PATH:process.env.PATH,USERPROFILE:process.env.USERPROFILE,TEMP:root,TMP:root};
+ for(const key of ['RUSTUP_HOME','CARGO_HOME'])if(process.env[key])compiler[key]=process.env[key];
+ const exe=join(root,'probe.exe'),src=fileURLToPath(new URL('../../scripts/release/runner-owner-diagnostic.rs',import.meta.url));
+ const build=spawnSync('rustup',['run','1.99.1','rustc','--edition','2024',src,'-o',exe],{env:compiler,encoding:'utf8',windowsHide:true,timeout:30000});assert.equal(build.status,0);
+ const run=()=>spawnSync(exe,[],{env:{RUNNER_TEMP:root,SystemRoot:systemRoot},encoding:'utf8',windowsHide:true,timeout:10000});
+ let r=run();assert.notEqual(r.status,0);assert.match(r.stderr,/^error stage=\d+ code=\d+/);
+ mkdirSync(join(root,'notype-native-smoke'));mkdirSync(join(root,'notype-assembled','extracted'),{recursive:true});
+ r=run();assert.equal(r.status,0);const lines=r.stdout.trim().split(/\r?\n/);assert.equal(lines.length,2);
+ for(const line of lines)assert.match(line,/^owner (data|extracted) user=[01] token_owner=[01] administrators=[01]$/);
+ renameSync(join(root,'notype-native-smoke'),join(root,'actual-data'));
+ symlinkSync(join(root,'actual-data'),join(root,'notype-native-smoke'),'junction');
+ r=run();assert.notEqual(r.status,0);assert.match(r.stderr,/^error stage=5 code=0/);
+});

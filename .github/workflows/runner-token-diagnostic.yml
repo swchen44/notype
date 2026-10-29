@@ -41,5 +41,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'diagnostic-baseline-unpack-failed' }
           rustup run 1.99.1 rustc --edition 2024 scripts/release/restricted-smoke-launcher.rs -o (Join-Path $env:RUNNER_TEMP 'notype-restricted-smoke.exe')
           if ($LASTEXITCODE -ne 0) { throw 'restricted-smoke-build-failed' }
+          rustup run 1.99.1 rustc --edition 2024 scripts/release/runner-owner-diagnostic.rs -o (Join-Path $env:RUNNER_TEMP 'notype-owner-diagnostic.exe')
+          if ($LASTEXITCODE -ne 0) { throw 'owner-diagnostic-build-failed' }
           node scripts/release/diagnose-baseline-smoke.mjs
           if ($LASTEXITCODE -ne 0) { throw 'diagnostic-baseline-smoke-failed' }
