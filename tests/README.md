@@ -37,6 +37,13 @@ On a local Windows reproduction, an empty profile caused the actual App to wait
 in a recovery error dialog; adding the owned Roaming directory allowed the
 unchanged local.7 EXE to exit successfully in 1.6 seconds. This is not evidence
 that a later GitHub-hosted runner has passed the full release action.
+The restricted smoke helper is tested with an owned synthetic executable for
+fixed-command rejection, noninheritance of a synthetic secret and absence of HOME, successful child
+exit, and job-tree timeout cleanup. A pinned local.7 bundle can also be checked
+in the temporary Windows runner diagnostic; that baseline check does not establish
+that a fresh build from current source passes the full release action. The runner
+uses an ephemeral account; a restricted token is not a separate account or a
+complete sandbox.
 
 ## Dictation fluency (#35)
 

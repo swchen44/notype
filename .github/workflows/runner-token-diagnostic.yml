@@ -32,3 +32,14 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'restricted-token-probe-build-failed' }
           & $probe
           if ($LASTEXITCODE -ne 0) { throw 'restricted-token-probe-failed' }
+      - name: Test the pinned local.7 App under the restricted token (temporary diagnostic)
+        shell: pwsh
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP 'notype-baseline.zip'
+          Invoke-WebRequest -Uri 'https://github.com/swchen44/notype/releases/download/v0.1.1-local.7/notype-0.1.1-local.7-offline-win-x64.zip' -OutFile $archive
+          python scripts/release/unpack-baseline.py --archive $archive --destination (Join-Path $env:RUNNER_TEMP 'notype-assembled/extracted')
+          if ($LASTEXITCODE -ne 0) { throw 'diagnostic-baseline-unpack-failed' }
+          rustup run 1.99.1 rustc --edition 2024 scripts/release/restricted-smoke-launcher.rs -o (Join-Path $env:RUNNER_TEMP 'notype-restricted-smoke.exe')
+          if ($LASTEXITCODE -ne 0) { throw 'restricted-smoke-build-failed' }
+          node scripts/release/diagnose-baseline-smoke.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'diagnostic-baseline-smoke-failed' }

@@ -110,6 +110,11 @@ jobs:
           Invoke-WebRequest -Uri 'https://visualstudio.microsoft.com/wp-content/uploads/2021/09/Visual-C-Runtime-2015-2022-License-1.docx' -OutFile $license
           node scripts/release/assemble-offline.mjs --baseline (Join-Path $env:RUNNER_TEMP 'notype-baseline') --native (Join-Path $env:RUNNER_TEMP 'notype-native') --source $env:GITHUB_SHA --version $env:RELEASE_VERSION --output (Join-Path $env:RUNNER_TEMP 'notype-assembled') --dumpbin $dumpbin --crtLicense $license
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build restricted smoke launcher
+        shell: pwsh
+        run: |
+          rustup run 1.99.1 rustc --edition 2024 scripts/release/restricted-smoke-launcher.rs -o (Join-Path $env:RUNNER_TEMP 'notype-restricted-smoke.exe')
+          if ($LASTEXITCODE -ne 0) { throw 'restricted-smoke-build-failed' }
       - name: Smoke-test the verified extracted App with isolated data
         env:
           RELEASE_VERSION: ${{ inputs.version }}

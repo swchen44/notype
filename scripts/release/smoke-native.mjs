@@ -35,13 +35,34 @@ export function runOwnedChild({executable,args,env,timeoutMs}) {
   });
 }
 
+/** The helper has no caller-selected command: it derives the verified bundle path from the owned data root. */
+export function runRestrictedSmoke({executable,args,env,timeoutMs}) {
+  if (!env?.NOTYPE_DATA_DIR || !path.isAbsolute(env.NOTYPE_DATA_DIR) ||
+      path.basename(env.NOTYPE_DATA_DIR)!=='notype-native-smoke' ||
+      executable!==path.join(path.dirname(env.NOTYPE_DATA_DIR),'notype-assembled','extracted','app','node_modules','notype-win32-x64','app','notype.exe') ||
+      args.length!==1 || args[0]!=='--list-models' || timeoutMs!==120000) throw Error('smoke-launcher-input-invalid');
+  const helper=path.join(path.dirname(env.NOTYPE_DATA_DIR),'notype-restricted-smoke.exe');
+  return new Promise((resolve,reject)=>{
+    const child=spawn(helper,[],{cwd:path.dirname(helper),env,shell:false,windowsHide:true,stdio:['ignore','ignore','pipe']});
+    let stderr='',timedOut=false;
+    child.stderr.on('data',chunk=>{if(stderr.length<256)stderr+=(chunk.toString('utf8')).slice(0,256-stderr.length)});
+    const timer=setTimeout(()=>{timedOut=true;child.kill()},timeoutMs);
+    child.once('error',()=>{clearTimeout(timer);reject(Error('smoke-launcher-start-failed'))});
+    child.once('close',code=>{clearTimeout(timer);
+      const match=/^error stage=(\d{1,3}) win32=(\d{1,10})\r?\n?$/.exec(stderr);
+      if(code!==0 && !timedOut && match) return reject(Error(`smoke-launcher-stage-${match[1]}-win32-${match[2]}`));
+      resolve({exitCode:code,timedOut});
+    });
+  });
+}
+
 import { mkdir, lstat, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { inspectBundle } from '../../packages/notype/lib/offline-bundle.mjs';
 import { validateVersion } from './assembly-policy.mjs';
 
 /** Inspect the independently extracted bundle before launching only its declared EXE. */
-export async function smokeExtractedBundle({outputRoot,temporaryRoot,source,version,systemRoot,inspect=inspectBundle,run=runOwnedChild}) {
+export async function smokeExtractedBundle({outputRoot,temporaryRoot,source,version,systemRoot,inspect=inspectBundle,run=runRestrictedSmoke}) {
   validateVersion(version);
   if (!/^[a-f0-9]{40}$/.test(source) || !path.isAbsolute(temporaryRoot) ||
       path.resolve(outputRoot)!==path.join(path.resolve(temporaryRoot),'notype-assembled') || !systemRoot) throw Error('smoke-input-invalid');
