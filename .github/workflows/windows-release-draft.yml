@@ -46,7 +46,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node --test tests/unittest/release-native.test.mjs tests/integration/release-native.test.mjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          node --test tests/unittest/release-smoke.test.mjs tests/integration/release-smoke.test.mjs
+          node --test tests/unittest/release-smoke.test.mjs tests/integration/release-smoke.test.mjs tests/unittest/restricted-smoke.test.mjs tests/integration/restricted-smoke.test.mjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node --test tests/unittest/release_assembly_policy.test.mjs tests/unittest/release_pe_closure.test.mjs tests/integration/release_assembly.test.mjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

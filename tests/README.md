@@ -39,8 +39,8 @@ unchanged local.7 EXE to exit successfully in 1.6 seconds. This is not evidence
 that a later GitHub-hosted runner has passed the full release action.
 The restricted smoke helper is tested with an owned synthetic executable for
 fixed-command rejection, noninheritance of a synthetic secret and absence of HOME, successful child
-exit, and job-tree timeout cleanup. A pinned local.7 bundle can also be checked
-in the temporary Windows runner diagnostic; that baseline check does not establish
+exit, and job-tree timeout cleanup. GitHub hosted diagnostic run 40802621149 verified owner normalization and
+restricted smoke with the pinned local.7 baseline; that check does not establish
 that a fresh build from current source passes the full release action. The runner
 uses an ephemeral account; a restricted token is not a separate account or a
 complete sandbox.
@@ -49,7 +49,7 @@ ephemeral runner's assembly and smoke steps create them exclusively. It is not
 a general-purpose tool for pre-existing local directories: ownership checks do
 not prove freshness, and concurrent untrusted path changes remain out of scope.
 Only the owner field is set; the DACL is unchanged, but owner assignment confers
-implicit WRITE_DAC. Hosted owner normalization still needs an actual runner test.
+implicit WRITE_DAC.
 
 ## Dictation fluency (#35)
 
