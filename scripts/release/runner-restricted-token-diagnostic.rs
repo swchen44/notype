@@ -1,4 +1,4 @@
-﻿// Temporary GitHub runner diagnostic. No app data, network, microphone or credentials.
+// Temporary GitHub runner diagnostic. No app data, network, microphone or credentials.
 #![cfg(windows)]
 use std::{ffi::{c_void,OsStr},mem::{size_of,zeroed},os::windows::ffi::OsStrExt,ptr::{null, null_mut, read_unaligned}};
 type Handle = *mut c_void;
@@ -34,9 +34,12 @@ unsafe fn token_info(t:Handle)->(u32,u32,u32) {
 }
 fn wide(s:&OsStr)->Vec<u16>{s.encode_wide().chain(Some(0)).collect()}
 fn main(){unsafe{
- let mut original=null_mut();if OpenProcessToken(GetCurrentProcess(),0x8b,&mut original)==0{fail(1)}
+ let child=std::env::args().nth(1).as_deref()==Some("child");
+ // The child only observes its token; restricted tokens need not permit mutation.
+ let access=if child {0x8} else {0x8b};
+ let mut original=null_mut();if OpenProcessToken(GetCurrentProcess(),access,&mut original)==0{fail(1)}
  let current=token_info(original);
- if std::env::args().nth(1).as_deref()==Some("child") {
+ if child {
   println!("child elevation={} uiaccess={} rid={}",current.0,current.1,current.2);
   CloseHandle(original);if current!=(0,0,8192){std::process::exit(2)} return;
  }
