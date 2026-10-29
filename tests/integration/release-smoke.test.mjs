@@ -66,7 +66,7 @@ test('Windows roaming KnownFolder requires the owned profile layout', {skip:proc
   const compilerEnv={SystemRoot:systemRoot,WINDIR:systemRoot,PATH:process.env.PATH,USERPROFILE:process.env.USERPROFILE,TEMP:f.temp,TMP:f.temp};
   for(const key of ['RUSTUP_HOME','CARGO_HOME']) if(process.env[key]) compilerEnv[key]=process.env[key];
   const exe=join(f.temp,'knownfolder-probe.exe');
-  const compiled=spawnSync('rustc',[fileURLToPath(new URL('./release-knownfolder-probe.rs',import.meta.url)),'--edition=2024','-o',exe],{env:compilerEnv,windowsHide:true,timeout:30000,encoding:'utf8'});
+  const compiled=spawnSync('rustup',['run','1.99.1','rustc',fileURLToPath(new URL('./release-knownfolder-probe.rs',import.meta.url)),'--edition=2024','-o',exe],{env:compilerEnv,windowsHide:true,timeout:30000,encoding:'utf8'});
   assert.equal(compiled.status,0,'native probe compilation failed');
   async function query(env,missing) {
     assert.equal(env.HOME,undefined);assert.equal(env.GH_TOKEN,undefined);
