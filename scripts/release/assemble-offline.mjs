@@ -6,18 +6,19 @@ import { fileURLToPath } from 'node:url';
 import { inspectBundle, bundleInventory, inspectZipArchive } from '../../packages/notype/lib/offline-bundle.mjs';
 import { verifyNativeInputs, nativeNames, digestFile, validateVersion } from './assembly-policy.mjs';
 import { verifyPEClosure } from './pe-closure.mjs';
+import { canonicalLockDigest, lockPins } from './lock-provenance.mjs';
 
 const baselineSource = 'e460e37422299c67ec7862ce3b67d9382df3f77b';
 const bundlePin = 'b07cf6cb8f1e2f54d8c975ecc3633f38504270587a7dbade193884271a2f78b0';
-const cargoPin = '31310c3e28219400de1aae68ea041708e891130c344754685c5c7aa8073fadfb';
-const bunPin = '323076c5aa1a53d57fa98c6c97e3e0201d87577450bc835e32c691fb7f14abc5';
+const cargoPin = lockPins.cargo;
+const bunPin = lockPins.bun;
 const crtLicensePin = 'f1e3d56ceb2ad68aae0711b910375009e651ac5530fa0760f0dea6e81e54fae1';
 const appRel = 'app/node_modules/notype-win32-x64';
 const json = value => Buffer.from(JSON.stringify(value,null,2)+'\n');
 const digest = data => createHash('sha256').update(data).digest('hex');
 const readJson = async file => JSON.parse(await readFile(file,'utf8'));
 const writeJson = async (file,value) => writeFile(file,json(value));
-const paths = ['desktop/LICENSE','desktop/UPSTREAM.md','desktop/src-tauri/Cargo.lock','desktop/src-tauri/Cargo.toml','desktop/src-tauri/build.rs','desktop/src-tauri/tauri.windows.conf.json','desktop/src-tauri/tauri.conf.json','.cargo','desktop/.cargo','crates/notype-platform','desktop/src-tauri/resources','packages/notype','packages/notype-model','packages/notype-win32-x64','desktop/bun.lock','desktop/package.json'];
+const paths = ['.gitattributes','desktop/.gitattributes','desktop/src-tauri/.gitattributes','desktop/LICENSE','desktop/UPSTREAM.md','desktop/src-tauri/Cargo.lock','desktop/src-tauri/Cargo.toml','desktop/src-tauri/build.rs','desktop/src-tauri/tauri.windows.conf.json','desktop/src-tauri/tauri.conf.json','.cargo','desktop/.cargo','crates/notype-platform','desktop/src-tauri/resources','packages/notype','packages/notype-model','packages/notype-win32-x64','desktop/bun.lock','desktop/package.json'];
 
 function run(cmd,args,opts={}) { return execFileSync(cmd,args,{encoding:'utf8',windowsHide:true,timeout:20*60*1000,maxBuffer:16*1024*1024,...opts}); }
 export async function sourceGate(source,options={}) {
@@ -26,7 +27,10 @@ export async function sourceGate(source,options={}) {
   if (!/^[0-9a-f]{40}$/.test(source) || run('git',['rev-parse','HEAD'],{cwd}).trim() !== source) throw Error('source-revision-mismatch');
   if (run('git',['status','--porcelain','--untracked-files=no'],{cwd}).trim()) throw Error('source-worktree-dirty');
   if (run('git',['diff','--name-only',base,source,'--',...paths],{cwd}).trim()) throw Error('baseline-inputs-changed');
-  if (await digestFile(path.join(cwd,'desktop/src-tauri/Cargo.lock')) !== cp || await digestFile(path.join(cwd,'desktop/bun.lock')) !== bp) throw Error('baseline-lock-changed');
+  for (const [name,pin] of [['cargo',cp],['bun',bp]]) {
+    const actual=await canonicalLockDigest({cwd,source,name});
+    if(actual!==pin) throw Error(`baseline-lock-changed:${name}:expected=${pin}:actual=${actual}`);
+  }
 }
 export function nativeMetadata(m,source,pins={cargoPin,bunPin}) {
   const t=m.tools;

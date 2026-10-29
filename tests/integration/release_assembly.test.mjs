@@ -6,10 +6,70 @@ import { bundleFixture,sealBundle } from './fixtures/offline-bundle.mjs';
 import { digest,json } from './fixtures/portable-package.mjs';
 import { assemble, nativeMetadata, sourceGate } from '../../scripts/release/assemble-offline.mjs';
 import { nativeNames } from '../../scripts/release/assembly-policy.mjs';
+import { cppDlls, crtDlls } from '../../scripts/release/native-contract.mjs';
+import { stageNative } from '../../scripts/release/native-stage.mjs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { mkdtemp,rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 
 const source='a'.repeat(40);
+
+test('CRLF working locks and LF Git blobs give identical source and native provenance',async t=>{
+  const root=await mkdtemp(path.join(tmpdir(),'notype-lock-eol-'));t.after(()=>rm(root,{recursive:true,force:true}));
+  const repo=path.join(root,'repo'), desktop=path.join(repo,'desktop'), tauri=path.join(desktop,'src-tauri');
+  await mkdir(tauri,{recursive:true});
+  const cargo=path.join(tauri,'Cargo.lock'), bun=path.join(desktop,'bun.lock');
+  await writeFile(cargo,'cargo-line\r\nsecond-line\n');await writeFile(bun,'bun-line\r\n');
+  const git=(...argv)=>{const p=spawnSync('git',argv,{cwd:repo,encoding:'utf8'});assert.equal(p.status,0,p.stderr);return p.stdout.trim();};
+  git('init','-q');git('config','user.name','fixture');git('config','user.email','fixture@example.invalid');git('config','core.autocrlf','true');
+  git('add','.');git('commit','-qm','fixture');const head=git('rev-parse','HEAD');
+  const cargoPin=digest('cargo-line\nsecond-line\n'),bunPin=digest('bun-line\n');
+  await sourceGate(head,{cwd:repo,baselineSource:head,cargoPin,bunPin});
+  await assert.rejects(sourceGate(head,{cwd:repo,baselineSource:head,cargoPin:'0'.repeat(64),bunPin}),error=>{
+    assert.match(error.message,new RegExp(`baseline-lock-changed:cargo:expected=${'0'.repeat(64)}:actual=${cargoPin}`));
+    assert.ok(!error.message.includes(repo));assert.ok(!error.message.includes('cargo-line'));return true;
+  });
+  const runtime=path.join(root,'runtime'),redist=path.join(root,'redist'),exe=path.join(root,'notype.exe');
+  await mkdir(runtime);await mkdir(redist);await writeFile(exe,'fixture');
+  for(const name of cppDlls) await writeFile(path.join(runtime,name),name);
+  for(const name of crtDlls) await writeFile(path.join(redist,name),name);
+  const tools={node:'22.15.0',bun:'1.2.22',rust:'1.99.1',msvc:'14.44.35207',redist:'14.44.35211',redist_dir:'14.44.35112',cpp_source:'https://github.com/handy-computer/transcribe.cpp',cpp_revision:'4807edaf210d0d7e8a6f7fb2a44b65966a2797f0',crt_source:'https://learn.microsoft.com/visualstudio/releases/2022/redistribution'};
+  const staged=await stageNative({exe,runtime,redist,output:path.join(root,'out'),source:head,tools,cargoLock:cargo,bunLock:bun,sourceRoot:repo});
+  assert.equal(staged.cargo_lock_sha256,cargoPin);assert.equal(staged.bun_lock_sha256,bunPin);
+  await assert.rejects(stageNative({exe,runtime,redist,output:path.join(root,'wrong-source'),source:'b'.repeat(40),tools,cargoLock:cargo,bunLock:bun,sourceRoot:repo}),/lock-source-invalid/);
+  const lfRepo=path.join(root,'lf-repo'),lfTauri=path.join(lfRepo,'desktop','src-tauri');await mkdir(lfTauri,{recursive:true});
+  const lfCargo=path.join(lfTauri,'Cargo.lock'),lfBun=path.join(lfRepo,'desktop','bun.lock');
+  await writeFile(lfCargo,'cargo-line\nsecond-line\n');await writeFile(lfBun,'bun-line\n');
+  const lfGit=(...argv)=>{const p=spawnSync('git',argv,{cwd:lfRepo,encoding:'utf8'});assert.equal(p.status,0,p.stderr);return p.stdout.trim();};
+  lfGit('init','-q');lfGit('config','user.name','fixture');lfGit('config','user.email','fixture@example.invalid');lfGit('config','core.autocrlf','false');
+  lfGit('add','.');lfGit('commit','-qm','fixture');const lfHead=lfGit('rev-parse','HEAD');
+  await sourceGate(lfHead,{cwd:lfRepo,baselineSource:lfHead,cargoPin,bunPin});
+  const lfStaged=await stageNative({exe,runtime,redist,output:path.join(root,'lf-out'),source:lfHead,tools,cargoLock:lfCargo,bunLock:lfBun,sourceRoot:lfRepo});
+  assert.equal(lfStaged.cargo_lock_sha256,cargoPin);assert.equal(lfStaged.bun_lock_sha256,bunPin);
+  await writeFile(bun,'bun-evil\r\n');
+  await assert.rejects(sourceGate(head,{cwd:repo,baselineSource:head,cargoPin,bunPin}));
+  await assert.rejects(stageNative({exe,runtime,redist,output:path.join(root,'bad'),source:head,tools,cargoLock:cargo,bunLock:bun,sourceRoot:repo}));
+});
+
+test('binary, invalid UTF-8 and explicit binary lock attributes are refused',async t=>{
+  for(const [name,content,attributes] of [
+    ['nul',Buffer.from([65,0,66]),null],
+    ['invalid',Buffer.from([0xff,0xfe]),null],
+    ['bare-cr',Buffer.from('a\rb'),null],
+    ['binary-attribute',Buffer.from('valid\n'),'/desktop/src-tauri/Cargo.lock -text\n'],
+    ['filter',Buffer.from('valid\n'),'/desktop/src-tauri/Cargo.lock filter=example\n'],
+  ]) {
+    const root=await mkdtemp(path.join(tmpdir(),`notype-lock-${name}-`));t.after(()=>rm(root,{recursive:true,force:true}));
+    const tauri=path.join(root,'desktop','src-tauri');await mkdir(tauri,{recursive:true});
+    await writeFile(path.join(tauri,'Cargo.lock'),content);await writeFile(path.join(root,'desktop','bun.lock'),'bun\n');
+    if(attributes) await writeFile(path.join(root,'.gitattributes'),attributes);
+    const git=(...argv)=>{const p=spawnSync('git',argv,{cwd:root,encoding:'utf8'});assert.equal(p.status,0,p.stderr);return p.stdout.trim();};
+    git('init','-q');git('config','user.name','fixture');git('config','user.email','fixture@example.invalid');git('add','.');git('commit','-qm','fixture');
+    const head=git('rev-parse','HEAD');
+    await assert.rejects(sourceGate(head,{cwd:root,baselineSource:head,cargoPin:digest(content),bunPin:digest('bun\n')}),/lock-(?:binary-or-invalid-utf8|attributes-invalid):cargo/);
+  }
+});
 async function fixture(t) {
   const f=await bundleFixture(t);
   const native=path.join(f.ownerRoot,'native'); await mkdir(native);

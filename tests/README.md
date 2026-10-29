@@ -17,6 +17,11 @@ The existing-output case runs the actual assembler with valid source, locks and
 native provenance and verifies the sentinel survives. Release input and assembly
 share a restricted lowercase prerelease validator, tested against the actual
 package manifest validator; this does not claim support for every SemVer spelling.
+Lock provenance exercises the actual Git source gate and native staging with
+LF blobs and CRLF working files, altered content, invalid UTF-8, NUL, and Git
+binary/filter attributes. Windows and Linux runner checkout behavior must still
+be verified independently; the failed 40789942577 log did not identify which
+lock file caused its prior generic baseline-lock-changed error.
 `release-smoke.test.mjs` tests the isolated data environment, a real owned child
 with a bounded timeout, and the requirement that the requested EXE belongs to the
 freshly validated extraction. The action separately runs `--list-models` on that

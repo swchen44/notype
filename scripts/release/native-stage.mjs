@@ -20,6 +20,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 import { cppDlls as nativeDlls, crtDlls } from './native-contract.mjs';
+import { canonicalLockDigest } from './lock-provenance.mjs';
 
 async function digest(file) {
   const hash = createHash('sha256');
@@ -34,7 +35,7 @@ async function checkedFile(file, maximum = 512 * 1024 * 1024) {
   return stat;
 }
 
-export async function stageNative({ exe, runtime, redist, output, source, tools, cargoLock, bunLock }) {
+export async function stageNative({ exe, runtime, redist, output, source, tools, cargoLock, bunLock, sourceRoot=process.cwd() }) {
   if (!/^[0-9a-f]{40}$/.test(source ?? '')) throw new Error('native-source-invalid');
   const allowedTools = ['node', 'bun', 'rust', 'msvc', 'redist', 'redist_dir', 'cpp_source', 'cpp_revision', 'crt_source'];
   if (JSON.stringify(Object.keys(tools ?? {}).sort()) !== JSON.stringify(allowedTools.sort()) ||
@@ -64,7 +65,8 @@ export async function stageNative({ exe, runtime, redist, output, source, tools,
   for (const [, file] of inputs) await checkedFile(file);
   await checkedFile(cargoLock, 16 * 1024 * 1024);
   await checkedFile(bunLock, 16 * 1024 * 1024);
-  const cargoHash = await digest(cargoLock), bunHash = await digest(bunLock);
+  const cargoHash=await canonicalLockDigest({cwd:sourceRoot,source,name:'cargo',file:cargoLock});
+  const bunHash=await canonicalLockDigest({cwd:sourceRoot,source,name:'bun',file:bunLock});
   await mkdir(output); // Exclusive creation: existing outputs are never replaced.
   const files = [];
   for (const [name, file] of inputs) {

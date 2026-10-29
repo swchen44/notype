@@ -17,9 +17,13 @@ async function fixture() {
   for (const name of cpp) await writeFile(path.join(runtime, name), `runtime ${name}`);
   for (const name of crt) await writeFile(path.join(redist, name), `crt ${name}`);
   const exe = path.join(root, 'notype.exe'); await writeFile(exe, 'native application');
-  const cargoLock = path.join(root, 'Cargo.lock'), bunLock = path.join(root, 'bun.lock');
+  const sourceRoot=path.join(root,'source');
+  await mkdir(path.join(sourceRoot,'desktop','src-tauri'),{recursive:true});
+  const cargoLock = path.join(sourceRoot, 'desktop','src-tauri','Cargo.lock'), bunLock = path.join(sourceRoot, 'desktop','bun.lock');
   await writeFile(cargoLock, 'cargo lock'); await writeFile(bunLock, 'bun lock');
-  return { root, runtime, redist, exe, cargoLock, bunLock, output: path.join(root, 'out'), source: 'a'.repeat(40), tools: { node: '22.15.0', bun: '1.2.22', rust: '1.99.1', msvc: '14.44.35207', redist: '14.44.35211', redist_dir: '14.44.35112', cpp_source: 'https://github.com/handy-computer/transcribe.cpp', cpp_revision: '4807edaf210d0d7e8a6f7fb2a44b65966a2797f0', crt_source: 'https://learn.microsoft.com/visualstudio/releases/2022/redistribution' } };
+  const git=(...args)=>{const r=spawnSync('git',args,{cwd:sourceRoot,encoding:'utf8'});assert.equal(r.status,0,r.stderr);return r.stdout.trim();};
+  git('init','-q');git('config','user.name','fixture');git('config','user.email','fixture@example.invalid');git('add','.');git('commit','-qm','fixture');
+  return { root, runtime, redist, exe, cargoLock, bunLock, sourceRoot, output: path.join(root, 'out'), source: git('rev-parse','HEAD'), tools: { node: '22.15.0', bun: '1.2.22', rust: '1.99.1', msvc: '14.44.35207', redist: '14.44.35211', redist_dir: '14.44.35112', cpp_source: 'https://github.com/handy-computer/transcribe.cpp', cpp_revision: '4807edaf210d0d7e8a6f7fb2a44b65966a2797f0', crt_source: 'https://learn.microsoft.com/visualstudio/releases/2022/redistribution' } };
 }
 
 test('stages real file bytes and nonsecret metadata with accurate hashes', async t => {

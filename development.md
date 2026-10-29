@@ -399,6 +399,8 @@ GitHub 的 Windows runner 會執行契約測試、重新編譯程式與其原生
 
 目前固定 Windows 2022 runner，四個 Visual C++ Runtime DLL 僅接受與 local.7 基準完全相同的檔案及 14.44.35211 版；Microsoft 官方 runtime 授權文件會另行下載、驗證固定 SHA-256 並附入 notice。runner 映像、CRT 或授權文件變更時會停止，需重新檢查及更新 pin；雜湊核對不等於法律授權審查。
 
+Cargo 和 Bun lock 檔的 provenance 使用來源 commit 的 Git blob SHA-256，而非依賴 checkout 是 LF 還是 CRLF；建置時同時核對工作檔經 Git 正規化後仍與該 blob 相同。二進位、非 UTF-8、單獨 CR、Git binary 屬性、外部 filter 或 working-tree-encoding 均不接受。鎖檔不符時記錄鎖檔類型與預期／實際 SHA，不輸出檔案內容或本機路徑。
+
 下載和解壓結果、版本、變更與尚待實機驗收項目須由維護者檢查，確認後再自行發布草稿。人工發布前須再確認同名 tag 不存在或實際指向已驗證 commit；草稿完成後仍可能有外部建立或變更 tag 的競態。若上傳或核對失敗，流程會盡力將草稿標示為 `INCOMPLETE`；若 GitHub 同時拒絕回寫，動作會報錯並要求人工檢查，不能假設標記已成功。請先處理該草稿，再重新使用版本。執行不使用個人的 API key 或文字資料。跨 job 的暫存 artifact 於執行結束後刪除；若清理工作未執行或失敗，該 artifact 設定一天後到期。GitHub-hosted runner 的臨時檔在 job 結束後隨 runner 回收。
 
 ## 測試與協作
