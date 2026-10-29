@@ -74,7 +74,7 @@ export async function publishDraft({ input, artifactRoot, github, wait = ms => n
     await github.finalize(id, guardedBody);
     if (await github.tagExists(release.tag)) throw Error('tag-conflict');
   } catch (error) {
-    try { await github.finalize(id, incomplete); }
+    try { await github.restoreIncomplete(id, incomplete); }
     catch { throw Error('draft-rollback-failed-manual-review-required'); }
     throw error;
   }
@@ -85,7 +85,7 @@ export async function publishDraft({ input, artifactRoot, github, wait = ms => n
 export function createGitHubAdapter(run) {
   const repo = 'swchen44/notype';
   const api = `repos/${repo}`;
-  let ownedTag = null;
+  let ownedTag = null, ownedSource = null, ownedId = null;
   async function json(args) { return JSON.parse(await run(['api', ...args])); }
   return {
     async mainHead() { const data=await json([`${api}/commits/main`]); return data.sha; },
@@ -107,7 +107,7 @@ export function createGitHubAdapter(run) {
     async createDraft(release) {
       const data=await json(['--method','POST',`${api}/releases`, '-f',`tag_name=${release.tag}`, '-f',`target_commitish=${release.source}`, '-f',`name=notype ${release.version}`, '-f',`body=${release.body}`, '-F','draft=true','-F','prerelease=true']);
       if (!Number.isSafeInteger(data.id) || data.id <= 0 || data.tag_name !== release.tag || data.draft !== true || data.prerelease !== true || data.target_commitish !== release.source) throw Error('invalid-created-draft');
-      ownedTag=release.tag; return data.id;
+      ownedTag=release.tag; ownedSource=release.source; ownedId=data.id; return data.id;
     },
     async getDraft(id) {
       if (!Number.isSafeInteger(id) || id <= 0) throw Error('invalid-release-id');
@@ -118,14 +118,25 @@ export function createGitHubAdapter(run) {
     },
     async upload(id, asset) {
       const draft=await this.getDraft(id);
-      if (!ownedTag || draft.tag !== ownedTag || !draft.draft || !draft.prerelease || draft.assets.some(a=>a.name===asset.name)) throw Error('draft-changed');
+      if (!ownedTag || id!==ownedId || draft.tag !== ownedTag || draft.source!==ownedSource || !draft.draft || !draft.prerelease || draft.assets.some(a=>a.name===asset.name)) throw Error('draft-changed');
       await run(['release','upload',ownedTag,asset.path,'--repo',repo]);
     },
     async finalize(id, body) {
       const draft=await this.getDraft(id);
-      if (!ownedTag || draft.tag !== ownedTag || !draft.draft || !draft.prerelease) throw Error('draft-changed');
+      if (!ownedTag || id!==ownedId || draft.tag!==ownedTag || draft.source!==ownedSource || !draft.draft || !draft.prerelease) throw Error('draft-changed');
       const data=await json(['--method','PATCH',`${api}/releases/${id}`,'-f',`tag_name=${ownedTag}`,'-f',`body=${body}`]);
-      if (data.id !== id || data.tag_name !== ownedTag || data.draft !== true || data.prerelease !== true || data.body !== body) throw Error('draft-finalize-failed');
+      if (data.id!==id || data.tag_name!==ownedTag || data.target_commitish!==ownedSource || data.draft!==true || data.prerelease!==true || data.body!==body) throw Error('draft-finalize-failed');
+      const observed=await this.getDraft(id);
+      if(observed.tag!==ownedTag || observed.source!==ownedSource || !observed.draft || !observed.prerelease || observed.body!==body) throw Error('draft-finalize-failed');
+    },
+    async restoreIncomplete(id, body) {
+      if (!ownedTag || id!==ownedId || !/^INCOMPLETE(?:\s|$)/.test(body)) throw Error('draft-rollback-refused');
+      const draft=await this.getDraft(id);
+      if ((!/^untagged-[a-f0-9]{20}$/.test(draft.tag) && draft.tag!==ownedTag) || draft.source!==ownedSource || !draft.draft || !draft.prerelease) throw Error('draft-rollback-refused');
+      const data=await json(['--method','PATCH',`${api}/releases/${id}`,'-f',`tag_name=${ownedTag}`,'-f',`body=${body}`]);
+      if(data.id!==id || data.tag_name!==ownedTag || data.target_commitish!==ownedSource || data.draft!==true || data.prerelease!==true || data.body!==body) throw Error('draft-rollback-failed');
+      const observed=await this.getDraft(id);
+      if(observed.tag!==ownedTag || observed.source!==ownedSource || !observed.draft || !observed.prerelease || observed.body!==body) throw Error('draft-rollback-failed');
     },
   };
 }

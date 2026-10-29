@@ -78,3 +78,43 @@ test('draft PATCH explicitly preserves the draft tag when updating its body',asy
   const id=await gh.createDraft({tag,source,version:'0.1.2-test.1',body:'initial'});
   await gh.finalize(id,'final');assert.equal(draft.tag_name,tag);assert.equal(draft.body,'final');
 });
+
+test('ID-scoped rollback repairs the known untagged draft and rejects changed ownership',async()=>{
+ const tag='v0.1.2-test.1',source='a'.repeat(40);let patches=0;
+ let draft={id:42,tag_name:tag,target_commitish:source,draft:true,prerelease:true,assets:[],body:'initial'};
+ const run=async args=>{
+  if(args.includes('POST'))return JSON.stringify(draft);
+  if(args.includes('PATCH')){patches++;draft={...draft,tag_name:args.find(x=>x.startsWith('tag_name=')).slice(9),body:args.find(x=>x.startsWith('body=')).slice(5)};return JSON.stringify(draft)}
+  return JSON.stringify(draft);
+ };
+ const gh=createGitHubAdapter(run);const id=await gh.createDraft({tag,source,version:'0.1.2-test.1',body:'initial'});
+ draft.tag_name='untagged-84a15933b0a68805a5dc';draft.body='wrong complete';
+ await gh.restoreIncomplete(id,'INCOMPLETE');assert.equal(draft.tag_name,tag);assert.equal(draft.body,'INCOMPLETE');assert.equal(patches,1);
+ for(const change of [{tag_name:'v9.9.9'},{tag_name:'untagged-not-safe'},{target_commitish:'b'.repeat(40)},{draft:false},{prerelease:false}]){
+  draft={...draft,tag_name:tag,target_commitish:source,draft:true,prerelease:true,...change};
+  await assert.rejects(gh.restoreIncomplete(id,'INCOMPLETE'));assert.equal(patches,1);
+ }
+});
+
+test('finalize rejects changed source or publication before writing',async()=>{
+ const tag='v0.1.2-test.1',source='a'.repeat(40);let patches=0;
+ let draft={id:42,tag_name:tag,target_commitish:source,draft:true,prerelease:true,assets:[],body:'initial'};
+ const run=async args=>{if(args.includes('PATCH'))patches++;return JSON.stringify(draft)};
+ const gh=createGitHubAdapter(run);const id=await gh.createDraft({tag,source,version:'0.1.2-test.1',body:'initial'});
+ for(const change of [{target_commitish:'b'.repeat(40)},{draft:false},{prerelease:false}]){
+  draft={...draft,target_commitish:source,draft:true,prerelease:true,...change};await assert.rejects(gh.finalize(id,'final'));assert.equal(patches,0);
+ }
+});
+
+test('rollback rejects another ID, non-incomplete body and a mismatching reread',async()=>{
+ const tag='v0.1.2-test.1',source='a'.repeat(40);let patches=0,reads=0;
+ let draft={id:42,tag_name:tag,target_commitish:source,draft:true,prerelease:true,assets:[],body:'initial'};
+ const run=async args=>{
+  if(args.includes('POST'))return JSON.stringify(draft);
+  if(args.includes('PATCH')){patches++;draft={...draft,body:'INCOMPLETE'};return JSON.stringify(draft)}
+  reads++;return JSON.stringify(reads===2?{...draft,target_commitish:'b'.repeat(40)}:draft);
+ };
+ const gh=createGitHubAdapter(run);await gh.createDraft({tag,source,version:'0.1.2-test.1',body:'initial'});
+ await assert.rejects(gh.restoreIncomplete(43,'INCOMPLETE'));await assert.rejects(gh.restoreIncomplete(42,'ordinary text'));assert.equal(patches,0);
+ await assert.rejects(gh.restoreIncomplete(42,'INCOMPLETE'),/draft-rollback-failed/);assert.equal(patches,1);
+});

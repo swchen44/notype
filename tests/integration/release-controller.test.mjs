@@ -40,6 +40,7 @@ function fakeGitHub(options={}) {
     async upload(id,file){state.writes.push('upload'); if(options.failUpload) throw Error('network');state.assetList.push({...file,digest:options.badDigest?'0'.repeat(64):file.digest});},
     async getDraft(){return {...state.draft,assets:state.assetList}},
     async finalize(id,body){state.writes.push('finalize');state.draft.body=body},
+    async restoreIncomplete(id,body){state.writes.push('restore');state.draft.body=body},
   };
 }
 const input = {version,ref:'refs/heads/main',source,repository:'swchen44/notype'};
@@ -85,7 +86,8 @@ test('unavailable tag verification after finalization restores incomplete state'
 
 test('an ambiguous finalization error restores the incomplete marker when possible',async t=>{
   const root=await fixture(t);const gh=fakeGitHub();const finalize=gh.finalize;let writes=0;
-  gh.finalize=async(...args)=>{await finalize(...args);if(++writes===1)throw Error('ambiguous-finalization');};
+  gh.finalize=async(...args)=>{await finalize(...args);writes++;throw Error('ambiguous-finalization');};
+  const restore=gh.restoreIncomplete;gh.restoreIncomplete=async(...args)=>{writes++;return restore(...args)};
   await assert.rejects(publishDraft({input,artifactRoot:root,github:gh}),/ambiguous-finalization/);
   assert.equal(writes,2);assert.match(gh.state.draft.body,/INCOMPLETE/);
 });
@@ -93,7 +95,8 @@ test('an ambiguous finalization error restores the incomplete marker when possib
 test('a failed rollback reports that manual draft inspection is required',async t=>{
   const root=await fixture(t); const gh=fakeGitHub(); let reads=0, writes=0;
   gh.tagExists=async()=>{if(++reads===3) throw Error('network');return false;};
-  const finalize=gh.finalize;gh.finalize=async(...args)=>{if(++writes===2) throw Error('network');return finalize(...args)};
+  const finalize=gh.finalize;gh.finalize=async(...args)=>{writes++;return finalize(...args)};
+  gh.restoreIncomplete=async()=>{if(++writes===2) throw Error('network')};
   await assert.rejects(publishDraft({input,artifactRoot:root,github:gh}),/draft-rollback-failed-manual-review-required/);
   assert.match(gh.state.draft.body,/人工發布前/);
 });
