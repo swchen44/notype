@@ -1,0 +1,55 @@
+name: Temporary release artifact roundtrip diagnostic
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: write
+jobs:
+  roundtrip:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.15.0'
+      - name: Generate synthetic assembly
+        env:
+          ROUNDTRIP_ROOT: ${{ runner.temp }}/roundtrip-source
+        run: node scripts/release/diagnose-artifact-roundtrip.mjs create
+      - name: Upload synthetic assembly with production path layout
+        id: upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: notype-roundtrip-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/roundtrip-source/assets/*
+            ${{ runner.temp }}/roundtrip-source/assembly-report.json
+          if-no-files-found: error
+          retention-days: 1
+      - name: Validate uploaded artifact ID
+        env:
+          ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
+        shell: bash
+        run: '[[ "$ARTIFACT_ID" =~ ^[0-9]+$ ]]'
+      - name: Download exact artifact ID into root
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ steps.upload.outputs.artifact-id }}
+          merge-multiple: true
+          path: ${{ runner.temp }}/roundtrip-downloaded
+      - name: Verify downloaded layout with real controller
+        env:
+          ROUNDTRIP_ROOT: ${{ runner.temp }}/roundtrip-downloaded
+        run: node scripts/release/diagnose-artifact-roundtrip.mjs verify
+      - name: Delete this diagnostic artifact
+        if: ${{ always() && steps.upload.outputs.artifact-id != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
+        shell: bash
+        run: |
+          [[ "$ARTIFACT_ID" =~ ^[0-9]+$ ]] || exit 1
+          gh api --method DELETE "repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID"
