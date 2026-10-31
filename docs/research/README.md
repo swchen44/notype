@@ -35,6 +35,8 @@ Windows 11 新 session 先讀根目錄 [HANDOFF.md](../../HANDOFF.md) 與 [TODO.
 | [08：決策紀錄](08-decision-log.md) | Q1～Q15 已確認選項、設計樹與驗證邊界 |
 | [09：文字歷史 source audit](09-history-source-audit.md) | WAV／文字保存耦合、UI／重試／retention 與 npm 更新接縫 |
 | [10：Windows MVP 定稿](10-confirmed-windows-mvp.md) | 最終行為、必改 source 接縫、測試與 Windows 接手順序 |
+| [Handy 與 notype 原始碼比較](10-handy-comparison-source-check.md) | 固定版本功能比較與查核依據 |
+| [Handy 中文使用經驗](11-handy-chinese-user-feedback.md) | 中文使用者回饋、模型基準、使用技巧及證據限制 |
 | [工作紀錄](HISTORY.md) | 工作里程碑，精確變更以 Git commits 為準 |
 
 ## 優先候選
