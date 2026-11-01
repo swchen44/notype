@@ -136,6 +136,8 @@ call ".\Start-notype.cmd"
 
 ## Windows 11 測試版與驗證狀態
 
+本版 **v0.1.2-local.1** 使用「05 波紋」圖示，portable ZIP **不含語音辨識模型**。已通過 43 個 unit／integration／rendered UI 測試、Windows 原生編譯、1,723 檔案的 ZIP／獨立解壓核對及無模型 headless 啟動。ZIP 為 384,409,745 bytes，解壓約 0.90 GB；詳見[本版驗證紀錄](docs/verification/ripple-portable.md)。模型須另行下載並[指定模型資料夾](docs/portable-win-x64.md)。
+
 前版 v0.1.1-local.7 已完成 CI、Windows 原生編譯、文字 API 測試，以及 1,733 檔案的 ZIP／獨立解壓核對。口述提示詞經一段合成例句實測，模型輸出仍需使用者核對。前版 local.6 曾以 Computer Use 驗證原生 YAML 匯出、差異預覽、取消、確認套用、自動重啟與重啟後詞彙；這些原生測試使用獨立合成設定，不等同所有電腦或所有連線的驗收，詳見 [YAML 原生驗證](docs/verification/settings-transfer-native.md)。
 
 本版亦包含 AI server 狀態、設定分頁及每個 server 的三場景特調提示詞。Gemini 曾於前一本機候選版以使用者確認的免費專案完成實測（gemini-3.1-flash-lite，最低 thinking；input50／output1，實際費用未知）。真人錄音、快捷鍵延遲、其他目標 App、公司內網與乾淨 Windows 11 主機仍待驗收。
