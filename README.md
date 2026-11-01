@@ -4,14 +4,14 @@
 
 notype 是為繁體中文／英文與簡體中文／英文混合口述設計的桌面語音輸入工具。透過快捷鍵開始說話，在本機完成語音辨識，保留可查閱、複製及匯出的文字歷史；需要整理、翻譯或代寫時，再接上自己選擇的文字 AI 服務。
 
-[下載 Windows 11 測試版](https://github.com/swchen44/notype/releases/tag/v0.1.1-local.7) · [安裝與啟動](#安裝與啟動) · [第一次使用](#第一次使用) · [開發者手冊](development.md)
+[下載 Windows 11 測試版](https://github.com/swchen44/notype/releases/tag/v0.1.2-local.1) · [安裝與啟動](#安裝與啟動) · [第一次使用](#第一次使用) · [開發者手冊](development.md)
 
 ## 為什麼使用 notype
 
 寫郵件、工作筆記或整理想法時，常會先想到內容，再花時間逐字輸入。notype 希望縮短這段距離：先把想法說出來，再決定如何使用文字。
 
 - **適合中英文混合表達**：可選繁體中文＋英文或簡體中文＋英文辨識模式，介面語言另行設定。
-- **語音在本機辨識**：完整離線包附帶模型與執行環境，本機口述不需要雲端語音服務或 API key。
+- **語音在本機辨識**：portable ZIP 附帶執行環境；語音模型另外下載並放入自選資料夾，本機口述不需要雲端語音服務或 API key。
 - **依需要選擇文字處理**：只使用辨識原稿，或接上文字 API 進行整理、翻譯、問答與代寫。
 - **模型與資料可獨立保存**：指定已有模型資料夾；文字歷史與設定放在程式資料夾之外。
 - **結果可回查與研究**：保留原稿、處理結果、字數、耗時與模型資訊，並匯出 UTF-8 BOM CSV。
@@ -55,39 +55,35 @@ Handy 的回譯、獨立問答與設定移轉未做完整否定式查核；空�
 ### 系統需求
 
 - Windows 11 x64，CPU 支援 AVX2 與 BMI2。
-- 麥克風及本機儲存空間。ZIP 約 **1.06 GB**，解壓內容約 **1.58 GB**；另需個人資料與執行時的工作空間。
+- 麥克風及本機儲存空間。ZIP 大小與 SHA-256 見 Release 附件，解壓後的程式與 runtime 約 **0.90 GB**；另需語音模型、個人資料與執行時的工作空間。
 
-完整包包含 Node、Fixed WebView2、原生執行環境及 **Qwen3-ASR 0.6B Q6_K**。使用者不必先安裝 Node、Rust、Bun 或 C++ Build Tools，也不需執行 installer。乾淨 Windows 11 與公司執行政策的實機驗收仍待完成。
+**本版 portable ZIP 不含語音辨識模型。** ZIP 包含 Node、完整 Fixed WebView2 與原生執行環境。請依下方「手動下載語音模型」取得模型，或沿用既有模型資料夾。使用者不必先安裝 Node、Rust、Bun 或 C++ Build Tools，也不需執行 installer。乾淨 Windows 11 與公司執行政策的實機驗收仍待完成。
 
 ### 下載、核對、解壓
 
-1. 在可連線的電腦開啟 [v0.1.1-local.7 Release](https://github.com/swchen44/notype/releases/tag/v0.1.1-local.7)。notype 的 GitHub 儲存庫目前為公開。
-2. 手動下載 [完整離線 ZIP](https://github.com/swchen44/notype/releases/download/v0.1.1-local.7/notype-0.1.1-local.7-offline-win-x64.zip) 與 [SHA256SUMS.txt](https://github.com/swchen44/notype/releases/download/v0.1.1-local.7/SHA256SUMS.txt)。Release 另附 `Windows11-README.md` 操作說明及 `VERIFICATION.md` 驗證紀錄。如果目標電腦無法連網，將這兩個檔案透過公司允許的方式轉移到目標電腦；完整包已包含語音模型及執行環境。
+1. 在可連線的電腦開啟 [v0.1.2-local.1 Release](https://github.com/swchen44/notype/releases/tag/v0.1.2-local.1)。notype 的 GitHub 儲存庫目前為公開。
+2. 手動下載 [不含模型的 portable ZIP](https://github.com/swchen44/notype/releases/download/v0.1.2-local.1/notype-0.1.2-local.1-portable-win-x64.zip) 與 [SHA256SUMS.txt](https://github.com/swchen44/notype/releases/download/v0.1.2-local.1/SHA256SUMS.txt)。Release 另附 `Windows11-README.md` 操作說明及 `VERIFICATION.md` 驗證紀錄。如果目標電腦無法連網，將這兩個檔案透過公司允許的方式轉移到目標電腦；ZIP 已包含執行環境，**不含語音模型**。模型須另行下載與轉移，操作詳見[下載模型與指定資料夾](docs/portable-win-x64.md)。
 3. 在下載資料夾開啟 PowerShell，核對 ZIP 的 SHA-256：
 
    ```powershell
-   Get-FileHash .\notype-0.1.1-local.7-offline-win-x64.zip -Algorithm SHA256
+   Get-FileHash .\notype-0.1.2-local.1-portable-win-x64.zip -Algorithm SHA256
    ```
 
-   應與 `SHA256SUMS.txt` 的 ZIP 那一列相同。本版 ZIP 雜湊：
-
-   ```text
-   b224031c3d05a2859beaadc519b8d0f9239600fefb88721b929c684c0ceb5b9b
-   ```
+   應與該 Release 附件 `SHA256SUMS.txt` 的 ZIP 那一列相同。
 
 4. 曾使用舊版時，先從系統匣選「結束」，關閉既有 notype 實例。
 5. **完整解壓到新資料夾**，再雙擊 `Start-notype.cmd`。保留整個目錄結構，從解壓後的資料夾啟動。
 
 不需要刪除舊模型、歷史或自己的 `.env`。更新程式時先保留個人資料，模型也可沿用既有資料夾。
 
-離線電腦可使用隨包的本機語音辨識；如啟用文字整理、翻譯或隨便問，仍須能連到所選的雲端或內網 AI server，並依服務要求設定 key。
+離線電腦取得模型後即可使用本機語音辨識；如啟用文字整理、翻譯或隨便問，仍須能連到所選的雲端或內網 AI server，並依服務要求設定 key。
 
 ### 獨立保存這次測試的資料
 
 預設設定與文字歷史位於 `%APPDATA%\io.github.swchen44.notype`。若要使用獨立測試目錄，在**解壓資料夾的命令提示字元（CMD）**執行：
 
 ```bat
-set "NOTYPE_DATA_DIR=%LOCALAPPDATA%\notype\local-trial-0.1.1-local.7"
+set "NOTYPE_DATA_DIR=%LOCALAPPDATA%\notype\local-trial-0.1.2-local.1"
 call ".\Start-notype.cmd"
 ```
 
@@ -95,7 +91,7 @@ call ".\Start-notype.cmd"
 
 ## 第一次使用
 
-1. 在設定確認麥克風與語音模型，選擇「繁體中文＋英文」或「簡體中文＋英文」辨識模式。
+1. 先下載模型並在「模型」指定資料夾、按「重新掃描」並選取模型，再確認麥克風，選擇「繁體中文＋英文」或「簡體中文＋英文」辨識模式。
 2. 先在自有空白測試輸入框試用。短按鍵盤**右側 Alt** 開始口述，例如「明天下午三點，我們 review 這個 PR」。
 3. 再按停止鍵結束錄音，預設也是右 Alt；不需持續按住。處理期間等待辨識完成。
 4. 原目標仍有效時，結果會嘗試自動輸入；不支援的 App 或目標改變時，從歷史複製。Notepad++ 會暫用剪貼簿並還原，請先在空白文件確認。
@@ -112,9 +108,9 @@ call ".\Start-notype.cmd"
 
 ## 模型、文字服務與歷史
 
-**沿用已有模型。** 完整包的模型位於 `models`。可在設定指定已有模型資料夾並重新掃描。換位置時先結束 App，自行搬移整個模型資料夾，保留模型資訊與授權檔，再重新開啟 App 指定位置。notype 不會替你搬移或複製已有權重。
+**沿用已有模型。** 本版 ZIP 不含模型；模型資料夾由使用者自行選擇，例如 `D:\notype-models`，請放在程式資料夾之外。可在設定指定已有模型資料夾並重新掃描。換位置時先結束 App，自行搬移整個模型資料夾，保留模型資訊與授權檔，再重新開啟 App 指定位置。notype 不會替你搬移或複製已有權重。
 
-**手動下載語音模型。** 完整離線包已包含此模型，通常不需另行下載。若要單獨取得 Qwen3-ASR 0.6B Q6_K，可在可連網的電腦下載[固定版本的模型檔](https://huggingface.co/handy-computer/Qwen3-ASR-0.6B-gguf/resolve/e4e16599b900eb0cb36e524514756bb92eb092b7/Qwen3-ASR-0.6B-Q6_K.gguf)，檔案大小為 690,417,824 bytes，SHA-256 為 `3b051f108f03c0c91bbe1a3b2c1ee15e3ed51e4caec2a48751b01f2a21441cc3`。請先核對檔案，再透過公司允許的方式轉移到目標電腦，放入指定模型資料夾的最上層；在 notype 的「模型」選擇該資料夾並按「重新掃描」，再選擇模型。不要將檔案放入程式安裝目錄。掃描邏輯已用測試資料驗證，手動下載後於乾淨 Windows 11 實機辨識仍待驗收。
+**手動下載語音模型。** 首次使用須另外取得模型；已有相容模型時可直接沿用。以 Qwen3-ASR 0.6B Q6_K 為例，可在可連網的電腦下載[固定版本的模型檔](https://huggingface.co/handy-computer/Qwen3-ASR-0.6B-gguf/resolve/e4e16599b900eb0cb36e524514756bb92eb092b7/Qwen3-ASR-0.6B-Q6_K.gguf)，檔案大小為 690,417,824 bytes，SHA-256 為 `3b051f108f03c0c91bbe1a3b2c1ee15e3ed51e4caec2a48751b01f2a21441cc3`。請先核對檔案，再透過公司允許的方式轉移到目標電腦，放入指定模型資料夾的最上層；在 notype 的「模型」選擇該資料夾並按「重新掃描」，再選擇模型。不要將檔案放入程式安裝目錄。掃描邏輯已用測試資料驗證，手動下載後於乾淨 Windows 11 實機辨識仍待驗收。
 
 **設定文字服務。** 本機辨識不需要 key。需要整理、翻譯或隨便問時，新增 Provider、Custom 或 Local 連線，填寫 API 位址、model ID 及服務要求的 key，儲存後選一筆啟用。可查詢服務提供的模型清單作參考，model ID 仍由使用者決定；thinking 預設關閉，effort 依模型能力設定。連線與費用依所選服務而定。
 
@@ -140,7 +136,7 @@ call ".\Start-notype.cmd"
 
 ## Windows 11 測試版與驗證狀態
 
-v0.1.1-local.7 已完成 CI、Windows 原生編譯、文字 API 測試，以及 1,733 檔案的 ZIP／獨立解壓核對。口述提示詞經一段合成例句實測，模型輸出仍需使用者核對。前版 local.6 曾以 Computer Use 驗證原生 YAML 匯出、差異預覽、取消、確認套用、自動重啟與重啟後詞彙；這些原生測試使用獨立合成設定，不等同所有電腦或所有連線的驗收，詳見 [YAML 原生驗證](docs/verification/settings-transfer-native.md)。
+前版 v0.1.1-local.7 已完成 CI、Windows 原生編譯、文字 API 測試，以及 1,733 檔案的 ZIP／獨立解壓核對。口述提示詞經一段合成例句實測，模型輸出仍需使用者核對。前版 local.6 曾以 Computer Use 驗證原生 YAML 匯出、差異預覽、取消、確認套用、自動重啟與重啟後詞彙；這些原生測試使用獨立合成設定，不等同所有電腦或所有連線的驗收，詳見 [YAML 原生驗證](docs/verification/settings-transfer-native.md)。
 
 本版亦包含 AI server 狀態、設定分頁及每個 server 的三場景特調提示詞。Gemini 曾於前一本機候選版以使用者確認的免費專案完成實測（gemini-3.1-flash-lite，最低 thinking；input50／output1，實際費用未知）。真人錄音、快捷鍵延遲、其他目標 App、公司內網與乾淨 Windows 11 主機仍待驗收。
 
