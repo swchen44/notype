@@ -1,5 +1,9 @@
 # notype
 
+[下載 portable 7z（約 269 MB，不含語音模型）](https://github.com/swchen44/notype/releases/download/v0.1.2-local.1/notype-0.1.2-local.1-portable-win-x64.7z) · [7z SHA-256](https://github.com/swchen44/notype/releases/download/v0.1.2-local.1/notype-0.1.2-local.1-portable-win-x64.7z.sha256)
+
+7z 與同版 ZIP 使用相同的已編譯程式及 05「波紋」圖示。完整解壓後執行 `Start-notype.cmd`；模型須另外下載或沿用已有資料夾，詳見[portable 操作說明](docs/portable-win-x64.md)。
+
 **把口述變成可用的文字，讓輸入跟上思考。**
 
 notype 是為繁體中文／英文與簡體中文／英文混合口述設計的桌面語音輸入工具。透過快捷鍵開始說話，在本機完成語音辨識，保留可查閱、複製及匯出的文字歷史；需要整理、翻譯或代寫時，再接上自己選擇的文字 AI 服務。
