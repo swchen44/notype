@@ -1,5 +1,7 @@
 # Windows portable ZIP 與模型資料夾
 
+同一 Release 另提供 `notype-0.1.2-local.1-portable-win-x64.7z` 與獨立的 `.7z.sha256`。7z 與已編譯 ZIP 的內容相同，也不包含語音模型；使用 7-Zip 或支援 7z 的工具完整解壓後執行 `Start-notype.cmd`。封裝流程核對來源 ZIP、EXE 與全部解壓檔案的 SHA-256，驗證明細為 Release 的 `PORTABLE-7Z-VERIFICATION.json`。這是同一原生編譯結果的壓縮格式轉換。
+
 本版 `notype-0.1.2-local.1-portable-win-x64.zip` **不含語音辨識模型**。程式與 Node、完整 Fixed WebView2 和原生 runtime 已包含在 ZIP，不需要 installer、Node、Rust 或開發工具。系統需求是 Windows 11 x64 與支援 AVX2／BMI2 的 CPU。
 
 ## 解壓與啟動

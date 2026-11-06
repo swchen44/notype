@@ -1,0 +1,43 @@
+name: Verify and attach portable 7z
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: portable-7z
+  cancel-in-progress: false
+jobs:
+  repack:
+    runs-on: windows-2022
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Download fixed compiled release
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri 'https://github.com/swchen44/notype/releases/download/v0.1.2-local.1/notype-0.1.2-local.1-portable-win-x64.zip' -OutFile (Join-Path $env:RUNNER_TEMP 'portable.zip')
+      - name: Test source rejection and file inventory
+        run: python -m unittest discover -s tests/unittest -p test_repack_portable.py
+      - name: Verify ZIP and compiled EXE, compress and compare every extracted file
+        shell: pwsh
+        run: |
+          python scripts/release/repack-portable.py (Join-Path $env:RUNNER_TEMP 'portable.zip') (Join-Path $env:RUNNER_TEMP 'portable-7z') 'C:\Program Files\7-Zip\7z.exe'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Attach new assets without replacing existing ZIP or checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $out = Join-Path $env:RUNNER_TEMP 'portable-7z'
+          $proof = Get-Content -Raw -LiteralPath (Join-Path $out 'PORTABLE-7Z-VERIFICATION.json') | ConvertFrom-Json
+          $release = gh release view v0.1.2-local.1 --repo swchen44/notype --json targetCommitish | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or $release.targetCommitish -ne $proof.source) { throw 'Release source changed' }
+          gh release upload v0.1.2-local.1 (Join-Path $out $proof.archive) (Join-Path $out ($proof.archive + '.sha256')) (Join-Path $out 'PORTABLE-7Z-VERIFICATION.json') --repo swchen44/notype
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $remote = gh release view v0.1.2-local.1 --repo swchen44/notype --json assets | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $asset = @($remote.assets | Where-Object { $_.name -ceq $proof.archive })
+          if ($asset.Count -ne 1 -or $asset[0].size -ne $proof.bytes -or $asset[0].digest -cne ('sha256:' + $proof.sha256)) { throw 'Uploaded archive mismatch' }
+          Write-Output ('Verified portable 7z: ' + $proof.sha256)
